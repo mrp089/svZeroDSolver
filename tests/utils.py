@@ -17,6 +17,7 @@ this_file_dir = os.path.abspath(os.path.dirname(__file__))
 RTOL_PRES = 1.0e-7
 RTOL_FLOW = 1.0e-8
 
+cases_solver = "cases_solver"
 
 def execute_pysvzerod(testfile, mode):
     """Execute pysvzerod (via Python interface or executable).

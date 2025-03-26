@@ -9,7 +9,7 @@ import pytest
 import sys
 sys.path.append(os.path.dirname(__file__))
 
-from .utils import run_test_case_by_name, get_result, run_with_reference, RTOL_FLOW, RTOL_PRES
+from .utils import run_test_case_by_name, get_result, run_with_reference, RTOL_FLOW, RTOL_PRES, cases_solver
 
 @pytest.mark.parametrize("testfile", ['chamber_elastance_inductor.json', 
                                       'steadyFlow_R_R.json', 
@@ -50,8 +50,8 @@ def test_solver(testfile):
 
     this_file_dir = os.path.abspath(os.path.dirname(__file__))
 
-    results_dir = os.path.join(this_file_dir, 'cases_solver', 'results')
+    results_dir = os.path.join(this_file_dir, cases_solver, 'results')
 
     ref = pd.read_json(os.path.join(results_dir, f'result_{testfile}'))
 
-    run_with_reference(ref, os.path.join(this_file_dir, 'cases_solver', testfile))
+    run_with_reference(ref, os.path.join(this_file_dir, cases_solver, testfile))

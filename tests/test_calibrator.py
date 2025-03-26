@@ -10,7 +10,7 @@ this_file_dir = os.path.abspath(os.path.dirname(__file__))
 
 
 def test_steady_flow_calibration():
-    testfile = os.path.join(this_file_dir, "cases", "steadyFlow_calibration.json")
+    testfile = os.path.join(this_file_dir, "cases_calibrator", "input", "steadyFlow_calibration.json")
 
     result, _ = execute_pysvzerod(testfile, "calibrator")
 
@@ -31,13 +31,13 @@ def test_calibration_vmr(model_id):
     """Test actual models from the vascular model repository."""
     with open(
         os.path.join(
-            this_file_dir, "cases", "vmr", "input", f"{model_id}_calibrate_from_0d.json"
+            this_file_dir, "cases_calibrator", "input", f"{model_id}_calibrate_from_0d.json"
         )
     ) as ff:
         reference = json.load(ff)
 
     test = os.path.join(
-        this_file_dir, "cases", "vmr", "input", f"{model_id}_calibrate_from_0d.json"
+        this_file_dir, "cases_calibrator", "input", f"{model_id}_calibrate_from_0d.json"
     )
 
     result, _ = execute_pysvzerod(test, "calibrator")

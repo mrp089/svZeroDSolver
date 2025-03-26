@@ -1,0 +1,167 @@
+{
+    "boundary_conditions": [
+        {
+            "bc_name": "INFLOW",
+            "bc_type": "PRESSURE",
+            "bc_values": {
+                "P": [
+                    100.0,
+                    120.0,
+                    110.0,
+                    100.0,
+                    90.0,
+                    95.0,
+                    100.0
+                ],
+                "t": [
+                    0.0,
+                    0.2,
+                    0.4,
+                    0.6,
+                    0.8,
+                    0.9,
+                    1.0
+                ]
+            }
+        },
+        {
+            "bc_name": "PCIM",
+            "bc_type": "PRESSURE",
+            "bc_values": {
+                "P": [
+                    20.0,
+                    30.0,
+                    25.0,
+                    15.0,
+                    10.0,
+                    15.0,
+                    20.0
+                ],
+                "t": [
+                    0.0,
+                    0.2,
+                    0.4,
+                    0.6,
+                    0.8,
+                    0.9,
+                    1.0
+                ]
+            }
+        },
+        {
+            "bc_name": "PV",
+            "bc_type": "PRESSURE",
+            "bc_values": {
+                "P": [
+                    0.0,
+                    0.0
+                ],
+                "t": [
+                    0.0,
+                    1.0
+                ]
+            }
+        }
+    ],
+    "junctions": [
+        {
+            "inlet_vessels": [
+                0
+            ],
+            "junction_name": "J_Ra_Ca",
+            "junction_type": "NORMAL_JUNCTION",
+            "outlet_vessels": [
+                1,
+                2
+            ]
+        },
+        {
+            "inlet_vessels": [
+                2
+            ],
+            "junction_name": "J_Ram_Cim",
+            "junction_type": "NORMAL_JUNCTION",
+            "outlet_vessels": [
+                3,
+                4
+            ]
+        }
+    ],
+    "simulation_parameters": {
+        "number_of_cardiac_cycles": 5,
+        "number_of_time_pts_per_cardiac_cycle": 100,
+        "output_cycles": [5],
+        "output_time_steps": [0, 25, 50, 75, 99]
+    },
+    "vessels": [
+        {
+            "boundary_conditions": {
+                "inlet": "INFLOW"
+            },
+            "vessel_id": 0,
+            "vessel_length": 1.0,
+            "vessel_name": "inlet_vessel",
+            "zero_d_element_type": "BloodVessel",
+            "zero_d_element_values": {
+                "R_poiseuille": 0.0
+            }
+        },
+        {
+            "vessel_id": 1,
+            "vessel_length": 1.0,
+            "vessel_name": "Ca_branch",
+            "zero_d_element_type": "Capacitance",
+            "zero_d_element_values": {
+                "C": 0.001
+            }
+        },
+        {
+            "vessel_id": 2,
+            "vessel_length": 1.0,
+            "vessel_name": "Ra_branch",
+            "zero_d_element_type": "Resistance",
+            "zero_d_element_values": {
+                "R": 100.0
+            }
+        },
+        {
+            "vessel_id": 3,
+            "vessel_length": 1.0,
+            "vessel_name": "Cim_branch",
+            "zero_d_element_type": "Capacitance",
+            "boundary_conditions": {
+                "outlet": "PCIM"
+            },
+            "zero_d_element_values": {
+                "C": 0.001
+            }
+        },
+        {
+            "vessel_id": 4,
+            "vessel_length": 1.0,
+            "vessel_name": "Ram_branch",
+            "zero_d_element_type": "Resistance",
+            "zero_d_element_values": {
+                "R": 100.0
+            }
+        },
+        {
+            "boundary_conditions": {
+                "outlet": "PV"
+            },
+            "vessel_id": 5,
+            "vessel_length": 1.0,
+            "vessel_name": "Rv_branch",
+            "zero_d_element_type": "Resistance",
+            "zero_d_element_values": {
+                "R": 100.0
+            }
+        }
+    ],
+    "connections": [
+        {
+            "vessel1_id": 4,
+            "vessel2_id": 5
+        }
+    ]
+}
