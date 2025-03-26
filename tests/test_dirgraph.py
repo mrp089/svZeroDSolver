@@ -10,8 +10,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../appl
 from dirgraph_utils import set_up_0d_network
 
 
-cases_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'cases'))
-results_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'cases/dirgraph-results'))
+fname = 'cases_solver'
+cases_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), fname))
+results_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), fname, 'dirgraph-results'))
 
 
 # List of files to exclude

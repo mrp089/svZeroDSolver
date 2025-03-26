@@ -50,8 +50,8 @@ def test_solver(testfile):
 
     this_file_dir = os.path.abspath(os.path.dirname(__file__))
 
-    results_dir = os.path.join(this_file_dir, 'cases', 'results')
+    results_dir = os.path.join(this_file_dir, 'cases_solver', 'results')
 
     ref = pd.read_json(os.path.join(results_dir, f'result_{testfile}'))
 
-    run_with_reference(ref, os.path.join(this_file_dir, 'cases', testfile))
+    run_with_reference(ref, os.path.join(this_file_dir, 'cases_solver', testfile))
