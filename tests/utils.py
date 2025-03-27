@@ -52,28 +52,70 @@ def execute_pysvzerod(testfile, mode):
     return result, config
 
 
-def run_with_reference(
-        ref,
-        test_config
-        ):
+def is_close(a, b, field):
+    # pick relative tolerance
+    if "pressure" in field.lower():
+        rtol = RTOL_PRES
+    elif "flow" in field.lower():
+        rtol = RTOL_FLOW
+    else:
+        raise ValueError("Unknown field: " + field)
+
+    # relative difference (as computed in np.isclose)
+    # note that we consider rtol as absolute zero (and as relative tolerance)
+    a_fl = a.flatten()
+    b_fl = b.flatten()
+    rel_diff = np.abs(a_fl - b_fl) - rtol - rtol * np.abs(b_fl)
+
+    # throw error if not all results are within relative tolerance
+    close = rel_diff <= 0.0
+    msg = ""
+    if not np.all(close):
+        # portion of individual results that are above the tolerance
+        wrong = 1 - np.sum(close) / close.size
+
+        # location of maximum relative difference
+        i_max = rel_diff.argmax()
+
+        # maximum relative difference
+        max_rel = rel_diff[i_max]
+
+        # maximum absolute difference at same location
+        max_abs = np.abs(a_fl[i_max] - b_fl[i_max])
+
+        # throw error message for pytest
+        msg = "Test failed in field " + field + "."
+        msg += " Results differ by more than rtol=" + str(rtol)
+        msg += " in {:.1%}".format(wrong)
+        msg += " of results."
+        msg += " Max. rel. difference is"
+        msg += " {:.1e}".format(max_rel)
+        msg += " (abs. {:.1e}".format(max_abs) + ")\n"
+    return msg
 
 
-    res, config = execute_pysvzerod(test_config, "solver")
+def run_with_reference(ref, test_config):
+
+    res, _ = execute_pysvzerod(test_config, "solver")
 
     if res.shape[1] == 6:
         # we have a result with fields [name, time, p_in, p_out, q_in, q_out]
+        msg = ""
         for field in ["pressure_in", "pressure_out", "flow_in", "flow_out"]:
-            if "pressure" in field:
-                assert np.isclose(res[field].to_numpy().all(), ref[field].to_numpy().all(), rtol=RTOL_PRES)
-            elif "flow" in field:
-                assert np.isclose(res[field].to_numpy().all(), ref[field].to_numpy().all(), rtol=RTOL_FLOW)
+            msg += is_close(res[field].to_numpy(), ref[field].to_numpy(), field)
+
+        # check all fields first and then throw error if any failed
+        if msg:
+            raise AssertionError(msg)
     else:
+        raise NotImplementedError("todo")
         # we have a result with fields [name, time, y] and the result must be compared based on the name field. name is of format [flow:vessel:outlet]
         # we will compare the average of each branch
         avg_res_flow = []
         avg_ref_flow = []
         avg_res_pres = []
         avg_ref_pres = []
+        msg = ""
         for index, row in res.iterrows():
 
             if "flow" in row["name"]:
@@ -83,36 +125,51 @@ def run_with_reference(
                     avg_res_flow.append(row.y)
                 elif avg_res_flow == []:
                     # there is only one result for this branch
-                    assert np.isclose(row.y, ref.loc[row.name].y, rtol=RTOL_FLOW)
+                    msg += is_close(row.y, ref.loc[row.name].y, RTOL_FLOW)
                 else:
                     # we are on the last result for this branch
                     avg_ref_flow.append(ref.loc[row.name].y)
                     avg_res_flow.append(row.y)
-                    assert np.isclose(np.array(avg_res_flow).all(), np.array(avg_ref_flow).all(), rtol=RTOL_FLOW)
+                    msg += is_close(
+                        np.array(avg_res_flow).all(),
+                        np.array(avg_ref_flow).all(),
+                        RTOL_FLOW,
+                    )
                     avg_res_flow = []
                     avg_ref_flow = []
-                    
+
             elif "pressure" in row["name"]:
                 if index == len(res) - 1:
                     # we are on the last row
                     avg_ref_pres.append(ref.loc[row.name].y)
                     avg_res_pres.append(row.y)
-                    assert np.isclose(np.array(avg_res_pres).all(), np.array(avg_ref_pres).all(), rtol=RTOL_PRES)
+                    msg += is_close(
+                        np.array(avg_res_pres).all(),
+                        np.array(avg_ref_pres).all(),
+                        RTOL_PRES,
+                    )
                 elif row["name"] == res.iloc[index + 1]["name"]:
-                    # we are compilng the results for a branch
+                    # we are compiling the results for a branch
                     avg_ref_pres.append(ref.loc[row.name].y)
                     avg_res_pres.append(row.y)
                 elif avg_res_pres == []:
                     # there is only one result for this branch
-                    assert np.isclose(row.y, ref.loc[row.name].y, rtol=RTOL_PRES)
+                    msg += is_close(row.y, ref.loc[row.name].y, RTOL_PRES)
                 else:
                     # we are on the last result for this branch
                     avg_ref_pres.append(ref.loc[row.name].y)
                     avg_res_pres.append(row.y)
                     # round the result to 10 decimal places to avoid floating point errors with reference solution computed on ubuntu OS
-                    assert np.isclose(np.array(avg_res_pres).round(10).all(), np.array(avg_ref_pres).all(), rtol=RTOL_PRES)
+                    msg += is_close(
+                        np.array(avg_res_pres).round(10).all(),
+                        np.array(avg_ref_pres).all(),
+                        RTOL_PRES,
+                    )
                     avg_res_pres = []
                     avg_ref_pres = []
+        # check all fields first and then throw error if any failed
+        if msg:
+            raise AssertionError(msg)
 
 
 def run_test_case_by_name(name, output_variable_based=False, folder="."):

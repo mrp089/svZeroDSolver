@@ -7,9 +7,10 @@ import pandas as pd
 import pytest
 
 import sys
+
 sys.path.append(os.path.dirname(__file__))
 
-from .utils import run_test_case_by_name, get_result, run_with_reference, RTOL_FLOW, RTOL_PRES
+from .utils import run_with_reference
 
 @pytest.mark.parametrize("testfile", ['chamber_elastance_inductor.json', 
                                       'steadyFlow_R_R.json', 
@@ -44,14 +45,14 @@ from .utils import run_test_case_by_name, get_result, run_with_reference, RTOL_F
                                       'pulsatileFlow_R_RCR_mean_derivative_variable.json'
                                       ])
 def test_solver(testfile):
-    '''
+    """
     run all test cases and compare against stored reference solution
-    '''
+    """
 
     this_file_dir = os.path.abspath(os.path.dirname(__file__))
 
-    results_dir = os.path.join(this_file_dir, 'cases', 'results')
+    results_dir = os.path.join(this_file_dir, "cases", "results")
 
-    ref = pd.read_json(os.path.join(results_dir, f'result_{testfile}'))
+    ref = pd.read_json(os.path.join(results_dir, f"result_{testfile}"))
 
-    run_with_reference(ref, os.path.join(this_file_dir, 'cases', testfile))
+    run_with_reference(ref, os.path.join(this_file_dir, "cases", testfile))
