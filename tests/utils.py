@@ -85,11 +85,8 @@ def is_close(a, b, field):
 
         # throw error message for pytest
         msg = "Test failed in field " + field + "."
-        msg += " Results differ by more than rtol=" + str(rtol)
-        msg += " in {:.1%}".format(wrong)
-        msg += " of results."
-        msg += " Max. rel. difference is"
-        msg += " {:.1e}".format(max_rel)
+        msg += " {:.1%}".format(wrong) + " of results differ relatively by >" + str(rtol)
+        msg += ". Max. rel. difference is {:.1e}".format(max_rel)
         msg += " (abs. {:.1e}".format(max_abs) + ")\n"
     return msg
 
