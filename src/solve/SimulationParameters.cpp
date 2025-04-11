@@ -29,6 +29,7 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "SimulationParameters.h"
+#include <set>
 
 bool get_param_scalar(const nlohmann::json& data, const std::string& name,
                       const InputParameter& param, double& val) {
@@ -221,6 +222,22 @@ SimulationParameters load_simulation_params(const nlohmann::json& config) {
 
 void load_simulation_model(const nlohmann::json& config, Model& model) {
   DEBUG_MSG("Loading model");
+
+  // Define valid component names
+  std::set<std::string> valid_components = {
+      "vessels",   "boundary_conditions", "external_solver_coupling_blocks",
+      "junctions", "closed_loop_blocks",  "valves",
+      "chambers", "simulation_parameters"};
+
+  // Check for invalid components
+  for (const auto& item : config.items()) {
+    if (item.key()[0] != '_' &&  // Ignore comments starting with _
+        valid_components.find(item.key()) == valid_components.end()) {
+      throw std::runtime_error("Unknown component '" + item.key() +
+                               "' defined in configuration");
+    }
+  }
+
   // Create list to store block connections while generating blocks
   std::vector<std::tuple<std::string, std::string>> connections;
 
