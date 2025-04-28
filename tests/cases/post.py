@@ -6,11 +6,28 @@ import numpy as np
 out_name = "out.csv"
 res = pd.read_csv(out_name)
 
-name = "tau:branch0_seg0"
-ids = res.name == name
-out = np.array(res[ids])
-plt.plot(np.array(res[ids].time), np.array(res[ids].y), label=name)
-plt.show()
+variables = ['flow:INFLOW:branch0_seg0',
+             'flow:branch0_seg0:OUT',
+             'pressure:INFLOW:branch0_seg0',
+             'pressure:branch0_seg0:OUT',
+             'r:branch0_seg0',
+             'v:branch0_seg0',
+             'S:branch0_seg0',
+             'tau:branch0_seg0',
+             'V:branch0_seg0']
+fig, axs = plt.subplots(5, 2, figsize=(12, 15))
+axs = axs.ravel()
+
+for idx, var in enumerate(variables):
+    name = f"{var}"
+    ids = res.name == name
+    axs[idx].plot(np.array(res[ids].time), np.array(res[ids].y), label=var)
+    axs[idx].set_xlabel('Time')
+    axs[idx].set_ylabel(var)
+    axs[idx].legend()
+
+plt.tight_layout()
+plt.savefig('output_plot.pdf')
 
 # # # Load out.csv for time values
 # out_name = "out.csv"

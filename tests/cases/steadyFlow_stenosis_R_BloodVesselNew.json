@@ -57,13 +57,13 @@
                 "Ro" : 2.36,
                 "W1" : 50000,
                 "W2" : 400,
-                "eta" : 700.0, 
-                "sigma_o" : 90.7E4,
+                "eta" : 5.0,
+                "sigma_o" : 90.7E3,
                 "alpha_max": 5.0,
                 "alpha_min": -30.0,
                 "tsys": 0.170,
                 "tdias": 0.484,
-                "steepness": 0.005
+                "steepness": 0.05
             }
         }
     ]
