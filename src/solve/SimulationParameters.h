@@ -143,13 +143,24 @@ State load_initial_condition(const nlohmann::json& config, Model& model);
 SimulationParameters load_simulation_params(const nlohmann::json& config);
 
 /**
- * @brief Load the 0D block in the model from a configuration
+ * @brief Load the 0D block in the model from a configuration for a forward
+ * problem
  *
  * @param config The json configuration
  * @param model The 0D model
  * @
  */
 void load_simulation_model(const nlohmann::json& config, Model& model);
+
+/**
+ * @brief Load the 0D block in the model from a configuration for an inverse
+ * problen
+ *
+ * @param config The json configuration
+ * @param model The 0D model
+ * @
+ */
+void load_calibration_model(const nlohmann::json& config, Model& model);
 
 /**
  * @brief Check that the JSON configuration has the required inputs

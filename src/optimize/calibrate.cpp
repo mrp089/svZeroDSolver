@@ -22,83 +22,34 @@ nlohmann::json calibrate(const nlohmann::json& config) {
 
   // Setup model
   auto model = Model();
-  std::vector<std::tuple<std::string, std::string>> connections;
-  std::vector<std::tuple<std::string, std::string>> inlet_connections;
-  std::vector<std::tuple<std::string, std::string>> outlet_connections;
+  load_calibration_model(config, model);
 
-  // Create vessels
-  DEBUG_MSG("Load vessels");
-  std::map<std::int64_t, std::string> vessel_id_map;
-  int param_counter = 0;
+  // Build mapping between optimization parameters and model parameters
+  // todo: have a list of optimization parameters for every block (default
+  // empty) and add all calibrated parameters for each block
+  std::vector<int> opt_to_model_param_ids;
+
+  // Add all vessel parameters to optimization vector
   for (auto const& vessel_config : config["vessels"]) {
     std::string vessel_name = vessel_config["vessel_name"];
-
-    // Create parameter IDs
-    std::vector<int> param_ids;
-    for (size_t k = 0; k < 4; k++) param_ids.push_back(param_counter++);
-    model.add_block("BloodVessel", param_ids, vessel_name);
-    vessel_id_map.insert({vessel_config["vessel_id"], vessel_name});
-    DEBUG_MSG("Created vessel " << vessel_name);
-
-    // Read connected boundary conditions
-    if (vessel_config.contains("boundary_conditions")) {
-      auto const& vessel_bc_config = vessel_config["boundary_conditions"];
-      if (vessel_bc_config.contains("inlet")) {
-        inlet_connections.push_back({vessel_bc_config["inlet"], vessel_name});
-      }
-      if (vessel_bc_config.contains("outlet")) {
-        outlet_connections.push_back({vessel_name, vessel_bc_config["outlet"]});
-      }
+    auto block = model.get_block(vessel_name);
+    for (size_t k = 0; k < 4; k++) {
+      opt_to_model_param_ids.push_back(block->global_param_ids[k]);
     }
   }
-
-  // Create junctions
+  // Map junction parameters
   for (auto const& junction_config : config["junctions"]) {
     std::string junction_name = junction_config["junction_name"];
-    auto const& outlet_vessels = junction_config["outlet_vessels"];
-    int num_outlets = outlet_vessels.size();
-
-    if (num_outlets == 1) {
-      model.add_block("NORMAL_JUNCTION", {}, junction_name);
-
-    } else {
-      std::vector<int> param_ids;
-      for (size_t i = 0; i < (num_outlets * 3); i++)
-        param_ids.push_back(param_counter++);
-      model.add_block("BloodVesselJunction", param_ids, junction_name);
+    auto block = model.get_block(junction_name);
+    int num_outlets = block->outlet_nodes.size();
+    if (num_outlets > 1) {
+      for (size_t i = 0; i < num_outlets * 3; i++) {
+        opt_to_model_param_ids.push_back(block->global_param_ids[i]);
+      }
     }
-
-    // Check for connections to inlet and outlet vessels and append to
-    // connections list
-    for (auto vessel_id : junction_config["inlet_vessels"]) {
-      connections.push_back({vessel_id_map[vessel_id], junction_name});
-    }
-
-    for (auto vessel_id : outlet_vessels) {
-      connections.push_back({junction_name, vessel_id_map[vessel_id]});
-    }
-    DEBUG_MSG("Created junction " << junction_name);
   }
 
-  // Create Connections
-  DEBUG_MSG("Created connection");
-  for (auto& connection : connections) {
-    auto ele1 = model.get_block(std::get<0>(connection));
-    auto ele2 = model.get_block(std::get<1>(connection));
-    model.add_node({ele1}, {ele2}, ele1->get_name() + ":" + ele2->get_name());
-  }
-  for (auto& connection : inlet_connections) {
-    auto ele = model.get_block(std::get<1>(connection));
-    model.add_node({}, {ele}, std::get<0>(connection) + ":" + ele->get_name());
-  }
-  for (auto& connection : outlet_connections) {
-    auto ele = model.get_block(std::get<0>(connection));
-    model.add_node({ele}, {}, ele->get_name() + ":" + std::get<1>(connection));
-  }
-
-  // Finalize model
-  model.finalize();
-
+  const int param_counter = opt_to_model_param_ids.size();
   DEBUG_MSG("Number of parameters " << param_counter);
 
   // Read observations
@@ -191,6 +142,12 @@ nlohmann::json calibrate(const nlohmann::json& config) {
                                   gradient_tol, increment_tol, max_iter);
 
   alpha = lm_alg.run(alpha, y_all, dy_all);
+
+  // Build reverse mapping: model_param_id -> optimization index
+  std::map<int, int> model_to_opt_param_ids;
+  for (size_t opt_idx = 0; opt_idx < opt_to_model_param_ids.size(); opt_idx++) {
+    model_to_opt_param_ids[opt_to_model_param_ids[opt_idx]] = opt_idx;
+  }
 
   // Write optimized simulation config file
   for (auto& vessel_config : output_config["vessels"]) {
