@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (c) Stanford University, The Regents of the
 // University of California, and others. SPDX-License-Identifier: BSD-3-Clause
 /**
- * @file SimulationParameters.h
+ * @file Parameters.h
  * @brief Source file to read simulation configuration
  */
 #ifndef SVZERODSOLVER_SIMULATIONPARAMETERS_HPP_
@@ -52,6 +52,13 @@ struct SimulationParameters {
       false};  ///< Running 0D simulation coupled with external solver
   double sim_external_step_size{0.0};  ///< Step size of external solver if
                                        ///< running coupled
+};
+
+struct CalibrationParameters {
+  double tolerance_gradient{0.0};    ///< Tolerance for gradient
+  double tolerance_increment{0.0};  ///< Tolerance for increment
+  int maximum_iterations{0};        ///< Maximum number of iterations
+  double lambda0{0.0};                ///< Initial damping factor
 };
 
 /// @brief Wrapper class for nlohmann:json with error checking
@@ -153,8 +160,16 @@ SimulationParameters load_simulation_params(const nlohmann::json& config);
 void load_simulation_model(const nlohmann::json& config, Model& model);
 
 /**
+ * @brief Load the calibration parameters from a JSON configuration
+ *
+ * @param config The JSON configuration
+ * @return SimulationParameters Simulation parameters read from configuration
+ */
+CalibrationParameters load_calibration_params(const nlohmann::json& config);
+
+/**
  * @brief Load the 0D block in the model from a configuration for an inverse
- * problen
+ * problem
  *
  * @param config The json configuration
  * @param model The 0D model
@@ -238,7 +253,7 @@ void create_junctions(
  *
  * @param model The model the block is associated with
  * @param connections Vector storing the connections between blocks
- */    
+ */
 void create_connections(
     Model& model,
     std::vector<std::tuple<std::string, std::string>>& connections);

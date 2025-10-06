@@ -5,7 +5,7 @@
 
 #include <cmath>
 
-#include "SimulationParameters.h"
+#include "Parameters.h"
 
 // Static member data.
 int SolverInterface::problem_id_count_ = 0;

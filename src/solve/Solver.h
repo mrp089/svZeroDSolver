@@ -7,7 +7,7 @@
 
 #include "Integrator.h"
 #include "Model.h"
-#include "SimulationParameters.h"
+#include "Parameters.h"
 #include "State.h"
 #include "debug.h"
 

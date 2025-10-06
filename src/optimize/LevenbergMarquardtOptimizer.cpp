@@ -5,18 +5,17 @@
 #include <iomanip>
 
 LevenbergMarquardtOptimizer::LevenbergMarquardtOptimizer(
-    Model* model, int num_obs, int num_params, double lambda0, double tol_grad,
-    double tol_inc, int max_iter) {
+    Model* model, int num_obs, int num_params, CalibrationParameters cali_params) {
   this->model = model;
   this->num_obs = num_obs;
   this->num_params = num_params;
   this->num_eqns = model->dofhandler.get_num_equations();
   this->num_vars = model->dofhandler.get_num_variables();
   this->num_dpoints = this->num_obs * this->num_eqns;
-  this->lambda = lambda0;
-  this->tol_grad = tol_grad;
-  this->tol_inc = tol_inc;
-  this->max_iter = max_iter;
+  this->lambda = cali_params.lambda0;
+  this->tol_grad = cali_params.tolerance_gradient;
+  this->tol_inc = cali_params.tolerance_increment;
+  this->max_iter = cali_params.maximum_iterations;
 
   jacobian = Eigen::SparseMatrix<double>(num_dpoints, num_params);
   residual = Eigen::Matrix<double, Eigen::Dynamic, 1>::Zero(num_dpoints);

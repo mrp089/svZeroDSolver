@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (c) Stanford University, The Regents of the
 // University of California, and others. SPDX-License-Identifier: BSD-3-Clause
-#include "SimulationParameters.h"
+#include "Parameters.h"
 
 bool get_param_scalar(const nlohmann::json& data, const std::string& name,
                       const InputParameter& param, double& val) {
@@ -258,6 +258,16 @@ void load_simulation_model(const nlohmann::json& config, Model& model) {
 
   // Finalize model
   model.finalize();
+}
+
+CalibrationParameters load_calibration_params(const nlohmann::json& config) {
+  DEBUG_MSG("Loading calibration parameters");
+  CalibrationParameters calib_params;
+  calib_params.tolerance_gradient = config.value("tolerance_gradient", 1e-5);
+  calib_params.tolerance_increment = config.value("tolerance_increment", 1e-10);
+  calib_params.maximum_iterations = config.value("maximum_iterations", 100);
+  calib_params.lambda0 = config.value("lambda0", 1.0);
+  return calib_params;
 }
 
 void load_calibration_model(const nlohmann::json& config, Model& model) {

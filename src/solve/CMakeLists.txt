@@ -7,14 +7,14 @@ set(lib svzero_solve_library)
 
 set(CXXSRCS 
   csv_writer.cpp 
-  SimulationParameters.cpp 
+  Parameters.cpp 
   Solver.cpp
 )
 
 set(HDRS 
   csv_writer.h 
   debug.h 
-  SimulationParameters.h 
+  Parameters.h 
   Solver.h 
 )
 

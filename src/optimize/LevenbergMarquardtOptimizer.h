@@ -11,6 +11,7 @@
 #include <Eigen/Sparse>
 
 #include "Model.h"
+#include "Parameters.h"
 
 /**
  * @brief Levenberg-Marquardt optimization class
@@ -81,14 +82,10 @@ class LevenbergMarquardtOptimizer {
    * @param model The 0D model
    * @param num_obs Number of observations in optimization
    * @param num_params Number of parameters in optimization
-   * @param lambda0 Initial damping factor
-   * @param tol_grad Gradient tolerance
-   * @param tol_inc Parameter increment tolerance
-   * @param max_iter Maximum iterations
+   * @param cali_params Calibration parameters
    */
   LevenbergMarquardtOptimizer(Model* model, int num_obs, int num_params,
-                              double lambda0, double tol_grad, double tol_inc,
-                              int max_iter);
+                              CalibrationParameters cali_params);
 
   /**
    * @brief Run the optimization algorithm

@@ -3,22 +3,13 @@
 #include "calibrate.h"
 
 #include "LevenbergMarquardtOptimizer.h"
-#include "SimulationParameters.h"
+#include "Parameters.h"
 
 nlohmann::json calibrate(const nlohmann::json& config) {
   auto output_config = nlohmann::json(config);
 
   // Read calibration parameters
-  DEBUG_MSG("Parse calibration parameters");
-  auto const& calibration_parameters = config["calibration_parameters"];
-  double gradient_tol =
-      calibration_parameters.value("tolerance_gradient", 1e-5);
-  double increment_tol =
-      calibration_parameters.value("tolerance_increment", 1e-10);
-  int max_iter = calibration_parameters.value("maximum_iterations", 100);
-  bool zero_capacitance =
-      calibration_parameters.value("set_capacitance_to_zero", false);
-  double lambda0 = calibration_parameters.value("initial_damping_factor", 1.0);
+  CalibrationParameters cali_params = load_calibration_params(config);
 
   // Setup model
   auto model = Model();
@@ -138,8 +129,7 @@ nlohmann::json calibrate(const nlohmann::json& config) {
   // Run optimization
   DEBUG_MSG("Start optimization");
   auto lm_alg =
-      LevenbergMarquardtOptimizer(&model, num_obs, param_counter, lambda0,
-                                  gradient_tol, increment_tol, max_iter);
+      LevenbergMarquardtOptimizer(&model, num_obs, param_counter, cali_params);
 
   alpha = lm_alg.run(alpha, y_all, dy_all);
 
@@ -153,12 +143,9 @@ nlohmann::json calibrate(const nlohmann::json& config) {
   for (auto& vessel_config : output_config["vessels"]) {
     std::string vessel_name = vessel_config["vessel_name"];
     auto block = model.get_block(vessel_name);
-    double stenosis_coeff = 0.0;
-    stenosis_coeff = alpha[block->global_param_ids[3]];
-    double c_value = 0.0;
-    if (!zero_capacitance) {
-      c_value = alpha[block->global_param_ids[1]];
-    }
+    double stenosis_coeff = alpha[block->global_param_ids[3]];
+    double c_value = alpha[block->global_param_ids[1]];
+
     vessel_config["zero_d_element_values"] = {
         {"R_poiseuille", alpha[block->global_param_ids[0]]},
         {"C", std::max(c_value, 0.0)},
