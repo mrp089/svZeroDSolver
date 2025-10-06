@@ -152,6 +152,17 @@ SimulationParameters load_simulation_params(const nlohmann::json& config);
 void load_simulation_model(const nlohmann::json& config, Model& model);
 
 /**
+ * @brief Load a simplified model for calibration (vessels and junctions only)
+ *
+ * @param config The JSON configuration
+ * @param model The model to populate
+ */
+void load_calibration_model(const nlohmann::json& config, Model& model);
+
+// legacy function with step-by-step building of the calibration model
+void load_calibration_model_legacy(const nlohmann::json& config, Model& model);
+
+/**
  * @brief Check that the JSON configuration has the required inputs
  *
  * @param config The JSON configuration
@@ -221,6 +232,16 @@ void create_junctions(
     std::vector<std::tuple<std::string, std::string>>& connections,
     const nlohmann::json& config, const std::string& component,
     std::map<int, std::string>& vessel_id_map);
+
+/**
+ * @brief Create connections between blocks in the model
+ *
+ * @param model The model to add connections to
+ * @param connections Vector of block name pairs to connect
+ */
+void create_connections(
+    Model& model,
+    std::vector<std::tuple<std::string, std::string>>& connections);
 
 /**
  * @brief Handle the creation of closed-loop blocks and associated connections

@@ -254,12 +254,82 @@ void load_simulation_model(const nlohmann::json& config, Model& model) {
     create_chambers(model, connections, config, component);
   }
 
-  // Create Connections
-  for (auto& connection : connections) {
-    auto ele1 = model.get_block(std::get<0>(connection));
-    auto ele2 = model.get_block(std::get<1>(connection));
-    model.add_node({ele1}, {ele2}, ele1->get_name() + ":" + ele2->get_name());
+  // Create connections
+  create_connections(model, connections);
+
+  // Finalize model
+  model.finalize();
+}
+
+void load_calibration_model(const nlohmann::json& config, Model& model) {
+  DEBUG_MSG("Loading calibration model");
+
+  // Create list to store block connections while generating blocks
+  std::vector<std::tuple<std::string, std::string>> connections;
+  std::vector<std::tuple<std::string, std::string>> boundary_connections;
+
+  // Create vessels - stores connections including boundary conditions
+  std::map<int, std::string> vessel_id_map;
+  DEBUG_MSG("About to create vessels");
+  if (config.contains("vessels")) {
+    DEBUG_MSG("Config contains vessels");
+    create_vessels(model, connections, config, "vessels", vessel_id_map);
   }
+  DEBUG_MSG("Vessels created");
+
+  // Create junctions - calibration needs special handling
+  // For multi-outlet junctions, always create BloodVesselJunction (not NORMAL_JUNCTION)
+  // to ensure parameters are created for optimization
+  DEBUG_MSG("About to create junctions");
+  if (config.contains("junctions")) {
+    DEBUG_MSG("Config contains junctions, count: " << config["junctions"].size());
+    for (const auto& junction_config : config["junctions"]) {
+      DEBUG_MSG("Processing junction");
+      std::string junction_name = junction_config["junction_name"];
+      DEBUG_MSG("Junction name: " << junction_name);
+      int num_outlets = junction_config["outlet_vessels"].size();
+      DEBUG_MSG("Num outlets: " << num_outlets);
+
+      // For calibration: single outlet = NORMAL_JUNCTION, multi-outlet = BloodVesselJunction
+      if (num_outlets == 1) {
+        generate_block(model, nlohmann::json::object(), "NORMAL_JUNCTION", junction_name);
+      } else {
+        // Multi-outlet junction needs BloodVesselJunction with parameters
+        // Parameters will be initialized from junction_values if present
+        if (junction_config.contains("junction_values")) {
+          generate_block(model, junction_config["junction_values"],
+                         "BloodVesselJunction", junction_name);
+        } else {
+          // No junction_values - create BloodVesselJunction with default parameters
+          // The calibrator will optimize these
+          generate_block(model, nlohmann::json::object(), "BloodVesselJunction", junction_name);
+        }
+      }
+
+      // Add connections
+      for (int vessel_id : junction_config["inlet_vessels"]) {
+        connections.push_back({vessel_id_map[vessel_id], junction_name});
+      }
+      for (int vessel_id : junction_config["outlet_vessels"]) {
+        connections.push_back({junction_name, vessel_id_map[vessel_id]});
+      }
+      DEBUG_MSG("Created junction " << junction_name);
+    }
+  }
+
+  // For calibration, we only create vessel-to-vessel connections
+  std::vector<std::tuple<std::string, std::string>> internal_connections;
+  for (auto& connection : connections) {
+    std::string block1_name = std::get<0>(connection);
+    std::string block2_name = std::get<1>(connection);
+
+    // Check if both blocks exist in the model (not boundary conditions)
+    if (model.has_block(block1_name) && model.has_block(block2_name))
+      internal_connections.push_back(connection);
+  }
+
+  // Create only internal connections (skip boundary condition connections)
+  create_connections(model, internal_connections);
 
   // Finalize model
   model.finalize();
@@ -298,6 +368,109 @@ void create_vessels(
       }
     }
   }
+}
+
+
+void load_calibration_model_legacy(const nlohmann::json& config, Model& model) {
+  auto output_config = nlohmann::json(config);
+
+  // Read calibration parameters
+  DEBUG_MSG("Parse calibration parameters");
+  auto const& calibration_parameters = config["calibration_parameters"];
+  double gradient_tol =
+      calibration_parameters.value("tolerance_gradient", 1e-5);
+  double increment_tol =
+      calibration_parameters.value("tolerance_increment", 1e-10);
+  int max_iter = calibration_parameters.value("maximum_iterations", 100);
+  bool calibrate_stenosis =
+      calibration_parameters.value("calibrate_stenosis_coefficient", true);
+  bool zero_capacitance =
+      calibration_parameters.value("set_capacitance_to_zero", false);
+  double lambda0 = calibration_parameters.value("initial_damping_factor", 1.0);
+
+  int num_params = 3;
+  if (calibrate_stenosis) {
+    num_params = 4;
+  }
+
+  // Setup model
+  std::vector<std::tuple<std::string, std::string>> connections;
+  std::vector<std::tuple<std::string, std::string>> inlet_connections;
+  std::vector<std::tuple<std::string, std::string>> outlet_connections;
+
+  // Create vessels
+  DEBUG_MSG("Load vessels");
+  std::map<std::int64_t, std::string> vessel_id_map;
+  int param_counter = 0;
+  for (auto const& vessel_config : config["vessels"]) {
+    std::string vessel_name = vessel_config["vessel_name"];
+
+    // Create parameter IDs
+    std::vector<int> param_ids;
+    for (size_t k = 0; k < num_params; k++)
+      param_ids.push_back(param_counter++);
+    model.add_block("BloodVessel", param_ids, vessel_name);
+    vessel_id_map.insert({vessel_config["vessel_id"], vessel_name});
+    DEBUG_MSG("Created vessel " << vessel_name);
+
+    // Read connected boundary conditions
+    if (vessel_config.contains("boundary_conditions")) {
+      auto const& vessel_bc_config = vessel_config["boundary_conditions"];
+      if (vessel_bc_config.contains("inlet")) {
+        inlet_connections.push_back({vessel_bc_config["inlet"], vessel_name});
+      }
+      if (vessel_bc_config.contains("outlet")) {
+        outlet_connections.push_back({vessel_name, vessel_bc_config["outlet"]});
+      }
+    }
+  }
+
+  // Create junctions
+  for (auto const& junction_config : config["junctions"]) {
+    std::string junction_name = junction_config["junction_name"];
+    auto const& outlet_vessels = junction_config["outlet_vessels"];
+    int num_outlets = outlet_vessels.size();
+
+    if (num_outlets == 1) {
+      model.add_block("NORMAL_JUNCTION", {}, junction_name);
+
+    } else {
+      std::vector<int> param_ids;
+      for (size_t i = 0; i < (num_outlets * (num_params - 1)); i++)
+        param_ids.push_back(param_counter++);
+      model.add_block("BloodVesselJunction", param_ids, junction_name);
+    }
+
+    // Check for connections to inlet and outlet vessels and append to
+    // connections list
+    for (auto vessel_id : junction_config["inlet_vessels"]) {
+      connections.push_back({vessel_id_map[vessel_id], junction_name});
+    }
+
+    for (auto vessel_id : outlet_vessels) {
+      connections.push_back({junction_name, vessel_id_map[vessel_id]});
+    }
+    DEBUG_MSG("Created junction " << junction_name);
+  }
+
+  // Create Connections
+  DEBUG_MSG("Created connection");
+  for (auto& connection : connections) {
+    auto ele1 = model.get_block(std::get<0>(connection));
+    auto ele2 = model.get_block(std::get<1>(connection));
+    model.add_node({ele1}, {ele2}, ele1->get_name() + ":" + ele2->get_name());
+  }
+  for (auto& connection : inlet_connections) {
+    auto ele = model.get_block(std::get<1>(connection));
+    model.add_node({}, {ele}, std::get<0>(connection) + ":" + ele->get_name());
+  }
+  for (auto& connection : outlet_connections) {
+    auto ele = model.get_block(std::get<0>(connection));
+    model.add_node({ele}, {}, ele->get_name() + ":" + std::get<1>(connection));
+  }
+
+  // Finalize model
+  model.finalize();
 }
 
 void create_boundary_conditions(Model& model, const nlohmann::json& config,
@@ -459,6 +632,17 @@ void create_junctions(
       }
     }
     DEBUG_MSG("Created junction " << junction_name);
+  }
+}
+
+void create_connections(
+    Model& model,
+    std::vector<std::tuple<std::string, std::string>>& connections) {
+  DEBUG_MSG("Creating connections");
+  for (auto& connection : connections) {
+    auto ele1 = model.get_block(std::get<0>(connection));
+    auto ele2 = model.get_block(std::get<1>(connection));
+    model.add_node({ele1}, {ele2}, ele1->get_name() + ":" + ele2->get_name());
   }
 }
 

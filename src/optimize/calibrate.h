@@ -23,4 +23,6 @@
  */
 nlohmann::json calibrate(const nlohmann::json& config);
 
+nlohmann::json calibrate(const nlohmann::json& config);
+
 #endif  // SVZERODSOLVER_OPTIMIZE_CALIBRATOR_HPP_
