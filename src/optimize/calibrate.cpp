@@ -16,16 +16,11 @@ nlohmann::json calibrate(const nlohmann::json& config) {
   double increment_tol =
       calibration_parameters.value("tolerance_increment", 1e-10);
   int max_iter = calibration_parameters.value("maximum_iterations", 100);
-  bool calibrate_stenosis =
-      calibration_parameters.value("calibrate_stenosis_coefficient", true);
   bool zero_capacitance =
       calibration_parameters.value("set_capacitance_to_zero", false);
   double lambda0 = calibration_parameters.value("initial_damping_factor", 1.0);
 
-  int num_params = 3;
-  if (calibrate_stenosis) {
-    num_params = 4;
-  }
+  const int num_params = 4;
 
   // Setup model
   auto model = Model();

@@ -645,7 +645,6 @@
         "tolerance_gradient": 1e-05,
         "tolerance_increment": 1e-09,
         "maximum_iterations": 20,
-        "calibrate_stenosis_coefficient": true,
         "set_capacitance_to_zero": false
     },
     "y": {
