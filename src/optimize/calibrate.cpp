@@ -20,8 +20,6 @@ nlohmann::json calibrate(const nlohmann::json& config) {
       calibration_parameters.value("set_capacitance_to_zero", false);
   double lambda0 = calibration_parameters.value("initial_damping_factor", 1.0);
 
-  const int num_params = 4;
-
   // Setup model
   auto model = Model();
   std::vector<std::tuple<std::string, std::string>> connections;
@@ -37,8 +35,7 @@ nlohmann::json calibrate(const nlohmann::json& config) {
 
     // Create parameter IDs
     std::vector<int> param_ids;
-    for (size_t k = 0; k < num_params; k++)
-      param_ids.push_back(param_counter++);
+    for (size_t k = 0; k < 4; k++) param_ids.push_back(param_counter++);
     model.add_block("BloodVessel", param_ids, vessel_name);
     vessel_id_map.insert({vessel_config["vessel_id"], vessel_name});
     DEBUG_MSG("Created vessel " << vessel_name);
@@ -66,7 +63,7 @@ nlohmann::json calibrate(const nlohmann::json& config) {
 
     } else {
       std::vector<int> param_ids;
-      for (size_t i = 0; i < (num_outlets * (num_params - 1)); i++)
+      for (size_t i = 0; i < (num_outlets * 3); i++)
         param_ids.push_back(param_counter++);
       model.add_block("BloodVesselJunction", param_ids, junction_name);
     }
@@ -152,11 +149,9 @@ nlohmann::json calibrate(const nlohmann::json& config) {
         vessel_config["zero_d_element_values"].value("C", 0.0);
     alpha[block->global_param_ids[2]] =
         vessel_config["zero_d_element_values"].value("L", 0.0);
-    if (num_params > 3) {
-      alpha[block->global_param_ids[3]] =
-          vessel_config["zero_d_element_values"].value("stenosis_coefficient",
-                                                       0.0);
-    }
+    alpha[block->global_param_ids[3]] =
+        vessel_config["zero_d_element_values"].value("stenosis_coefficient",
+                                                     0.0);
   }
   for (auto& junction_config : output_config["junctions"]) {
     std::string junction_name = junction_config["junction_name"];
@@ -171,9 +166,7 @@ nlohmann::json calibrate(const nlohmann::json& config) {
     for (size_t i = 0; i < num_outlets; i++) {
       alpha[block->global_param_ids[i]] = 0.0;
       alpha[block->global_param_ids[i + num_outlets]] = 0.0;
-      if (num_params > 3) {
-        alpha[block->global_param_ids[i + 2 * num_outlets]] = 0.0;
-      }
+      alpha[block->global_param_ids[i + 2 * num_outlets]] = 0.0;
     }
     if (junction_config["junction_type"] == "BloodVesselJunction") {
       auto resistance = junction_config["junction_values"]["R_poiseuille"]
@@ -186,10 +179,7 @@ nlohmann::json calibrate(const nlohmann::json& config) {
       for (size_t i = 0; i < num_outlets; i++) {
         alpha[block->global_param_ids[i]] = resistance[i];
         alpha[block->global_param_ids[i + num_outlets]] = inductance[i];
-        if (num_params > 3) {
-          alpha[block->global_param_ids[i + 2 * num_outlets]] =
-              stenosis_coeff[i];
-        }
+        alpha[block->global_param_ids[i + 2 * num_outlets]] = stenosis_coeff[i];
       }
     }
   }
@@ -207,9 +197,7 @@ nlohmann::json calibrate(const nlohmann::json& config) {
     std::string vessel_name = vessel_config["vessel_name"];
     auto block = model.get_block(vessel_name);
     double stenosis_coeff = 0.0;
-    if (num_params > 3) {
-      stenosis_coeff = alpha[block->global_param_ids[3]];
-    }
+    stenosis_coeff = alpha[block->global_param_ids[3]];
     double c_value = 0.0;
     if (!zero_capacitance) {
       c_value = alpha[block->global_param_ids[1]];
@@ -241,15 +229,8 @@ nlohmann::json calibrate(const nlohmann::json& config) {
 
     std::vector<double> ste_values;
 
-    if (num_params > 3) {
-      for (size_t i = 0; i < num_outlets; i++) {
-        ste_values.push_back(
-            alpha[block->global_param_ids[i + 2 * num_outlets]]);
-      }
-    } else {
-      for (size_t i = 0; i < num_outlets; i++) {
-        ste_values.push_back(0.0);
-      }
+    for (size_t i = 0; i < num_outlets; i++) {
+      ste_values.push_back(alpha[block->global_param_ids[i + 2 * num_outlets]]);
     }
 
     junction_config["junction_type"] = "BloodVesselJunction";
