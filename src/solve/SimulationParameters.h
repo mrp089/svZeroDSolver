@@ -234,6 +234,16 @@ void create_junctions(
     std::map<int, std::string>& vessel_id_map);
 
 /**
+ * @brief Create connections between blocks
+ *
+ * @param model The model the block is associated with
+ * @param connections Vector storing the connections between blocks
+ */    
+void create_connections(
+    Model& model,
+    std::vector<std::tuple<std::string, std::string>>& connections);
+
+/**
  * @brief Handle the creation of closed-loop blocks and associated connections
  *
  * @param model The model the block is associated with
