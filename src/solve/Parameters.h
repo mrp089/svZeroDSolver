@@ -176,6 +176,7 @@ CalibrationParameters load_calibration_params(const nlohmann::json& config);
  * @
  */
 void load_calibration_model(const nlohmann::json& config, Model& model);
+void load_calibration_model_legacy(const nlohmann::json& config, Model& model);
 
 /**
  * @brief Check that the JSON configuration has the required inputs

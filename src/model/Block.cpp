@@ -9,6 +9,8 @@ std::string Block::get_name() { return this->model->get_block_name(this->id); }
 
 void Block::update_vessel_type(VesselType type) { vessel_type = type; }
 
+VesselType Block::get_vessel_type() { return vessel_type; }
+
 Block::~Block() {}
 
 void Block::setup_params_(const std::vector<int>& param_ids) {

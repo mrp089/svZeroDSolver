@@ -38,7 +38,8 @@
                 "C": 0.0001,
                 "L": 1.0,
                 "R_poiseuille": 100.0
-            }
+            },
+            "calibrate_elements": ["R_poiseuille", "C", "L", "stenosis_coefficient"]
         }
     ],
     "y": {

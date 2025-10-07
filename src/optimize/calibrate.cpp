@@ -13,7 +13,7 @@ nlohmann::json calibrate(const nlohmann::json& config) {
 
   // Setup model
   auto model = Model();
-  load_calibration_model(config, model);
+  load_calibration_model_legacy(config, model);
 
   // Build mapping between optimization parameters and model parameters
   // todo: have a list of optimization parameters for every block (default

@@ -163,6 +163,13 @@ class Block {
   void update_vessel_type(VesselType type);
 
   /**
+   * @brief Get vessel type of the block
+   *
+   * @return VesselType Type of vessel
+   */
+  VesselType get_vessel_type();
+
+  /**
    * @brief Setup parameter IDs for the block
    * @param param_ids Global IDs of the block parameters
    */
