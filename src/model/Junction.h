@@ -16,10 +16,9 @@
  * Models a junction with arbitrary inlets and outlets. Across all inlets and
  * outlets of the junction, mass is conserved and pressure is continuous.
  *
- * Inlets and outlets can be specified in two ways. Either using `inlet_vessels`
- * and `outlet_vessels` keys in the JSON file, with the corresponding lists
- * specifying vessel IDs, or using `inlet_blocks` and `outlet_blocks` keys, with
- * the corresponding lists specifying the names of blocks as strings.
+ * Inlets and outlets are specified using `inlet` and `outlet` keys in the
+ * junction configuration, with the corresponding lists specifying the names
+ * of connected blocks as strings.
  *
  *
  * \f[
@@ -65,19 +64,13 @@
  *
  * ### Usage in json configuration file
  *
- *     "junctions": [
- *         {
- *             "inlet_vessels": [
- *                 0
- *             ],
- *             "junction_name": "J0",
- *             "junction_type": "NORMAL_JUNCTION",
- *             "outlet_vessels": [
- *                 1,
- *                 2
- *             ]
+ *     "junctions": {
+ *         "J0": {
+ *             "type": "NORMAL_JUNCTION",
+ *             "inlet": ["branch0_seg0"],
+ *             "outlet": ["branch1_seg0", "branch2_seg0"]
  *         }
- *     ]
+ *     }
  *
  * ### Internal variables
  *

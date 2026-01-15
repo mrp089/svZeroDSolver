@@ -71,12 +71,12 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  nlohmann::json config;
+  svzero_json config;
 
   try {
-    config = nlohmann::json::parse(input_file);
+    config = svzero_json::parse(input_file);
 
-  } catch (const nlohmann::json::parse_error& e) {
+  } catch (const svzero_json::parse_error& e) {
     std::cout << "[svzerodsolver] Error: Parsing the input file '"
               << input_file_name << "' has failed." << std::endl;
     std::cout << "[svzerodsolver] Details of the parsing error: " << std::endl;

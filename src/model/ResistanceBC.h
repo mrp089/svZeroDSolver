@@ -52,16 +52,15 @@
  *
  * ### Usage in json configuration file
  *
- *     "boundary_conditions": [
- *         {
- *             "bc_name": "OUT",
- *             "bc_type": "RESISTANCE",
- *             "bc_values": {
+ *     "boundary_conditions": {
+ *         "OUT": {
+ *             "type": "RESISTANCE",
+ *             "values": {
  *                 "R": 100.0,
  *                 "Pd": 1000.0
  *             }
  *         }
- *     ]
+ *     }
  *
  * ### Internal variables
  *

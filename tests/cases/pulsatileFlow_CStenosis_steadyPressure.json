@@ -12,11 +12,15 @@
       "outlet flow = SIN(t)"
     ]
   },
-  "boundary_conditions": [
-    {
-      "bc_name": "INFLOW",
-      "bc_type": "FLOW",
-      "bc_values": {
+  "simulation_parameters": {
+    "number_of_cardiac_cycles": 30,
+    "number_of_time_pts_per_cardiac_cycle": 501,
+    "absolute_tolerance": 1e-9
+  },
+  "boundary_conditions": {
+    "INFLOW": {
+      "type": "FLOW",
+      "values": {
         "Q": [
           0.0, 0.06342392, 0.126592454, 0.189251244, 0.251147987, 0.312033446,
           0.371662456, 0.429794912, 0.486196736, 0.540640817, 0.592907929,
@@ -63,36 +67,27 @@
         ]
       }
     },
-    {
-      "bc_name": "OUT",
-      "bc_type": "PRESSURE",
-      "bc_values": {
+    "OUT": {
+      "type": "PRESSURE",
+      "values": {
         "P": [0.1, 0.1],
         "t": [0.0, 6.283185307]
       }
     }
-  ],
-  "simulation_parameters": {
-    "number_of_cardiac_cycles": 30,
-    "number_of_time_pts_per_cardiac_cycle": 501,
-    "absolute_tolerance": 1e-9
   },
-  "vessels": [
-    {
-      "boundary_conditions": {
-        "inlet": "INFLOW",
-        "outlet": "OUT"
-      },
-      "vessel_id": 0,
-      "vessel_length": 1.0,
-      "vessel_name": "branch0_seg0",
-      "zero_d_element_type": "BloodVessel",
-      "zero_d_element_values": {
+  "vessels": {
+    "branch0_seg0": {
+      "type": "BloodVessel",
+      "values": {
         "C": 1.0,
         "L": 0.0,
         "R_poiseuille": 0.0,
         "stenosis_coefficient": 1.0
       }
     }
+  },
+  "connections": [
+    ["INFLOW", "branch0_seg0"],
+    ["branch0_seg0", "OUT"]
   ]
 }

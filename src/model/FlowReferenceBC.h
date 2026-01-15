@@ -52,11 +52,10 @@
  *
  * ### Usage in json configuration file
  *
- *     "boundary_conditions": [
- *         {
- *             "bc_name": "INFLOW",
- *             "bc_type": "FLOW",
- *             "bc_values": {
+ *     "boundary_conditions": {
+ *         "INFLOW": {
+ *             "type": "FLOW",
+ *             "values": {
  *                 "Q": [
  *                     5.0,
  *                     5.0
@@ -67,7 +66,7 @@
  *                 ]
  *             }
  *         }
- *     ]
+ *     }
  *
  * ### Internal variables
  *

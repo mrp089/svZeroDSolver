@@ -14,6 +14,7 @@
 #include <nlohmann/json.hpp>
 
 #include "Model.h"
+#include "SimulationParameters.h"
 #include "debug.h"
 
 /**
@@ -21,6 +22,6 @@
  * @param config JSON configuration for 0D model
  * @return Calibrated JSON configuration for the 0D model
  */
-nlohmann::json calibrate(const nlohmann::json& config);
+svzero_json calibrate(const svzero_json& config);
 
 #endif  // SVZERODSOLVER_OPTIMIZE_CALIBRATOR_HPP_

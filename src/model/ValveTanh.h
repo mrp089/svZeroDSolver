@@ -110,11 +110,10 @@
  *
  * ### Usage in json configuration file
  *
- *     "valves": [
- *         {
+ *     "valves": {
+ *         "valve": {
  *             "type": "ValveTanh",
- *             "name": "valve",
- *             "params": {
+ *             "values": {
  *                 "Rmax": 100000.0,
  *                 "Rmin": 100.0,
  *                 "Steepness": 100.0,
@@ -122,7 +121,7 @@
  *                 "downstream_block": "downstream_vessel"
  *             }
  *         }
- *     ]
+ *     }
  *
  * ### Internal variables
  *

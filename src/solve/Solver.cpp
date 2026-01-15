@@ -5,7 +5,7 @@
 
 #include "csv_writer.h"
 
-Solver::Solver(const nlohmann::json& config) {
+Solver::Solver(const svzero_json& config) {
   validate_input(config);
   DEBUG_MSG("Read simulation parameters");
   simparams = load_simulation_params(config);

@@ -85,7 +85,7 @@ void initialize(std::string input_file_arg, int& problem_id, int& pts_per_cycle,
 
   // Create configuration reader.
   std::ifstream ifs(input_file);
-  const auto& config = nlohmann::json::parse(ifs);
+  const auto& config = svzero_json::parse(ifs);
   auto simparams = load_simulation_params(config);
 
   auto model = std::shared_ptr<Model>(new Model());

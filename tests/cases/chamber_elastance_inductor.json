@@ -16,11 +16,10 @@
     "output_all_cycles": false,
     "output_variable_based": true
   },
-  "boundary_conditions": [
-    {
-      "bc_name": "INLET",
-      "bc_type": "PRESSURE",
-      "bc_values": {
+  "boundary_conditions": {
+    "INLET": {
+      "type": "PRESSURE",
+      "values": {
         "P": [
           0.0, 0.003414699, 0.4075651, 1.431949, 2.938218, 4.722943, 6.545085,
           8.158555, 9.345445, 9.945458, 9.87756, 9.15092, 7.863676, 6.189676,
@@ -43,36 +42,27 @@
         ]
       }
     },
-    {
-      "bc_name": "OUTLET",
-      "bc_type": "RESISTANCE",
-      "bc_values": {
+    "OUTLET": {
+      "type": "RESISTANCE",
+      "values": {
         "Pd": 64.0,
         "R": 1000.0
       }
     }
-  ],
-  "junctions": [],
-  "vessels": [
-    {
-      "boundary_conditions": {
-        "outlet": "OUTLET"
-      },
-      "vessel_id": 0,
-      "vessel_length": 10.0,
-      "vessel_name": "vessel",
-      "zero_d_element_type": "BloodVessel",
-      "zero_d_element_values": {
+  },
+  "vessels": {
+    "vessel": {
+      "type": "BloodVessel",
+      "values": {
         "C": 0.0001,
         "R_poiseuille": 100.0
       }
     }
-  ],
-  "valves": [
-    {
+  },
+  "valves": {
+    "valve0": {
       "type": "ValveTanh",
-      "name": "valve0",
-      "params": {
+      "values": {
         "Rmax": 100000.0,
         "Rmin": 100.0,
         "Steepness": 100.0,
@@ -80,10 +70,9 @@
         "downstream_block": "ventricle"
       }
     },
-    {
+    "valve1": {
       "type": "ValveTanh",
-      "name": "valve1",
-      "params": {
+      "values": {
         "Rmax": 100000.0,
         "Rmin": 100.0,
         "Steepness": 100.0,
@@ -91,11 +80,10 @@
         "downstream_block": "vessel"
       }
     }
-  ],
-  "chambers": [
-    {
+  },
+  "chambers": {
+    "ventricle": {
       "type": "ChamberElastanceInductor",
-      "name": "ventricle",
       "values": {
         "Emax": 1.057,
         "Emin": 0.091,
@@ -106,7 +94,8 @@
         "Impedance": 0.000351787
       }
     }
-  ],
+  },
+  "connections": [["vessel", "OUTLET"]],
   "initial_condition": {
     "Vc:ventricle": 96.07
   }

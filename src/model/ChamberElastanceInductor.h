@@ -111,10 +111,9 @@
  *
  * ### Usage in json configuration file
  *
- *     "chambers": [
- *         {
+ *     "chambers": {
+ *         "ventricle": {
  *             "type": "ChamberElastanceInductor",
- *             "name": "ventricle",
  *             "values": {
  *                 "Emax": 1.057,
  *                 "Emin": 0.091,
@@ -125,7 +124,7 @@
  *                 "Impedance": 0.000351787
  *             }
  *         }
- *     ],
+ *     },
  *     "initial_condition": {
  *         "Vc:ventricle": 96.07
  *     }

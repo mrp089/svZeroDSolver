@@ -19,12 +19,15 @@ PYBIND11_MODULE(pysvzerod, m) {
   using Solver = Solver;
   py::class_<Solver>(m, "Solver")
       .def(py::init([](py::dict& config) {
-        const nlohmann::json& config_json = config;
+        // Use Python's json.dumps() to serialize dict, preserving key order
+        py::module_ json = py::module_::import("json");
+        std::string json_str = json.attr("dumps")(config).cast<std::string>();
+        svzero_json config_json = svzero_json::parse(json_str);
         return Solver(config_json);
       }))
       .def(py::init([](std::string config_file) {
         std::ifstream ifs(config_file);
-        const auto& config_json = nlohmann::json::parse(ifs);
+        const auto& config_json = svzero_json::parse(ifs);
         return Solver(config_json);
       }))
       .def("run", &Solver::run)
@@ -43,7 +46,10 @@ PYBIND11_MODULE(pysvzerod, m) {
   m.def("simulate", [](py::dict& config) {
     py::module_ pd = py::module_::import("pandas");
     py::module_ io = py::module_::import("io");
-    const nlohmann::json& config_json = config;
+    // Use Python's json.dumps() to serialize dict, preserving key order
+    py::module_ json = py::module_::import("json");
+    std::string json_str = json.attr("dumps")(config).cast<std::string>();
+    svzero_json config_json = svzero_json::parse(json_str);
     auto solver = Solver(config_json);
     solver.run();
     return pd.attr("read_csv")(io.attr("StringIO")(solver.get_full_result()));
@@ -52,14 +58,17 @@ PYBIND11_MODULE(pysvzerod, m) {
     py::module_ pd = py::module_::import("pandas");
     py::module_ io = py::module_::import("io");
     std::ifstream ifs(config_file);
-    const auto& config_json = nlohmann::json::parse(ifs);
+    const auto& config_json = svzero_json::parse(ifs);
     auto solver = Solver(config_json);
     solver.run();
     return pd.attr("read_csv")(io.attr("StringIO")(solver.get_full_result()));
   });
   m.def("calibrate", [](py::dict& config) {
-    const nlohmann::json& config_json = config;
-    return calibrate(config);
+    // Use Python's json.dumps() to serialize dict, preserving key order
+    py::module_ json = py::module_::import("json");
+    std::string json_str = json.attr("dumps")(config).cast<std::string>();
+    svzero_json ordered_config = svzero_json::parse(json_str);
+    return calibrate(ordered_config);
   });
   m.def("run_simulation_cli", []() {
     py::module_ sys = py::module_::import("sys");
@@ -70,7 +79,7 @@ PYBIND11_MODULE(pysvzerod, m) {
       exit(1);
     }
     std::ifstream ifs(argv[1]);
-    const auto& config = nlohmann::json::parse(ifs);
+    const auto& config = svzero_json::parse(ifs);
     auto solver = Solver(config);
     solver.run();
     solver.write_result_to_csv(argv[2]);
@@ -85,7 +94,7 @@ PYBIND11_MODULE(pysvzerod, m) {
       exit(1);
     }
     std::ifstream ifs(argv[1]);
-    const auto& config = nlohmann::json::parse(ifs);
+    const auto& config = svzero_json::parse(ifs);
     auto output_config = calibrate(config);
     std::ofstream o(argv[2]);
     o << std::setw(4) << output_config << std::endl;

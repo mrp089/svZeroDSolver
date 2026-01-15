@@ -31,12 +31,12 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  const auto& config = nlohmann::json::parse(input_file);
-  nlohmann::json output_config;
+  const auto& config = svzero_json::parse(input_file);
+  svzero_json output_config;
 
   try {
     output_config = calibrate(config);
-  } catch (const nlohmann::json::parse_error& e) {
+  } catch (const svzero_json::parse_error& e) {
     std::cerr
         << "[svzerodcalibrator] Error: The input file '" << input_file_name
         << "' does not have the parameters needed by the calibrate program."

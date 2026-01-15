@@ -9,8 +9,12 @@
 
 #include <list>
 #include <nlohmann/json.hpp>
+#include <set>
 #include <stdexcept>
 #include <string>
+
+// Use ordered_json to preserve insertion order when iterating over dictionaries
+using svzero_json = nlohmann::ordered_json;
 
 #include "Model.h"
 #include "State.h"
@@ -69,7 +73,7 @@ struct SimulationParameters {
 };
 
 /// @brief Wrapper class for nlohmann:json with error checking
-class JsonWrapper : public nlohmann::json {
+class JsonWrapper : public svzero_json {
  public:
   /**
    * @brief Wrap around JSON configuration with detailed error message in case
@@ -80,9 +84,9 @@ class JsonWrapper : public nlohmann::json {
    * @param name_str Name string of the JSON sub-list to be extracted
    * @param id Index of JSON sub-list to be extracted
    */
-  JsonWrapper(const nlohmann::json& json, const std::string& component,
+  JsonWrapper(const svzero_json& json, const std::string& component,
               const std::string& name_str, const int& id)
-      : nlohmann::json(json[component][id]),
+      : svzero_json(json[component][id]),
         component(component),
         name_str(name_str),
         block_id(id) {}
@@ -94,7 +98,7 @@ class JsonWrapper : public nlohmann::json {
    * @param key Key to retrieve from JSON object
    * @return JSON entry of key
    */
-  const nlohmann::json& operator[](const char* key) const {
+  const svzero_json& operator[](const char* key) const {
     if (!this->contains(key)) {
       if (this->contains(name_str)) {
         const std::string name = this->at(name_str);
@@ -111,9 +115,9 @@ class JsonWrapper : public nlohmann::json {
   }
 
   // Inherit functions
-  using nlohmann::json::contains;
-  using nlohmann::json::value;
-  using nlohmann::json::operator[];
+  using svzero_json::contains;
+  using svzero_json::value;
+  using svzero_json::operator[];
 
  private:
   std::string component;
@@ -135,7 +139,7 @@ class JsonWrapper : public nlohmann::json {
  * relevant for coupling with external solvers
  * @return int The block count
  */
-int generate_block(Model& model, const nlohmann::json& block_params_json,
+int generate_block(Model& model, const svzero_json& block_params_json,
                    const std::string& block_type, const std::string_view& name,
                    bool internal = false, bool periodic = true);
 
@@ -146,7 +150,7 @@ int generate_block(Model& model, const nlohmann::json& block_params_json,
  * @param model The model
  * @return State Initial configuration for the model
  */
-State load_initial_condition(const nlohmann::json& config, Model& model);
+State load_initial_condition(const svzero_json& config, Model& model);
 
 /**
  * @brief Load the simulation parameters from a JSON configuration
@@ -154,7 +158,7 @@ State load_initial_condition(const nlohmann::json& config, Model& model);
  * @param config The JSON configuration
  * @return SimulationParameters Simulation parameters read from configuration
  */
-SimulationParameters load_simulation_params(const nlohmann::json& config);
+SimulationParameters load_simulation_params(const svzero_json& config);
 
 /**
  * @brief Load the 0D block in the model from a configuration
@@ -163,30 +167,26 @@ SimulationParameters load_simulation_params(const nlohmann::json& config);
  * @param model The 0D model
  * @
  */
-void load_simulation_model(const nlohmann::json& config, Model& model);
+void load_simulation_model(const svzero_json& config, Model& model);
 
 /**
  * @brief Check that the JSON configuration has the required inputs
  *
  * @param config The JSON configuration
  */
-void validate_input(const nlohmann::json& config);
+void validate_input(const svzero_json& config);
 
 /**
- * @brief Handle the creation of vessel blocks and connections with boundary
- * conditions
+ * @brief Handle the creation of vessel blocks
  *
  * @param model The model the block is associated with
- * @param connections Vector storing the connections between blocks
  * @param config The JSON configuration
  * @param component Name of the component to retrieve from config
- * @param vessel_id_map Map between vessel names and IDs
+ * @param vessel_names Set to store vessel names for later lookup
  */
-void create_vessels(
-    Model& model,
-    std::vector<std::tuple<std::string, std::string>>& connections,
-    const nlohmann::json& config, const std::string& component,
-    std::map<int, std::string>& vessel_id_map);
+void create_vessels(Model& model, const svzero_json& config,
+                    const std::string& component,
+                    std::set<std::string>& vessel_names);
 
 /**
  * @brief Handle the creation of external coupling blocks and connections with
@@ -196,14 +196,14 @@ void create_vessels(
  * @param connections Vector storing the connections between blocks
  * @param config The JSON configuration
  * @param component Name of the component to retrieve from config
- * @param vessel_id_map Map between vessel names and IDs
+ * @param vessel_names Set of vessel names for lookup
  * @param bc_type_map Map between boundary condition names and their types
  */
 void create_external_coupling(
     Model& model,
     std::vector<std::tuple<std::string, std::string>>& connections,
-    const nlohmann::json& config, const std::string& component,
-    std::map<int, std::string>& vessel_id_map,
+    const svzero_json& config, const std::string& component,
+    std::set<std::string>& vessel_names,
     std::map<std::string, std::string>& bc_type_map);
 
 /**
@@ -216,7 +216,7 @@ void create_external_coupling(
  * @param closed_loop_bcs List of boundary conditions that should be connected
  * to a closed loop heart block
  */
-void create_boundary_conditions(Model& model, const nlohmann::json& config,
+void create_boundary_conditions(Model& model, const svzero_json& config,
                                 const std::string& component,
                                 std::map<std::string, std::string>& bc_type_map,
                                 std::vector<std::string>& closed_loop_bcs);
@@ -228,13 +228,11 @@ void create_boundary_conditions(Model& model, const nlohmann::json& config,
  * @param connections Vector storing the connections between blocks
  * @param config The JSON configuration
  * @param component Name of the component to retrieve from config
- * @param vessel_id_map Map between vessel names and IDs
  */
 void create_junctions(
     Model& model,
     std::vector<std::tuple<std::string, std::string>>& connections,
-    const nlohmann::json& config, const std::string& component,
-    std::map<int, std::string>& vessel_id_map);
+    const svzero_json& config, const std::string& component);
 
 /**
  * @brief Handle the creation of closed-loop blocks and associated connections
@@ -249,7 +247,7 @@ void create_junctions(
 void create_closed_loop(
     Model& model,
     std::vector<std::tuple<std::string, std::string>>& connections,
-    const nlohmann::json& config, const std::string& component,
+    const svzero_json& config, const std::string& component,
     std::vector<std::string>& closed_loop_bcs);
 
 /**
@@ -263,19 +261,16 @@ void create_closed_loop(
 void create_valves(
     Model& model,
     std::vector<std::tuple<std::string, std::string>>& connections,
-    const nlohmann::json& config, const std::string& component);
+    const svzero_json& config, const std::string& component);
 
 /**
  * @brief Handle the creation of chambers
  *
  * @param model The model the block is associated with
- * @param connections Vector storing the connections between blocks
  * @param config The JSON configuration containing all the closed loop blocks
  * @param component Name of the component to retrieve from config
  */
-void create_chambers(
-    Model& model,
-    std::vector<std::tuple<std::string, std::string>>& connections,
-    const nlohmann::json& config, const std::string& component);
+void create_chambers(Model& model, const svzero_json& config,
+                     const std::string& component);
 
 #endif

@@ -5,8 +5,8 @@
 #include "LevenbergMarquardtOptimizer.h"
 #include "SimulationParameters.h"
 
-nlohmann::json calibrate(const nlohmann::json& config) {
-  auto output_config = nlohmann::json(config);
+svzero_json calibrate(const svzero_json& config) {
+  auto output_config = svzero_json(config);
 
   // Read calibration parameters
   DEBUG_MSG("Parse calibration parameters");

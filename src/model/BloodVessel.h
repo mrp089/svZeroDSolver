@@ -114,20 +114,17 @@
  *
  * ### Usage in json configuration file
  *
- *     "vessels": [
- *        {
- *            "vessel_id": 0,
- *            "vessel_length": 10.0,
- *            "vessel_name": "branch0_seg0",
- *            "zero_d_element_type": "BloodVessel",
- *            "zero_d_element_values": {
- *                "R_poiseuille": 100.0,
- *                "C": 1.0e-5,
- *                "L": 1.0e-6,
- *                "stenosis_coefficient": 0.0
- *            }
- *        }
- *     ]
+ *     "vessels": {
+ *         "branch0_seg0": {
+ *             "type": "BloodVessel",
+ *             "values": {
+ *                 "R_poiseuille": 100.0,
+ *                 "C": 1.0e-5,
+ *                 "L": 1.0e-6,
+ *                 "stenosis_coefficient": 0.0
+ *             }
+ *         }
+ *     }
  *
  * ### Internal variables
  *

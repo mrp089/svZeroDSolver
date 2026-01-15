@@ -78,18 +78,17 @@
  *
  * ### Usage in json configuration file
  *
- *     "boundary_conditions": [
- *         {
- *             "bc_name": "OUT",
- *             "bc_type": "RCR",
- *             "bc_values": {
+ *     "boundary_conditions": {
+ *         "OUT": {
+ *             "type": "RCR",
+ *             "values": {
  *                 "C": 0.0001,
  *                 "Pd": 0.0,
  *                 "Rd": 1000.0,
  *                 "Rp": 1000.0
  *             }
  *         }
- *     ]
+ *     }
  *
  * ### Internal variables
  *

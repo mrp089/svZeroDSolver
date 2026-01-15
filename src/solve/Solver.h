@@ -29,7 +29,7 @@ class Solver {
    *
    * @param config Configuration handler
    */
-  Solver(const nlohmann::json& config);
+  Solver(const svzero_json& config);
 
   /// Set up and initialize the simulation parameters and model
   void setup_initial();

@@ -17,11 +17,16 @@
       "inlet pressure (at time = t0) = outlet pressure + Q(t = 0) * R_poiseuille = 4400 + 2.2 * 100 = 4620"
     ]
   },
-  "boundary_conditions": [
-    {
-      "bc_name": "INFLOW",
-      "bc_type": "FLOW",
-      "bc_values": {
+  "simulation_parameters": {
+    "number_of_cardiac_cycles": 10,
+    "number_of_time_pts_per_cardiac_cycle": 201,
+    "output_all_cycles": true,
+    "absolute_tolerance": 1e-9
+  },
+  "boundary_conditions": {
+    "INFLOW": {
+      "type": "FLOW",
+      "values": {
         "Q": [
           2.2, 2.35697629882328, 2.51333308391076, 2.66845328646431,
           2.82172471791214, 2.97254248593737, 3.1203113817117, 3.26444822891268,
@@ -68,36 +73,26 @@
         ]
       }
     },
-    {
-      "bc_name": "OUT",
-      "bc_type": "RCR",
-      "bc_values": {
+    "OUT": {
+      "type": "RCR",
+      "values": {
         "C": 0.0001,
         "Pd": 0.0,
         "Rd": 1000.0,
         "Rp": 1000.0
       }
     }
-  ],
-  "simulation_parameters": {
-    "number_of_cardiac_cycles": 10,
-    "number_of_time_pts_per_cardiac_cycle": 201,
-    "output_all_cycles": true,
-    "absolute_tolerance": 1e-9
   },
-  "vessels": [
-    {
-      "boundary_conditions": {
-        "inlet": "INFLOW",
-        "outlet": "OUT"
-      },
-      "vessel_id": 0,
-      "vessel_length": 10.0,
-      "vessel_name": "branch0_seg0",
-      "zero_d_element_type": "BloodVessel",
-      "zero_d_element_values": {
+  "vessels": {
+    "branch0_seg0": {
+      "type": "BloodVessel",
+      "values": {
         "R_poiseuille": 100.0
       }
     }
+  },
+  "connections": [
+    ["INFLOW", "branch0_seg0"],
+    ["branch0_seg0", "OUT"]
   ]
 }

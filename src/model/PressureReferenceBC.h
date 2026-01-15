@@ -53,11 +53,10 @@
  *
  * ### Usage in json configuration file
  *
- *     "boundary_conditions": [
- *         {
- *             "bc_name": "OUT",
- *             "bc_type": "PRESSURE",
- *             "bc_values": {
+ *     "boundary_conditions": {
+ *         "OUT": {
+ *             "type": "PRESSURE",
+ *             "values": {
  *                 "P": [
  *                     1000.0,
  *                     1000.0
@@ -68,7 +67,7 @@
  *                 ]
  *             }
  *         }
- *     ]
+ *     }
  *
  * ### Internal variables
  *

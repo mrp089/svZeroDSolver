@@ -14,11 +14,19 @@
       "n_infinity = ceil(-max(Rd_1 * C_1, Rd_2 * C_2) / period * ln(sim_cycle_to_cycle_percent_error / 100) ) = ceil(-max(70000 * 0.0001, 10000 * 0.0001) / 1.0 * ln(1.0 / 100)) = 33"
     ]
   },
-  "boundary_conditions": [
-    {
-      "bc_name": "INFLOW",
-      "bc_type": "FLOW",
-      "bc_values": {
+  "simulation_parameters": {
+    "number_of_cardiac_cycles": 3,
+    "number_of_time_pts_per_cardiac_cycle": 5,
+    "absolute_tolerance": 1e-9,
+    "output_all_cycles": true,
+    "use_cycle_to_cycle_error": true,
+    "sim_cycle_to_cycle_percent_error": 1.0,
+    "steady_initial": false
+  },
+  "boundary_conditions": {
+    "INFLOW": {
+      "type": "FLOW",
+      "values": {
         "Q": [
           2.2, 2.35697629882328, 2.51333308391076, 2.66845328646431,
           2.82172471791214, 2.97254248593737, 3.1203113817117, 3.26444822891268,
@@ -65,80 +73,55 @@
         ]
       }
     },
-    {
-      "bc_name": "OUT1",
-      "bc_type": "RCR",
-      "bc_values": {
+    "OUT1": {
+      "type": "RCR",
+      "values": {
         "C": 0.0001,
         "Pd": 0.0,
         "Rd": 70000.0,
         "Rp": 1000.0
       }
     },
-    {
-      "bc_name": "OUT2",
-      "bc_type": "RCR",
-      "bc_values": {
+    "OUT2": {
+      "type": "RCR",
+      "values": {
         "C": 0.0001,
         "Pd": 0.0,
         "Rd": 10000.0,
         "Rp": 1000.0
       }
     }
-  ],
-  "junctions": [
-    {
-      "inlet_vessels": [0],
-      "junction_name": "J0",
-      "junction_type": "NORMAL_JUNCTION",
-      "outlet_vessels": [1, 2]
-    }
-  ],
-  "simulation_parameters": {
-    "number_of_cardiac_cycles": 3,
-    "number_of_time_pts_per_cardiac_cycle": 5,
-    "absolute_tolerance": 1e-9,
-    "output_all_cycles": true,
-    "use_cycle_to_cycle_error": true,
-    "sim_cycle_to_cycle_percent_error": 1.0,
-    "steady_initial": false
   },
-  "vessels": [
-    {
-      "boundary_conditions": {
-        "inlet": "INFLOW"
-      },
-      "vessel_id": 0,
-      "vessel_length": 10.0,
-      "vessel_name": "branch0_seg0",
-      "zero_d_element_type": "BloodVessel",
-      "zero_d_element_values": {
+  "vessels": {
+    "branch0_seg0": {
+      "type": "BloodVessel",
+      "values": {
         "R_poiseuille": 300.0
       }
     },
-    {
-      "boundary_conditions": {
-        "outlet": "OUT1"
-      },
-      "vessel_id": 1,
-      "vessel_length": 10.0,
-      "vessel_name": "branch1_seg0",
-      "zero_d_element_type": "BloodVessel",
-      "zero_d_element_values": {
+    "branch1_seg0": {
+      "type": "BloodVessel",
+      "values": {
         "R_poiseuille": 400.0
       }
     },
-    {
-      "boundary_conditions": {
-        "outlet": "OUT2"
-      },
-      "vessel_id": 2,
-      "vessel_length": 10.0,
-      "vessel_name": "branch2_seg0",
-      "zero_d_element_type": "BloodVessel",
-      "zero_d_element_values": {
+    "branch2_seg0": {
+      "type": "BloodVessel",
+      "values": {
         "R_poiseuille": 500.0
       }
     }
+  },
+  "junctions": {
+    "J0": {
+      "type": "NORMAL_JUNCTION",
+      "inlet": ["branch0_seg0"],
+      "outlet": ["branch1_seg0", "branch2_seg0"]
+    }
+  },
+  "connections": [
+    ["INFLOW", "branch0_seg0"],
+    ["branch1_seg0", "OUT1"],
+    ["branch2_seg0", "OUT2"]
   ]
 }

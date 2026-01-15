@@ -9,11 +9,10 @@
     "steady_initial": false,
     "output_variable_based": true
   },
-  "boundary_conditions": [
-    {
-      "bc_name": "LCA",
-      "bc_type": "ClosedLoopCoronaryLeft",
-      "bc_values": {
+  "boundary_conditions": {
+    "LCA": {
+      "type": "ClosedLoopCoronaryLeft",
+      "values": {
         "_comment_": "Ra_total = 67.540250*0.361748 = 24.432550357, Ra = (0.32/0.84)*Ra_total, Ram = (0.52/0.84)*Ra_total, Ca = 0.000110*5.022065, Rv = 12.864810*2.586199, Cim = 0.000890*4.198904",
         "Ra": 9.307638231,
         "Ram": 15.124912126,
@@ -22,10 +21,9 @@
         "Ca": 0.000552427
       }
     },
-    {
-      "bc_name": "RCA",
-      "bc_type": "ClosedLoopCoronaryRight",
-      "bc_values": {
+    "RCA": {
+      "type": "ClosedLoopCoronaryRight",
+      "values": {
         "_comment_": "Ra_total = 41.778304*0.361748 = 15.113217915, Ra = (0.32/0.84)*Ra_total, Ram = (0.52/0.84)*Ra_total, Ca = 0.000110*9.599613, Rv = 7.957772*2.586199, Cim = 0.000890*3.891162",
         "Ra": 5.757416349,
         "Ram": 9.355801566,
@@ -34,10 +32,9 @@
         "Ca": 0.001055957
       }
     },
-    {
-      "bc_name": "RCR_aorta",
-      "bc_type": "ClosedLoopRCR",
-      "bc_values": {
+    "RCR_aorta": {
+      "type": "ClosedLoopRCR",
+      "values": {
         "_comment_": "R_total = 1.570879*0.948914 = 1.490629075, Rp = 0.09*R_total, Rd = 0.91*R_total, C = 0.228215*1.044637",
         "Rp": 0.134156617,
         "Rd": 1.356472458,
@@ -45,10 +42,9 @@
         "closed_loop_outlet": true
       }
     },
-    {
-      "bc_name": "RCR_aorta_br",
-      "bc_type": "ClosedLoopRCR",
-      "bc_values": {
+    "RCR_aorta_br": {
+      "type": "ClosedLoopRCR",
+      "values": {
         "_comment_": "R_total = 6.922824*0.948914 = 6.569164613, Rp = 0.09*R_total, Rd = 0.91*R_total, C = 0.051785*1.044637",
         "Rp": 0.591224815,
         "Rd": 5.977939798,
@@ -56,10 +52,46 @@
         "closed_loop_outlet": true
       }
     }
-  ],
-  "external_solver_coupling_blocks": [
-    {
-      "name": "inlet_aorta",
+  },
+  "closed_loop_blocks": {
+    "CLH": {
+      "type": "ClosedLoopHeartAndPulmonary",
+      "values": {
+        "_comment_": "Lrv_a = 0.249155/pConv, Rrv_a = 0.993637 * this->Rrv_base /pConv, Lra_v = 0.289378/pConv, Rra_v = 10.516664/pConv, Lla_v = 0.469052/pConv, Rla_v = 7.081136/pConv, Rlv_ao = 0.972624 * this->Rlv_base /pConv, Llv_a = 0.147702/pConv, Rpd = 1.120725 * this->Rpd_base /pConv",
+        "Tsa": 0.40742,
+        "tpwave": 8.976868,
+        "Erv_s": 2.125279,
+        "Elv_s": 3.125202,
+        "iml": 0.509365,
+        "imr": 0.806369,
+        "Lrv_a": 0.000186865,
+        "Rrv_a": 0.035061704,
+        "Lra_v": 0.000217032,
+        "Rra_v": 0.007887459,
+        "Lla_v": 0.000351787,
+        "Rla_v": 0.005310825,
+        "Rlv_ao": 0.034320234,
+        "Llv_a": 0.000110776,
+        "Vrv_u": 9.424629,
+        "Vlv_u": 5.606007,
+        "Rpd": 0.098865401,
+        "Cp": 1.090989,
+        "Cpa": 0.556854,
+        "Kxp_ra": 9.22244,
+        "Kxv_ra": 0.004837,
+        "Emax_ra": 0.208858,
+        "Vaso_ra": 4.848742,
+        "Kxp_la": 9.194992,
+        "Kxv_la": 0.008067,
+        "Emax_la": 0.303119,
+        "Vaso_la": 9.355754
+      },
+      "cardiac_cycle_period": 0.99,
+      "outlet": ["external_outlet"]
+    }
+  },
+  "external_solver_coupling_blocks": {
+    "inlet_aorta": {
       "type": "FLOW",
       "location": "inlet",
       "connected_block": "RCR_aorta",
@@ -113,8 +145,7 @@
         ]
       }
     },
-    {
-      "name": "inlet_aorta_br",
+    "inlet_aorta_br": {
       "type": "FLOW",
       "location": "inlet",
       "connected_block": "RCR_aorta_br",
@@ -168,8 +199,7 @@
         ]
       }
     },
-    {
-      "name": "inlet_LCA",
+    "inlet_LCA": {
       "type": "FLOW",
       "location": "inlet",
       "connected_block": "LCA",
@@ -223,8 +253,7 @@
         ]
       }
     },
-    {
-      "name": "inlet_RCA",
+    "inlet_RCA": {
       "type": "FLOW",
       "location": "inlet",
       "connected_block": "RCA",
@@ -278,8 +307,7 @@
         ]
       }
     },
-    {
-      "name": "external_outlet",
+    "external_outlet": {
       "type": "FLOW",
       "location": "outlet",
       "connected_block": "ClosedLoopHeartAndPulmonary",
@@ -333,44 +361,7 @@
         ]
       }
     }
-  ],
-  "closed_loop_blocks": [
-    {
-      "outlet_blocks": ["external_outlet"],
-      "closed_loop_type": "ClosedLoopHeartAndPulmonary",
-      "cardiac_cycle_period": 0.99,
-      "parameters": {
-        "_comment_": "Lrv_a = 0.249155/pConv, Rrv_a = 0.993637 * this->Rrv_base /pConv, Lra_v = 0.289378/pConv, Rra_v = 10.516664/pConv, Lla_v = 0.469052/pConv, Rla_v = 7.081136/pConv, Rlv_ao = 0.972624 * this->Rlv_base /pConv, Llv_a = 0.147702/pConv, Rpd = 1.120725 * this->Rpd_base /pConv",
-        "Tsa": 0.40742,
-        "tpwave": 8.976868,
-        "Erv_s": 2.125279,
-        "Elv_s": 3.125202,
-        "iml": 0.509365,
-        "imr": 0.806369,
-        "Lrv_a": 0.000186865,
-        "Rrv_a": 0.035061704,
-        "Lra_v": 0.000217032,
-        "Rra_v": 0.007887459,
-        "Lla_v": 0.000351787,
-        "Rla_v": 0.005310825,
-        "Rlv_ao": 0.034320234,
-        "Llv_a": 0.000110776,
-        "Vrv_u": 9.424629,
-        "Vlv_u": 5.606007,
-        "Rpd": 0.098865401,
-        "Cp": 1.090989,
-        "Cpa": 0.556854,
-        "Kxp_ra": 9.22244,
-        "Kxv_ra": 0.004837,
-        "Emax_ra": 0.208858,
-        "Vaso_ra": 4.848742,
-        "Kxp_la": 9.194992,
-        "Kxv_la": 0.008067,
-        "Emax_la": 0.303119,
-        "Vaso_la": 9.355754
-      }
-    }
-  ],
+  },
   "initial_condition": {
     "V_RA:CLH": 38.43,
     "V_RV:CLH": 96.07,
