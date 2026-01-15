@@ -14,16 +14,13 @@ def test_steady_flow_calibration():
 
     result, _ = execute_pysvzerod(testfile, "calibrator")
 
-    calibrated_parameters = result["vessels"][0]["zero_d_element_values"]
+    # New format uses dict with vessel name as key, and renamed parameters
+    calibrated_parameters = result["vessels"]["branch0_seg0"]["values"]
 
-    assert np.isclose(
-        np.mean(calibrated_parameters["R_poiseuille"]), 100, rtol=RTOL_PRES
-    )
-    assert np.isclose(np.mean(calibrated_parameters["C"]), 0.0001, rtol=RTOL_PRES)
-    assert np.isclose(np.mean(calibrated_parameters["L"]), 1.0, rtol=RTOL_PRES)
-    assert np.isclose(
-        np.mean(calibrated_parameters["stenosis_coefficient"]), 0.0, rtol=RTOL_PRES
-    )
+    assert np.isclose(calibrated_parameters["resistance"], 100, rtol=RTOL_PRES)
+    assert np.isclose(calibrated_parameters["capacitance"], 0.0001, rtol=RTOL_PRES)
+    assert np.isclose(calibrated_parameters["inductance"], 1.0, rtol=RTOL_PRES)
+    assert np.isclose(calibrated_parameters["stenosis"], 0.0, rtol=RTOL_PRES)
 
 
 @pytest.mark.parametrize("model_id", ["0080_0001", "0104_0001", "0140_2001"])
@@ -42,19 +39,21 @@ def test_calibration_vmr(model_id):
 
     result, _ = execute_pysvzerod(test, "calibrator")
 
-    for i, vessel in enumerate(reference["vessels"]):
-        for key, value in vessel["zero_d_element_values"].items():
+    # New format uses dict with vessel/junction name as key
+    for vessel_name, vessel_config in reference["vessels"].items():
+        for key, value in vessel_config["values"].items():
             np.isclose(
-                result["vessels"][i]["zero_d_element_values"][key],
+                result["vessels"][vessel_name]["values"][key],
                 value,
                 rtol=RTOL_PRES,
             )
 
-    for i, junction in enumerate(reference["junctions"]):
-        if "junction_values" in junction:
-            for key, value in junction["junction_values"].items():
-                np.allclose(
-                    result["junctions"][i]["junction_values"][key],
-                    value,
-                    rtol=RTOL_PRES,
-                )
+    if "junctions" in reference:
+        for junction_name, junction_config in reference["junctions"].items():
+            if "values" in junction_config:
+                for key, value in junction_config["values"].items():
+                    np.allclose(
+                        result["junctions"][junction_name]["values"][key],
+                        value,
+                        rtol=RTOL_PRES,
+                    )

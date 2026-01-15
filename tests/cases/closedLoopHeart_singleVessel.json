@@ -5,7 +5,7 @@
   "simulation_parameters": {
     "number_of_cardiac_cycles": 10,
     "number_of_time_pts_per_cardiac_cycle": 100,
-    "absolute_tolerance": 1e-08,
+    "absolute_tolerance": 1e-8,
     "steady_initial": false
   },
   "boundary_conditions": {
@@ -64,17 +64,10 @@
         "Vaso_la": 9.355754
       },
       "cardiac_cycle_period": 1.0169,
-      "outlet": [
-        "branch0_seg0"
-      ]
+      "outlet": ["branch0_seg0"]
     }
   },
-  "connections": [
-    [
-      "branch0_seg0",
-      "RCR_aorta"
-    ]
-  ],
+  "connections": [["branch0_seg0", "RCR_aorta"]],
   "initial_condition": {
     "V_RA:CLH": 38.43,
     "V_RV:CLH": 96.07,

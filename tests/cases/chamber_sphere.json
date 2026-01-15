@@ -7,34 +7,22 @@
     "number_of_time_pts_per_cardiac_cycle": 500,
     "steady_initial": false,
     "output_variable_based": true,
-    "absolute_tolerance": 1e-09,
+    "absolute_tolerance": 1e-9,
     "output_all_cycles": true
   },
   "boundary_conditions": {
     "IN": {
       "type": "PRESSURE",
       "values": {
-        "pressure": [
-          2150,
-          2150
-        ],
-        "time": [
-          0,
-          1
-        ]
+        "pressure": [2150, 2150],
+        "time": [0, 1]
       }
     },
     "OUT": {
       "type": "PRESSURE",
       "values": {
-        "pressure": [
-          13332.2,
-          13332.2
-        ],
-        "time": [
-          0,
-          1
-        ]
+        "pressure": [13332.2, 13332.2],
+        "time": [0, 1]
       }
     }
   },
@@ -43,7 +31,7 @@
       "type": "BloodVessel",
       "values": {
         "resistance": 1000000.0,
-        "capacitance": 1e-09
+        "capacitance": 1e-9
       }
     },
     "ventricle": {
@@ -67,7 +55,7 @@
       "type": "BloodVessel",
       "values": {
         "resistance": 10000000.0,
-        "capacitance": 1e-09
+        "capacitance": 1e-9
       }
     }
   },
@@ -94,13 +82,7 @@
     }
   },
   "connections": [
-    [
-      "IN",
-      "upstream_vessel"
-    ],
-    [
-      "downstream_vessel",
-      "OUT"
-    ]
+    ["IN", "upstream_vessel"],
+    ["downstream_vessel", "OUT"]
   ]
 }

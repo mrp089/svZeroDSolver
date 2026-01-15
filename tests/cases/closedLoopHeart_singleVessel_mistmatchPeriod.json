@@ -64,17 +64,10 @@
         "Vaso_la": 9.355754
       },
       "cardiac_cycle_period": 1.0169,
-      "outlet": [
-        "branch0_seg0"
-      ]
+      "outlet": ["branch0_seg0"]
     }
   },
-  "connections": [
-    [
-      "branch0_seg0",
-      "RCR_aorta"
-    ]
-  ],
+  "connections": [["branch0_seg0", "RCR_aorta"]],
   "initial_condition": {
     "V_RA:CLH": 38.43,
     "V_RV:CLH": 96.07,

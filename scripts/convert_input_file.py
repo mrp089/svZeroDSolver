@@ -167,11 +167,23 @@ def convert_junctions(old_junctions: list, vessel_id_map: dict, connections: lis
 
         # For NORMAL_JUNCTION, just add connections (auto-junction will be created)
         if junction_type == "NORMAL_JUNCTION":
-            # Add direct connections from each inlet to each outlet
-            # The solver will auto-create a junction where needed
-            for inlet in inlet_names:
-                for outlet in outlet_names:
-                    connections.append([inlet, outlet])
+            # Use nested array syntax:
+            #   Bifurcation: [inlet, [outlet1, outlet2, ...]]
+            #   Confluence: [[inlet1, inlet2, ...], outlet]
+            if len(inlet_names) == 1 and len(outlet_names) == 1:
+                # Simple 1-to-1 connection
+                connections.append([inlet_names[0], outlet_names[0]])
+            elif len(inlet_names) == 1 and len(outlet_names) > 1:
+                # Bifurcation: [inlet, [outlet1, outlet2, ...]]
+                connections.append([inlet_names[0], outlet_names])
+            elif len(inlet_names) > 1 and len(outlet_names) == 1:
+                # Confluence: [[inlet1, inlet2, ...], outlet]
+                connections.append([inlet_names, outlet_names[0]])
+            else:
+                # General case: multiple inlets and outlets - use separate connections
+                for inlet in inlet_names:
+                    for outlet in outlet_names:
+                        connections.append([inlet, outlet])
         else:
             # For other junction types (e.g., BloodVesselJunction), keep explicit
             new_junction = {
@@ -341,6 +353,16 @@ def convert_input_file(old_config: dict) -> dict:
 
     if "initial_condition_d" in old_config:
         new_config["initial_condition_d"] = old_config["initial_condition_d"]
+
+    # Copy calibration-specific fields as-is
+    if "calibration_parameters" in old_config:
+        new_config["calibration_parameters"] = old_config["calibration_parameters"]
+
+    if "y" in old_config:
+        new_config["y"] = old_config["y"]
+
+    if "dy" in old_config:
+        new_config["dy"] = old_config["dy"]
 
     return new_config
 

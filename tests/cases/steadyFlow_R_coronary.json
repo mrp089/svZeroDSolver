@@ -17,20 +17,14 @@
   "simulation_parameters": {
     "number_of_cardiac_cycles": 30,
     "number_of_time_pts_per_cardiac_cycle": 101,
-    "absolute_tolerance": 1e-09
+    "absolute_tolerance": 1e-9
   },
   "boundary_conditions": {
     "INFLOW": {
       "type": "FLOW",
       "values": {
-        "flow": [
-          5.0,
-          5.0
-        ],
-        "time": [
-          0.0,
-          1.0
-        ]
+        "flow": [5.0, 5.0],
+        "time": [0.0, 1.0]
       }
     },
     "OUT": {
@@ -38,18 +32,12 @@
       "values": {
         "capacitance_artery": 0.0001,
         "capacitance_im": 0.0001,
-        "pressure_im": [
-          1000.0,
-          1000.0
-        ],
+        "pressure_im": [1000.0, 1000.0],
         "pressure_venous": 0.0,
         "resistance_artery1": 100.0,
         "resistance_artery2": 100.0,
         "resistance_vein1": 100.0,
-        "time": [
-          0.0,
-          1.0
-        ]
+        "time": [0.0, 1.0]
       }
     }
   },
@@ -62,13 +50,7 @@
     }
   },
   "connections": [
-    [
-      "INFLOW",
-      "branch0_seg0"
-    ],
-    [
-      "branch0_seg0",
-      "OUT"
-    ]
+    ["INFLOW", "branch0_seg0"],
+    ["branch0_seg0", "OUT"]
   ]
 }

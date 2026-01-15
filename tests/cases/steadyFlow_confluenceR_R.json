@@ -23,33 +23,21 @@
   "simulation_parameters": {
     "number_of_cardiac_cycles": 2,
     "number_of_time_pts_per_cardiac_cycle": 5,
-    "absolute_tolerance": 1e-09
+    "absolute_tolerance": 1e-9
   },
   "boundary_conditions": {
     "INFLOW0": {
       "type": "FLOW",
       "values": {
-        "flow": [
-          5.0,
-          5.0
-        ],
-        "time": [
-          0.0,
-          1.0
-        ]
+        "flow": [5.0, 5.0],
+        "time": [0.0, 1.0]
       }
     },
     "INFLOW1": {
       "type": "FLOW",
       "values": {
-        "flow": [
-          10.0,
-          10.0
-        ],
-        "time": [
-          0.0,
-          1.0
-        ]
+        "flow": [10.0, 10.0],
+        "time": [0.0, 1.0]
       }
     },
     "OUT": {
@@ -81,25 +69,9 @@
     }
   },
   "connections": [
-    [
-      "INFLOW0",
-      "branch0_seg0"
-    ],
-    [
-      "INFLOW1",
-      "branch1_seg0"
-    ],
-    [
-      "branch2_seg0",
-      "OUT"
-    ],
-    [
-      "branch0_seg0",
-      "branch2_seg0"
-    ],
-    [
-      "branch1_seg0",
-      "branch2_seg0"
-    ]
+    ["INFLOW0", "branch0_seg0"],
+    ["INFLOW1", "branch1_seg0"],
+    ["branch2_seg0", "OUT"],
+    [["branch0_seg0", "branch1_seg0"], "branch2_seg0"]
   ]
 }

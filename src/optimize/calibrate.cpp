@@ -33,65 +33,91 @@ svzero_json calibrate(const svzero_json& config) {
   std::vector<std::tuple<std::string, std::string>> inlet_connections;
   std::vector<std::tuple<std::string, std::string>> outlet_connections;
 
-  // Create vessels
+  // Create vessels (dictionary format: name -> {type, values})
   DEBUG_MSG("Load vessels");
-  std::map<std::int64_t, std::string> vessel_id_map;
   int param_counter = 0;
-  for (auto const& vessel_config : config["vessels"]) {
-    std::string vessel_name = vessel_config["vessel_name"];
-
+  for (auto const& [vessel_name, vessel_config] : config["vessels"].items()) {
     // Create parameter IDs
     std::vector<int> param_ids;
     for (size_t k = 0; k < num_params; k++)
       param_ids.push_back(param_counter++);
-    std::string block_type =
-        vessel_config["zero_d_element_type"].get<std::string>();
+    std::string block_type = vessel_config["type"].get<std::string>();
     model.add_block(block_type, param_ids, vessel_name);
-    vessel_id_map.insert({vessel_config["vessel_id"], vessel_name});
     DEBUG_MSG("Created vessel " << vessel_name);
+  }
 
-    // Read connected boundary conditions
-    if (vessel_config.contains("boundary_conditions")) {
-      auto const& vessel_bc_config = vessel_config["boundary_conditions"];
-      if (vessel_bc_config.contains("inlet")) {
-        inlet_connections.push_back({vessel_bc_config["inlet"], vessel_name});
+  // Create junctions (dictionary format: name -> {type, values, inlet, outlet})
+  if (config.contains("junctions")) {
+    for (auto const& [junction_name, junction_config] :
+         config["junctions"].items()) {
+      auto const& outlets = junction_config["outlet"];
+      int num_outlets = outlets.size();
+
+      if (num_outlets == 1) {
+        model.add_block("NORMAL_JUNCTION", {}, junction_name);
+      } else {
+        std::vector<int> param_ids;
+        for (size_t i = 0; i < (num_outlets * (num_params - 1)); i++)
+          param_ids.push_back(param_counter++);
+        model.add_block("BloodVesselJunction", param_ids, junction_name);
       }
-      if (vessel_bc_config.contains("outlet")) {
-        outlet_connections.push_back({vessel_name, vessel_bc_config["outlet"]});
+
+      // Check for connections to inlet and outlet blocks
+      for (auto const& block_name : junction_config["inlet"]) {
+        connections.push_back({block_name, junction_name});
       }
+
+      for (auto const& block_name : outlets) {
+        connections.push_back({junction_name, block_name});
+      }
+      DEBUG_MSG("Created junction " << junction_name);
     }
   }
 
-  // Create junctions
-  for (auto const& junction_config : config["junctions"]) {
-    std::string junction_name = junction_config["junction_name"];
-    auto const& outlet_vessels = junction_config["outlet_vessels"];
-    int num_outlets = outlet_vessels.size();
+  // Process top-level connections array
+  // Connections can be: [A, B] - simple connection between named blocks
+  // For BC-to-vessel connections, the BC name is used directly
+  if (config.contains("connections")) {
+    for (const auto& conn : config["connections"]) {
+      bool first_is_array = conn[0].is_array();
+      bool second_is_array = conn[1].is_array();
 
-    if (num_outlets == 1) {
-      model.add_block("NORMAL_JUNCTION", {}, junction_name);
+      if (!first_is_array && !second_is_array) {
+        // Simple connection: [A, B]
+        std::string upstream = conn[0];
+        std::string downstream = conn[1];
+        // Check if upstream/downstream are vessels (have blocks) or BCs (no
+        // blocks)
+        bool upstream_is_vessel = model.has_block(upstream);
+        bool downstream_is_vessel = model.has_block(downstream);
 
-    } else {
-      std::vector<int> param_ids;
-      for (size_t i = 0; i < (num_outlets * (num_params - 1)); i++)
-        param_ids.push_back(param_counter++);
-      model.add_block("BloodVesselJunction", param_ids, junction_name);
+        if (upstream_is_vessel && downstream_is_vessel) {
+          connections.push_back({upstream, downstream});
+        } else if (!upstream_is_vessel && downstream_is_vessel) {
+          // BC -> vessel (inlet)
+          inlet_connections.push_back({upstream, downstream});
+        } else if (upstream_is_vessel && !downstream_is_vessel) {
+          // vessel -> BC (outlet)
+          outlet_connections.push_back({upstream, downstream});
+        }
+      } else if (!first_is_array && second_is_array) {
+        // Bifurcation: [A, [B, C, ...]]
+        std::string upstream = conn[0];
+        for (const auto& downstream : conn[1]) {
+          connections.push_back({upstream, downstream});
+        }
+      } else if (first_is_array && !second_is_array) {
+        // Confluence: [[A, B, ...], C]
+        std::string downstream = conn[1];
+        for (const auto& upstream : conn[0]) {
+          connections.push_back({upstream, downstream});
+        }
+      }
     }
-
-    // Check for connections to inlet and outlet vessels and append to
-    // connections list
-    for (auto vessel_id : junction_config["inlet_vessels"]) {
-      connections.push_back({vessel_id_map[vessel_id], junction_name});
-    }
-
-    for (auto vessel_id : outlet_vessels) {
-      connections.push_back({junction_name, vessel_id_map[vessel_id]});
-    }
-    DEBUG_MSG("Created junction " << junction_name);
   }
 
   // Create Connections
-  DEBUG_MSG("Created connection");
+  DEBUG_MSG("Create connections");
   for (auto& connection : connections) {
     auto ele1 = model.get_block(std::get<0>(connection));
     auto ele2 = model.get_block(std::get<1>(connection));
@@ -149,53 +175,47 @@ svzero_json calibrate(const svzero_json& config) {
   Eigen::Matrix<double, Eigen::Dynamic, 1> alpha =
       Eigen::Matrix<double, Eigen::Dynamic, 1>::Zero(param_counter);
   DEBUG_MSG("Reading initial alpha");
-  for (auto& vessel_config : output_config["vessels"]) {
-    std::string vessel_name = vessel_config["vessel_name"];
+  for (auto& [vessel_name, vessel_config] : output_config["vessels"].items()) {
     DEBUG_MSG("Reading initial alpha for " << vessel_name);
     auto block = model.get_block(vessel_name);
-    alpha[block->global_param_ids[0]] =
-        vessel_config["zero_d_element_values"].value("R_poiseuille", 0.0);
-    alpha[block->global_param_ids[1]] =
-        vessel_config["zero_d_element_values"].value("C", 0.0);
-    alpha[block->global_param_ids[2]] =
-        vessel_config["zero_d_element_values"].value("L", 0.0);
+    const auto& values = vessel_config["values"];
+    alpha[block->global_param_ids[0]] = values.value("resistance", 0.0);
+    alpha[block->global_param_ids[1]] = values.value("capacitance", 0.0);
+    alpha[block->global_param_ids[2]] = values.value("inductance", 0.0);
     if (num_params > 3) {
-      alpha[block->global_param_ids[3]] =
-          vessel_config["zero_d_element_values"].value("stenosis_coefficient",
-                                                       0.0);
+      alpha[block->global_param_ids[3]] = values.value("stenosis", 0.0);
     }
   }
-  for (auto& junction_config : output_config["junctions"]) {
-    std::string junction_name = junction_config["junction_name"];
-    DEBUG_MSG("Reading initial alpha for " << junction_name);
-    auto block = model.get_block(junction_name);
-    int num_outlets = block->outlet_nodes.size();
+  if (output_config.contains("junctions")) {
+    for (auto& [junction_name, junction_config] :
+         output_config["junctions"].items()) {
+      DEBUG_MSG("Reading initial alpha for " << junction_name);
+      auto block = model.get_block(junction_name);
+      int num_outlets = block->outlet_nodes.size();
 
-    if (num_outlets < 2) {
-      continue;
-    }
-
-    for (size_t i = 0; i < num_outlets; i++) {
-      alpha[block->global_param_ids[i]] = 0.0;
-      alpha[block->global_param_ids[i + num_outlets]] = 0.0;
-      if (num_params > 3) {
-        alpha[block->global_param_ids[i + 2 * num_outlets]] = 0.0;
+      if (num_outlets < 2) {
+        continue;
       }
-    }
-    if (junction_config["junction_type"] == "BloodVesselJunction") {
-      auto resistance = junction_config["junction_values"]["R_poiseuille"]
-                            .get<std::vector<double>>();
-      auto inductance =
-          junction_config["junction_values"]["L"].get<std::vector<double>>();
-      auto stenosis_coeff =
-          junction_config["junction_values"]["stenosis_coefficient"]
-              .get<std::vector<double>>();
+
       for (size_t i = 0; i < num_outlets; i++) {
-        alpha[block->global_param_ids[i]] = resistance[i];
-        alpha[block->global_param_ids[i + num_outlets]] = inductance[i];
+        alpha[block->global_param_ids[i]] = 0.0;
+        alpha[block->global_param_ids[i + num_outlets]] = 0.0;
         if (num_params > 3) {
-          alpha[block->global_param_ids[i + 2 * num_outlets]] =
-              stenosis_coeff[i];
+          alpha[block->global_param_ids[i + 2 * num_outlets]] = 0.0;
+        }
+      }
+      if (junction_config["type"] == "BloodVesselJunction") {
+        const auto& values = junction_config["values"];
+        auto resistance = values["resistance"].get<std::vector<double>>();
+        auto inductance = values["inductance"].get<std::vector<double>>();
+        auto stenosis_coeff = values["stenosis"].get<std::vector<double>>();
+        for (size_t i = 0; i < num_outlets; i++) {
+          alpha[block->global_param_ids[i]] = resistance[i];
+          alpha[block->global_param_ids[i + num_outlets]] = inductance[i];
+          if (num_params > 3) {
+            alpha[block->global_param_ids[i + 2 * num_outlets]] =
+                stenosis_coeff[i];
+          }
         }
       }
     }
@@ -210,8 +230,7 @@ svzero_json calibrate(const svzero_json& config) {
   alpha = lm_alg.run(alpha, y_all, dy_all);
 
   // Write optimized simulation config file
-  for (auto& vessel_config : output_config["vessels"]) {
-    std::string vessel_name = vessel_config["vessel_name"];
+  for (auto& [vessel_name, vessel_config] : output_config["vessels"].items()) {
     auto block = model.get_block(vessel_name);
     double stenosis_coeff = 0.0;
     if (num_params > 3) {
@@ -221,48 +240,50 @@ svzero_json calibrate(const svzero_json& config) {
     if (!zero_capacitance) {
       c_value = alpha[block->global_param_ids[1]];
     }
-    vessel_config["zero_d_element_values"] = {
-        {"R_poiseuille", alpha[block->global_param_ids[0]]},
-        {"C", std::max(c_value, 0.0)},
-        {"L", std::max(alpha[block->global_param_ids[2]], 0.0)},
-        {"stenosis_coefficient", stenosis_coeff}};
+    vessel_config["values"] = {
+        {"resistance", alpha[block->global_param_ids[0]]},
+        {"capacitance", std::max(c_value, 0.0)},
+        {"inductance", std::max(alpha[block->global_param_ids[2]], 0.0)},
+        {"stenosis", stenosis_coeff}};
   }
-  for (auto& junction_config : output_config["junctions"]) {
-    std::string junction_name = junction_config["junction_name"];
-    auto block = model.get_block(junction_name);
-    int num_outlets = block->outlet_nodes.size();
+  if (output_config.contains("junctions")) {
+    for (auto& [junction_name, junction_config] :
+         output_config["junctions"].items()) {
+      auto block = model.get_block(junction_name);
+      int num_outlets = block->outlet_nodes.size();
 
-    if (num_outlets < 2) {
-      continue;
-    }
-
-    std::vector<double> r_values;
-    for (size_t i = 0; i < num_outlets; i++) {
-      r_values.push_back(alpha[block->global_param_ids[i]]);
-    }
-    std::vector<double> l_values;
-    for (size_t i = 0; i < num_outlets; i++) {
-      l_values.push_back(
-          std::max(alpha[block->global_param_ids[i + num_outlets]], 0.0));
-    }
-
-    std::vector<double> ste_values;
-
-    if (num_params > 3) {
-      for (size_t i = 0; i < num_outlets; i++) {
-        ste_values.push_back(
-            alpha[block->global_param_ids[i + 2 * num_outlets]]);
+      if (num_outlets < 2) {
+        continue;
       }
-    } else {
-      for (size_t i = 0; i < num_outlets; i++) {
-        ste_values.push_back(0.0);
-      }
-    }
 
-    junction_config["junction_type"] = "BloodVesselJunction";
-    junction_config["junction_values"] = {{"R_poiseuille", r_values},
-                                          {"L", l_values},
-                                          {"stenosis_coefficient", ste_values}};
+      std::vector<double> r_values;
+      for (size_t i = 0; i < num_outlets; i++) {
+        r_values.push_back(alpha[block->global_param_ids[i]]);
+      }
+      std::vector<double> l_values;
+      for (size_t i = 0; i < num_outlets; i++) {
+        l_values.push_back(
+            std::max(alpha[block->global_param_ids[i + num_outlets]], 0.0));
+      }
+
+      std::vector<double> ste_values;
+
+      if (num_params > 3) {
+        for (size_t i = 0; i < num_outlets; i++) {
+          ste_values.push_back(
+              alpha[block->global_param_ids[i + 2 * num_outlets]]);
+        }
+      } else {
+        for (size_t i = 0; i < num_outlets; i++) {
+          ste_values.push_back(0.0);
+        }
+      }
+
+      junction_config["type"] = "BloodVesselJunction";
+      junction_config["values"] = {{"resistance", r_values},
+                                   {"inductance", l_values},
+                                   {"stenosis", ste_values}};
+    }
   }
 
   output_config.erase("y");

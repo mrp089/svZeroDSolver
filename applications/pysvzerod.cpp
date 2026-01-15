@@ -68,7 +68,10 @@ PYBIND11_MODULE(pysvzerod, m) {
     py::module_ json = py::module_::import("json");
     std::string json_str = json.attr("dumps")(config).cast<std::string>();
     svzero_json ordered_config = svzero_json::parse(json_str);
-    return calibrate(ordered_config);
+    auto result = calibrate(ordered_config);
+    // Convert result back to Python dict via JSON string
+    std::string result_str = result.dump();
+    return json.attr("loads")(result_str);
   });
   m.def("run_simulation_cli", []() {
     py::module_ sys = py::module_::import("sys");

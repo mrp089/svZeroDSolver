@@ -235,37 +235,67 @@ void load_simulation_model(const svzero_json& config, Model& model) {
   }
 
   // Collect top-level connections and analyze for auto-junction creation
+  // Connections can be:
+  //   [A, B] - A connects to B (simple)
+  //   [A, [B, C]] - A connects to B and C (bifurcation)
+  //   [[A, B], C] - A and B both connect to C (confluence)
   std::vector<std::tuple<std::string, std::string>> raw_connections;
+
+  // Helper lambda to add a connection and update vessel types
+  auto add_connection = [&](const std::string& upstream,
+                            const std::string& downstream) {
+    raw_connections.push_back({upstream, downstream});
+
+    // Update vessel types based on BC connections
+    bool upstream_is_bc = bc_type_map.count(upstream) > 0;
+    bool downstream_is_bc = bc_type_map.count(downstream) > 0;
+    bool upstream_is_vessel = vessel_names.count(upstream) > 0;
+    bool downstream_is_vessel = vessel_names.count(downstream) > 0;
+
+    // If BC connects to vessel inlet, mark vessel as inlet type
+    if (upstream_is_bc && downstream_is_vessel) {
+      Block* vessel = model.get_block(downstream);
+      if (vessel->vessel_type == VesselType::outlet) {
+        vessel->update_vessel_type(VesselType::both);
+      } else {
+        vessel->update_vessel_type(VesselType::inlet);
+      }
+    }
+
+    // If vessel connects to BC outlet, mark vessel as outlet type
+    if (upstream_is_vessel && downstream_is_bc) {
+      Block* vessel = model.get_block(upstream);
+      if (vessel->vessel_type == VesselType::inlet) {
+        vessel->update_vessel_type(VesselType::both);
+      } else {
+        vessel->update_vessel_type(VesselType::outlet);
+      }
+    }
+  };
+
   if (config.contains("connections")) {
     for (const auto& conn : config["connections"]) {
-      std::string upstream = conn[0];
-      std::string downstream = conn[1];
-      raw_connections.push_back({upstream, downstream});
+      bool first_is_array = conn[0].is_array();
+      bool second_is_array = conn[1].is_array();
 
-      // Update vessel types based on BC connections
-      bool upstream_is_bc = bc_type_map.count(upstream) > 0;
-      bool downstream_is_bc = bc_type_map.count(downstream) > 0;
-      bool upstream_is_vessel = vessel_names.count(upstream) > 0;
-      bool downstream_is_vessel = vessel_names.count(downstream) > 0;
-
-      // If BC connects to vessel inlet, mark vessel as inlet type
-      if (upstream_is_bc && downstream_is_vessel) {
-        Block* vessel = model.get_block(downstream);
-        if (vessel->vessel_type == VesselType::outlet) {
-          vessel->update_vessel_type(VesselType::both);
-        } else {
-          vessel->update_vessel_type(VesselType::inlet);
+      if (!first_is_array && !second_is_array) {
+        // Simple connection: [A, B]
+        add_connection(conn[0], conn[1]);
+      } else if (!first_is_array && second_is_array) {
+        // Bifurcation: [A, [B, C, ...]]
+        std::string upstream = conn[0];
+        for (const auto& downstream : conn[1]) {
+          add_connection(upstream, downstream);
         }
-      }
-
-      // If vessel connects to BC outlet, mark vessel as outlet type
-      if (upstream_is_vessel && downstream_is_bc) {
-        Block* vessel = model.get_block(upstream);
-        if (vessel->vessel_type == VesselType::inlet) {
-          vessel->update_vessel_type(VesselType::both);
-        } else {
-          vessel->update_vessel_type(VesselType::outlet);
+      } else if (first_is_array && !second_is_array) {
+        // Confluence: [[A, B, ...], C]
+        std::string downstream = conn[1];
+        for (const auto& upstream : conn[0]) {
+          add_connection(upstream, downstream);
         }
+      } else {
+        throw std::runtime_error(
+            "Invalid connection format: both elements cannot be arrays");
       }
     }
   }
