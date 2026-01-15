@@ -97,14 +97,14 @@
       "values": {
         "resistance_max": 100000.0,
         "resistance_min": 100.0,
-        "steepness": 100.0,
-        "upstream_block": "upstream_vessel",
-        "downstream_block": "downstream_vessel"
+        "steepness": 100.0
       }
     }
   },
   "connections": [
     ["INLET", "upstream_vessel"],
+    ["upstream_vessel", "valve"],
+    ["valve", "downstream_vessel"],
     ["downstream_vessel", "OUTLET"]
   ]
 }

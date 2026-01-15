@@ -400,10 +400,10 @@ void load_simulation_model(const svzero_json& config, Model& model) {
     create_closed_loop(model, connections, config, component, closed_loop_bcs);
   }
 
-  // Create valves
+  // Create valves (connections handled via top-level connections array)
   component = "valves";
   if (config.contains(component)) {
-    create_valves(model, connections, config, component);
+    create_valves(model, config, component);
   }
 
   // Create chambers
@@ -639,17 +639,14 @@ void create_closed_loop(
   }
 }
 
-void create_valves(
-    Model& model,
-    std::vector<std::tuple<std::string, std::string>>& connections,
-    const svzero_json& config, const std::string& component) {
+void create_valves(Model& model, const svzero_json& config,
+                   const std::string& component) {
   // Loop all valves (dictionary format: name -> {type, values})
+  // Valve connections are handled via the top-level connections array
   for (auto& [valve_name, valve_config] : config[component].items()) {
     std::string valve_type = valve_config["type"];
     const auto& valve_values = valve_config["values"];
     generate_block(model, valve_values, valve_type, valve_name);
-    connections.push_back({valve_values["upstream_block"], valve_name});
-    connections.push_back({valve_name, valve_values["downstream_block"]});
     DEBUG_MSG("Created valve " << valve_name);
   }
 }

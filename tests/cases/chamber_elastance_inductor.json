@@ -65,9 +65,7 @@
       "values": {
         "resistance_max": 100000.0,
         "resistance_min": 100.0,
-        "steepness": 100.0,
-        "upstream_block": "INLET",
-        "downstream_block": "ventricle"
+        "steepness": 100.0
       }
     },
     "valve1": {
@@ -75,9 +73,7 @@
       "values": {
         "resistance_max": 100000.0,
         "resistance_min": 100.0,
-        "steepness": 100.0,
-        "upstream_block": "ventricle",
-        "downstream_block": "vessel"
+        "steepness": 100.0
       }
     }
   },
@@ -95,7 +91,13 @@
       }
     }
   },
-  "connections": [["vessel", "OUTLET"]],
+  "connections": [
+    ["INLET", "valve0"],
+    ["valve0", "ventricle"],
+    ["ventricle", "valve1"],
+    ["valve1", "vessel"],
+    ["vessel", "OUTLET"]
+  ],
   "initial_condition": {
     "Vc:ventricle": 96.07
   }

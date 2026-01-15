@@ -105,8 +105,6 @@
  * * `0` Rmax: Maximum (closed) valve resistance
  * * `1` Rmin: Minimum (open) valve resistance
  * * `2` Steepness: Steepness of sigmoid function
- * * `3` upstream_block: Name of block connected upstream
- * * `4` downstream_block: Name of block connected downstream
  *
  * ### Usage in json configuration file
  *
@@ -116,12 +114,14 @@
  *             "values": {
  *                 "resistance_max": 100000.0,
  *                 "resistance_min": 100.0,
- *                 "steepness": 100.0,
- *                 "upstream_block": "upstream_vessel",
- *                 "downstream_block": "downstream_vessel"
+ *                 "steepness": 100.0
  *             }
  *         }
- *     }
+ *     },
+ *     "connections": [
+ *         ["upstream_vessel", "valve"],
+ *         ["valve", "downstream_vessel"]
+ *     ]
  *
  * ### Internal variables
  *
@@ -150,9 +150,7 @@ class ValveTanh : public Block {
       : Block(id, model, BlockType::valve_tanh, BlockClass::valve,
               {{"resistance_max", InputParameter()},
                {"resistance_min", InputParameter()},
-               {"steepness", InputParameter()},
-               {"upstream_block", InputParameter(false, false, false)},
-               {"downstream_block", InputParameter(false, false, false)}}) {}
+               {"steepness", InputParameter()}}) {}
 
   /**
    * @brief Set up the degrees of freedom (DOF) of the block

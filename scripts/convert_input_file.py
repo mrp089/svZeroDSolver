@@ -237,20 +237,32 @@ def convert_closed_loop_blocks(old_blocks: list) -> dict:
     return new_blocks
 
 
-def convert_valves(old_valves: list) -> dict:
+def convert_valves(old_valves: list, connections: list) -> dict:
     """Convert valves from array to dict format.
 
-    Valve connections (upstream_block, downstream_block) are kept in the values
-    and processed by the C++ code, not added to the global connections array.
+    Valve connections (upstream_block, downstream_block) are extracted and added
+    to the global connections array.
     """
     new_valves = {}
 
     for valve in old_valves:
         name = valve["name"]
-        # Rename 'params' to 'values', keeping upstream_block/downstream_block
+        old_params = valve.get("params", {})
+
+        # Extract connection info
+        upstream = old_params.pop("upstream_block", None)
+        downstream = old_params.pop("downstream_block", None)
+
+        # Add connections
+        if upstream:
+            connections.append([upstream, name])
+        if downstream:
+            connections.append([name, downstream])
+
+        # Rename remaining params to 'values'
         new_valves[name] = {
             "type": valve["type"],
-            "values": rename_params(valve.get("params", {}))
+            "values": rename_params(old_params)
         }
 
     return new_valves
@@ -331,7 +343,7 @@ def convert_input_file(old_config: dict) -> dict:
 
     # Convert valves
     if "valves" in old_config:
-        new_config["valves"] = convert_valves(old_config["valves"])
+        new_config["valves"] = convert_valves(old_config["valves"], connections)
 
     # Convert chambers
     if "chambers" in old_config:

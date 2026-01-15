@@ -251,17 +251,16 @@ void create_closed_loop(
     std::vector<std::string>& closed_loop_bcs);
 
 /**
- * @brief Handle the creation of valves and their associated connections
+ * @brief Handle the creation of valves
+ *
+ * Valve connections are handled via the top-level connections array.
  *
  * @param model The model the block is associated with
- * @param connections Vector storing the connections between blocks
  * @param config The JSON configuration
  * @param component Name of the component to retrieve from config
  */
-void create_valves(
-    Model& model,
-    std::vector<std::tuple<std::string, std::string>>& connections,
-    const svzero_json& config, const std::string& component);
+void create_valves(Model& model, const svzero_json& config,
+                   const std::string& component);
 
 /**
  * @brief Handle the creation of chambers
