@@ -228,19 +228,19 @@ void load_simulation_model(const svzero_json& config, Model& model) {
   create_boundary_conditions(model, config, component, bc_type_map,
                              closed_loop_bcs);
 
-  // Create junctions
+  // Create explicit junctions (e.g., BloodVesselJunction with parameters)
   component = "junctions";
   if (config.contains(component)) {
     create_junctions(model, connections, config, component);
   }
 
-  // Load top-level connections (BC-to-vessel connections) BEFORE other blocks
-  // This ensures BC connections are created first, matching the original behavior
+  // Collect top-level connections and analyze for auto-junction creation
+  std::vector<std::tuple<std::string, std::string>> raw_connections;
   if (config.contains("connections")) {
     for (const auto& conn : config["connections"]) {
       std::string upstream = conn[0];
       std::string downstream = conn[1];
-      connections.push_back({upstream, downstream});
+      raw_connections.push_back({upstream, downstream});
 
       // Update vessel types based on BC connections
       bool upstream_is_bc = bc_type_map.count(upstream) > 0;
@@ -268,6 +268,100 @@ void load_simulation_model(const svzero_json& config, Model& model) {
         }
       }
     }
+  }
+
+  // Auto-create NORMAL_JUNCTIONs where blocks have multiple inlets or outlets
+  // Build maps: block -> list of downstream blocks, block -> list of upstream
+  // blocks
+  std::map<std::string, std::vector<std::string>> downstream_map;
+  std::map<std::string, std::vector<std::string>> upstream_map;
+  for (const auto& conn : raw_connections) {
+    downstream_map[std::get<0>(conn)].push_back(std::get<1>(conn));
+    upstream_map[std::get<1>(conn)].push_back(std::get<0>(conn));
+  }
+
+  // Track which junctions we create to avoid duplicates
+  std::set<std::string> auto_junctions;
+
+  // Create junctions for blocks with multiple outlets (bifurcations)
+  for (const auto& [block_name, downstreams] : downstream_map) {
+    if (downstreams.size() > 1) {
+      // Check if block already exists (could be an explicit junction)
+      if (model.has_block(block_name)) {
+        // Block exists, check if it's already a junction
+        Block* block = model.get_block(block_name);
+        if (block->block_class == BlockClass::junction) {
+          // Already a junction, just add connections
+          for (const auto& ds : downstreams) {
+            connections.push_back({block_name, ds});
+          }
+          continue;
+        }
+      }
+      // Need to create an auto-junction after this block
+      std::string junction_name = "J_" + block_name + "_outlet";
+      if (auto_junctions.find(junction_name) == auto_junctions.end()) {
+        generate_block(model, {}, "NORMAL_JUNCTION", junction_name);
+        auto_junctions.insert(junction_name);
+        DEBUG_MSG("Auto-created junction " << junction_name);
+      }
+      // Connect: block -> junction -> each downstream
+      connections.push_back({block_name, junction_name});
+      for (const auto& ds : downstreams) {
+        connections.push_back({junction_name, ds});
+      }
+    } else if (downstreams.size() == 1) {
+      // Single downstream, direct connection
+      connections.push_back({block_name, downstreams[0]});
+    }
+  }
+
+  // Create junctions for blocks with multiple inlets (confluences)
+  for (const auto& [block_name, upstreams] : upstream_map) {
+    if (upstreams.size() > 1) {
+      // Check if connections already go through an auto-junction
+      bool already_handled = false;
+      for (const auto& us : upstreams) {
+        std::string potential_junction = "J_" + us + "_outlet";
+        if (auto_junctions.find(potential_junction) != auto_junctions.end()) {
+          // This upstream already has an outlet junction, check if it connects
+          // to block_name
+          already_handled = true;
+          break;
+        }
+      }
+      if (already_handled) {
+        continue;  // Connections already added via outlet junction
+      }
+
+      // Check if block already exists and is a junction
+      if (model.has_block(block_name)) {
+        Block* block = model.get_block(block_name);
+        if (block->block_class == BlockClass::junction) {
+          continue;  // Already handled by explicit junction
+        }
+      }
+
+      // Need to create an auto-junction before this block
+      std::string junction_name = "J_" + block_name + "_inlet";
+      if (auto_junctions.find(junction_name) == auto_junctions.end()) {
+        generate_block(model, {}, "NORMAL_JUNCTION", junction_name);
+        auto_junctions.insert(junction_name);
+        DEBUG_MSG("Auto-created junction " << junction_name);
+      }
+      // Connect: each upstream -> junction -> block
+      for (const auto& us : upstreams) {
+        // Remove any existing direct connection that was added
+        auto it = std::find(connections.begin(), connections.end(),
+                            std::make_tuple(us, block_name));
+        if (it != connections.end()) {
+          connections.erase(it);
+        }
+        connections.push_back({us, junction_name});
+      }
+      connections.push_back({junction_name, block_name});
+    }
+    // Single upstream connections are already handled in the downstream loop
   }
 
   // Create closed-loop blocks

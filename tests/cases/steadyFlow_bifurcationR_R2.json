@@ -66,16 +66,11 @@
       }
     }
   },
-  "junctions": {
-    "J0": {
-      "type": "NORMAL_JUNCTION",
-      "inlet": ["branch0_seg0"],
-      "outlet": ["branch1_seg0", "branch2_seg0"]
-    }
-  },
   "connections": [
     ["INFLOW", "branch0_seg0"],
     ["branch1_seg0", "OUT1"],
-    ["branch2_seg0", "OUT2"]
+    ["branch2_seg0", "OUT2"],
+    ["branch0_seg0", "branch1_seg0"],
+    ["branch0_seg0", "branch2_seg0"]
   ]
 }

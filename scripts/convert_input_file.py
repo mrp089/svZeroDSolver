@@ -70,40 +70,57 @@ def convert_vessels(old_vessels: list, connections: list) -> dict:
     return new_vessels, vessel_id_map
 
 
-def convert_junctions(old_junctions: list, vessel_id_map: dict) -> dict:
+def convert_junctions(old_junctions: list, vessel_id_map: dict, connections: list) -> dict:
     """Convert junctions from array to dict format.
 
+    For NORMAL_JUNCTION: converts to direct connections (auto-junction will be created)
+    For other junction types (e.g., BloodVesselJunction): keeps as explicit junction
+
     Converts inlet_vessels/outlet_vessels (using IDs) to inlet/outlet (using names).
-    Junction connections are encoded in the junction's inlet/outlet arrays,
-    not in the global connections list.
     """
     new_junctions = {}
 
     for junction in old_junctions:
         name = junction["junction_name"]
+        junction_type = junction["junction_type"]
 
-        new_junction = {
-            "type": junction["junction_type"]
-        }
-
-        # Convert junction_values if present
-        if "junction_values" in junction:
-            new_junction["values"] = junction["junction_values"]
-
-        # Convert vessel IDs to names, or use block names directly
+        # Get inlet and outlet names
         if "inlet_vessels" in junction:
             inlet_names = [vessel_id_map[vid] for vid in junction["inlet_vessels"]]
-            new_junction["inlet"] = inlet_names
         elif "inlet_blocks" in junction:
-            new_junction["inlet"] = junction["inlet_blocks"]
+            inlet_names = junction["inlet_blocks"]
+        else:
+            inlet_names = []
 
         if "outlet_vessels" in junction:
             outlet_names = [vessel_id_map[vid] for vid in junction["outlet_vessels"]]
-            new_junction["outlet"] = outlet_names
         elif "outlet_blocks" in junction:
-            new_junction["outlet"] = junction["outlet_blocks"]
+            outlet_names = junction["outlet_blocks"]
+        else:
+            outlet_names = []
 
-        new_junctions[name] = new_junction
+        # For NORMAL_JUNCTION, just add connections (auto-junction will be created)
+        if junction_type == "NORMAL_JUNCTION":
+            # Add direct connections from each inlet to each outlet
+            # The solver will auto-create a junction where needed
+            for inlet in inlet_names:
+                for outlet in outlet_names:
+                    connections.append([inlet, outlet])
+        else:
+            # For other junction types (e.g., BloodVesselJunction), keep explicit
+            new_junction = {
+                "type": junction_type
+            }
+
+            if "junction_values" in junction:
+                new_junction["values"] = junction["junction_values"]
+
+            if inlet_names:
+                new_junction["inlet"] = inlet_names
+            if outlet_names:
+                new_junction["outlet"] = outlet_names
+
+            new_junctions[name] = new_junction
 
     return new_junctions
 
@@ -219,11 +236,14 @@ def convert_input_file(old_config: dict) -> dict:
             old_config["vessels"], connections
         )
 
-    # Convert junctions
+    # Convert junctions (NORMAL_JUNCTION becomes connections, others stay explicit)
     if "junctions" in old_config and old_config["junctions"]:
-        new_config["junctions"] = convert_junctions(
-            old_config["junctions"], vessel_id_map
+        new_junctions = convert_junctions(
+            old_config["junctions"], vessel_id_map, connections
         )
+        # Only add junctions section if there are non-NORMAL_JUNCTION types
+        if new_junctions:
+            new_config["junctions"] = new_junctions
 
     # Convert closed_loop_blocks
     if "closed_loop_blocks" in old_config:
