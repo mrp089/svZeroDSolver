@@ -118,10 +118,10 @@
  *         "branch0_seg0": {
  *             "type": "BloodVessel",
  *             "values": {
- *                 "R_poiseuille": 100.0,
- *                 "C": 1.0e-5,
- *                 "L": 1.0e-6,
- *                 "stenosis_coefficient": 0.0
+ *                 "resistance": 100.0,
+ *                 "capacitance": 1.0e-5,
+ *                 "inductance": 1.0e-6,
+ *                 "stenosis": 0.0
  *             }
  *         }
  *     }
@@ -152,10 +152,10 @@ class BloodVessel : public Block {
    */
   BloodVessel(int id, Model* model)
       : Block(id, model, BlockType::blood_vessel, BlockClass::vessel,
-              {{"R_poiseuille", InputParameter()},
-               {"C", InputParameter(true)},
-               {"L", InputParameter(true)},
-               {"stenosis_coefficient", InputParameter(true)}}) {}
+              {{"resistance", InputParameter()},
+               {"capacitance", InputParameter(true)},
+               {"inductance", InputParameter(true)},
+               {"stenosis", InputParameter(true)}}) {}
 
   /**
    * @brief Set up the degrees of freedom (DOF) of the block

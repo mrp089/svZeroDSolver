@@ -99,17 +99,17 @@
  *         "ventricle": {
  *             "type": "ChamberSphere",
  *             "values": {
- *                 "rho": 1e3,
- *                 "thick0": 0.01,
- *                 "radius0": 0.05,
- *                 "W1": 10e3,
- *                 "W2": 40,
- *                 "eta": 10.0,
- *                 "sigma_max": 185e3,
+ *                 "density": 1e3,
+ *                 "thickness_ref": 0.01,
+ *                 "radius_ref": 0.05,
+ *                 "material_constant_1": 10e3,
+ *                 "material_constant_2": 40,
+ *                 "viscosity": 10.0,
+ *                 "stress_max": 185e3,
  *                 "alpha_max": 30.0,
  *                 "alpha_min": -30.0,
- *                 "tsys": 0.170,
- *                 "tdias": 0.484,
+ *                 "time_systole": 0.170,
+ *                 "time_diastole": 0.484,
  *                 "steepness": 0.005
  *             }
  *         }
@@ -155,17 +155,17 @@ class ChamberSphere : public Block {
    */
   ChamberSphere(int id, Model* model)
       : Block(id, model, BlockType::chamber_sphere, BlockClass::vessel,
-              {{"rho", InputParameter()},
-               {"thick0", InputParameter()},
-               {"radius0", InputParameter()},
-               {"W1", InputParameter()},
-               {"W2", InputParameter()},
-               {"eta", InputParameter()},
-               {"sigma_max", InputParameter()},
+              {{"density", InputParameter()},
+               {"thickness_ref", InputParameter()},
+               {"radius_ref", InputParameter()},
+               {"material_constant_1", InputParameter()},
+               {"material_constant_2", InputParameter()},
+               {"viscosity", InputParameter()},
+               {"stress_max", InputParameter()},
                {"alpha_max", InputParameter()},
                {"alpha_min", InputParameter()},
-               {"tsys", InputParameter()},
-               {"tdias", InputParameter()},
+               {"time_systole", InputParameter()},
+               {"time_diastole", InputParameter()},
                {"steepness", InputParameter()}}) {}
 
   /**

@@ -56,11 +56,11 @@
  *         "INFLOW": {
  *             "type": "FLOW",
  *             "values": {
- *                 "Q": [
+ *                 "flow": [
  *                     5.0,
  *                     5.0
  *                 ],
- *                 "t": [
+ *                 "time": [
  *                     0.0,
  *                     1.0
  *                 ]
@@ -83,8 +83,8 @@ class FlowReferenceBC : public Block {
    */
   FlowReferenceBC(int id, Model* model)
       : Block(id, model, BlockType::flow_bc, BlockClass::boundary_condition,
-              {{"t", InputParameter(false, true)},
-               {"Q", InputParameter(false, true)}}) {}
+              {{"time", InputParameter(false, true)},
+               {"flow", InputParameter(false, true)}}) {}
 
   /**
    * @brief Set up the degrees of freedom (DOF) of the block

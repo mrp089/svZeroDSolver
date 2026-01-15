@@ -114,9 +114,9 @@
  *         "valve": {
  *             "type": "ValveTanh",
  *             "values": {
- *                 "Rmax": 100000.0,
- *                 "Rmin": 100.0,
- *                 "Steepness": 100.0,
+ *                 "resistance_max": 100000.0,
+ *                 "resistance_min": 100.0,
+ *                 "steepness": 100.0,
  *                 "upstream_block": "upstream_vessel",
  *                 "downstream_block": "downstream_vessel"
  *             }
@@ -148,9 +148,9 @@ class ValveTanh : public Block {
    */
   ValveTanh(int id, Model* model)
       : Block(id, model, BlockType::valve_tanh, BlockClass::valve,
-              {{"Rmax", InputParameter()},
-               {"Rmin", InputParameter()},
-               {"Steepness", InputParameter()},
+              {{"resistance_max", InputParameter()},
+               {"resistance_min", InputParameter()},
+               {"steepness", InputParameter()},
                {"upstream_block", InputParameter(false, false, false)},
                {"downstream_block", InputParameter(false, false, false)}}) {}
 

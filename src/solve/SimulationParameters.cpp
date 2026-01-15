@@ -81,7 +81,7 @@ int generate_block(Model& model, const svzero_json& block_params_json,
   } else {
     for (const auto& block_param : block->input_params) {
       // Time parameter is read at the same time as time-dependent value
-      if (block_param.first.compare("t") == 0) {
+      if (block_param.first.compare("time") == 0) {
         continue;
       }
 
@@ -105,9 +105,9 @@ int generate_block(Model& model, const svzero_json& block_params_json,
         // Get time vector
         InputParameter t_param{false, true};
         std::vector<double> time;
-        err = get_param_vector(block_params_json, "t", t_param, time);
+        err = get_param_vector(block_params_json, "time", t_param, time);
         if (err) {
-          throw std::runtime_error("Array parameter t is mandatory in " +
+          throw std::runtime_error("Array parameter time is mandatory in " +
                                    block_type + " block " +
                                    static_cast<std::string>(name));
         }
@@ -423,8 +423,8 @@ void create_boundary_conditions(Model& model, const svzero_json& config,
 
     if (block->block_type == BlockType::windkessel_bc) {
       model.update_has_windkessel_bc(true);
-      double Rd = bc_values["Rd"];
-      double C = bc_values["C"];
+      double Rd = bc_values["resistance_distal"];
+      double C = bc_values["capacitance"];
       double time_constant = Rd * C;
       model.update_largest_windkessel_time_constant(std::max(
           model.get_largest_windkessel_time_constant(), time_constant));

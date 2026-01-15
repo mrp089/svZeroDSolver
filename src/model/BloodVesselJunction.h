@@ -122,20 +122,16 @@
  *             ],
  *             "junction_name": "J0",
  *             "junction_type": "BloodVesselJunction",
- *             "junction_values": {
- *                 "R_poiseuille": [
+ *             "values": {
+ *                 "resistance": [
  *                     100,
  *                     200
  *                 ],
- *                 "C": [
+ *                 "inductance": [
  *                     0.0,
  *                     0.0
  *                 ],
- *                 "L": [
- *                     0.0,
- *                     0.0
- *                 ],
- *                 "stenosis_coefficient": [
+ *                 "stenosis": [
  *                     0.0,
  *                     0.0
  *                 ]
@@ -162,9 +158,9 @@ class BloodVesselJunction : public Block {
    */
   BloodVesselJunction(int id, Model* model)
       : Block(id, model, BlockType::blood_vessel_junction, BlockClass::junction,
-              {{"R_poiseuille", InputParameter()},
-               {"L", InputParameter()},
-               {"stenosis_coefficient", InputParameter()}}) {
+              {{"resistance", InputParameter()},
+               {"inductance", InputParameter()},
+               {"stenosis", InputParameter()}}) {
     input_params_list = true;
   }
 

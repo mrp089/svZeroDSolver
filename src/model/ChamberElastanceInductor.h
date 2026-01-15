@@ -115,13 +115,13 @@
  *         "ventricle": {
  *             "type": "ChamberElastanceInductor",
  *             "values": {
- *                 "Emax": 1.057,
- *                 "Emin": 0.091,
- *                 "Vrd": 26.1,
- *                 "Vrs": 18.0,
- *                 "t_active": 0.2,
- *                 "t_twitch": 0.3,
- *                 "Impedance": 0.000351787
+ *                 "elastance_max": 1.057,
+ *                 "elastance_min": 0.091,
+ *                 "volume_rest_diastolic": 26.1,
+ *                 "volume_rest_systolic": 18.0,
+ *                 "time_active": 0.2,
+ *                 "time_twitch": 0.3,
+ *                 "impedance": 0.000351787
  *             }
  *         }
  *     },
@@ -147,13 +147,13 @@ class ChamberElastanceInductor : public Block {
   ChamberElastanceInductor(int id, Model* model)
       : Block(id, model, BlockType::chamber_elastance_inductor,
               BlockClass::chamber,
-              {{"Emax", InputParameter()},
-               {"Emin", InputParameter()},
-               {"Vrd", InputParameter()},
-               {"Vrs", InputParameter()},
-               {"t_active", InputParameter()},
-               {"t_twitch", InputParameter()},
-               {"Impedance", InputParameter()}}) {}
+              {{"elastance_max", InputParameter()},
+               {"elastance_min", InputParameter()},
+               {"volume_rest_diastolic", InputParameter()},
+               {"volume_rest_systolic", InputParameter()},
+               {"time_active", InputParameter()},
+               {"time_twitch", InputParameter()},
+               {"impedance", InputParameter()}}) {}
 
   /**
    * @brief Local IDs of the parameters

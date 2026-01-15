@@ -15,19 +15,18 @@
  *
  * ### Usage in json configuration file
  *
- *     "boundary_conditions": [
- *          {
- *              "bc_name": "LCA",
- *              "bc_type": "ClosedLoopCoronaryLeft",
- *              "bc_values": {
- *                  "Ra": 9.307638231,
- *                  "Ram": 15.124912126,
- *                  "Rv": 33.270958757,
- *                  "Cim": 0.003737025,
- *                  "Ca": 0.000552427
- *              }
- *          }
- *     ]
+ *     "boundary_conditions": {
+ *         "LCA": {
+ *             "type": "ClosedLoopCoronaryLeft",
+ *             "values": {
+ *                 "resistance_artery": 9.307638231,
+ *                 "resistance_micro": 15.124912126,
+ *                 "resistance_vein": 33.270958757,
+ *                 "capacitance_im": 0.003737025,
+ *                 "capacitance_artery": 0.000552427
+ *             }
+ *         }
+ *     }
  */
 class ClosedLoopCoronaryLeftBC : public ClosedLoopCoronaryBC {
  public:

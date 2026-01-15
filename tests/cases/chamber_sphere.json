@@ -7,22 +7,34 @@
     "number_of_time_pts_per_cardiac_cycle": 500,
     "steady_initial": false,
     "output_variable_based": true,
-    "absolute_tolerance": 1e-9,
+    "absolute_tolerance": 1e-09,
     "output_all_cycles": true
   },
   "boundary_conditions": {
     "IN": {
       "type": "PRESSURE",
       "values": {
-        "P": [2150, 2150],
-        "t": [0, 1]
+        "pressure": [
+          2150,
+          2150
+        ],
+        "time": [
+          0,
+          1
+        ]
       }
     },
     "OUT": {
       "type": "PRESSURE",
       "values": {
-        "P": [13332.2, 13332.2],
-        "t": [0, 1]
+        "pressure": [
+          13332.2,
+          13332.2
+        ],
+        "time": [
+          0,
+          1
+        ]
       }
     }
   },
@@ -30,32 +42,32 @@
     "upstream_vessel": {
       "type": "BloodVessel",
       "values": {
-        "R_poiseuille": 1000000.0,
-        "C": 1e-9
+        "resistance": 1000000.0,
+        "capacitance": 1e-09
       }
     },
     "ventricle": {
       "type": "ChamberSphere",
       "values": {
-        "rho": 1000.0,
-        "thick0": 0.01,
-        "radius0": 0.05,
-        "W1": 10000.0,
-        "W2": 40,
-        "eta": 10.0,
-        "sigma_max": 185000.0,
+        "density": 1000.0,
+        "thickness_ref": 0.01,
+        "radius_ref": 0.05,
+        "material_constant_1": 10000.0,
+        "material_constant_2": 40,
+        "viscosity": 10.0,
+        "stress_max": 185000.0,
         "alpha_max": 30.0,
         "alpha_min": -30.0,
-        "tsys": 0.17,
-        "tdias": 0.484,
+        "time_systole": 0.17,
+        "time_diastole": 0.484,
         "steepness": 0.005
       }
     },
     "downstream_vessel": {
       "type": "BloodVessel",
       "values": {
-        "R_poiseuille": 10000000.0,
-        "C": 1e-9
+        "resistance": 10000000.0,
+        "capacitance": 1e-09
       }
     }
   },
@@ -63,9 +75,9 @@
     "inlet_valve": {
       "type": "ValveTanh",
       "values": {
-        "Rmax": 700000000.0,
-        "Rmin": 0,
-        "Steepness": 0.000575,
+        "resistance_max": 700000000.0,
+        "resistance_min": 0,
+        "steepness": 0.000575,
         "upstream_block": "upstream_vessel",
         "downstream_block": "ventricle"
       }
@@ -73,16 +85,22 @@
     "outlet_valve": {
       "type": "ValveTanh",
       "values": {
-        "Rmax": 6665000000.0,
-        "Rmin": 0,
-        "Steepness": 0.000575,
+        "resistance_max": 6665000000.0,
+        "resistance_min": 0,
+        "steepness": 0.000575,
         "upstream_block": "ventricle",
         "downstream_block": "downstream_vessel"
       }
     }
   },
   "connections": [
-    ["IN", "upstream_vessel"],
-    ["downstream_vessel", "OUT"]
+    [
+      "IN",
+      "upstream_vessel"
+    ],
+    [
+      "downstream_vessel",
+      "OUT"
+    ]
   ]
 }

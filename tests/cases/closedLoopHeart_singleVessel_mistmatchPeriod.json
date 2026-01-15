@@ -13,9 +13,9 @@
       "type": "ClosedLoopRCR",
       "values": {
         "_comment_": "C = 0.228215*1.044637",
-        "Rp": 0.134156617,
-        "Rd": 1.356472458,
-        "C": 0.238401833,
+        "resistance_proximal": 0.134156617,
+        "resistance_distal": 1.356472458,
+        "capacitance": 0.238401833,
         "closed_loop_outlet": true
       }
     }
@@ -25,8 +25,8 @@
       "type": "BloodVessel",
       "values": {
         "_comment_": "L = 5.25/1333.34",
-        "R_poiseuille": 0.003348073,
-        "L": 0.004
+        "resistance": 0.003348073,
+        "inductance": 0.004
       }
     }
   },
@@ -64,10 +64,17 @@
         "Vaso_la": 9.355754
       },
       "cardiac_cycle_period": 1.0169,
-      "outlet": ["branch0_seg0"]
+      "outlet": [
+        "branch0_seg0"
+      ]
     }
   },
-  "connections": [["branch0_seg0", "RCR_aorta"]],
+  "connections": [
+    [
+      "branch0_seg0",
+      "RCR_aorta"
+    ]
+  ],
   "initial_condition": {
     "V_RA:CLH": 38.43,
     "V_RV:CLH": 96.07,

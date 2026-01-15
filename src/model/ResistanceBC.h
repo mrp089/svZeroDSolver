@@ -56,8 +56,8 @@
  *         "OUT": {
  *             "type": "RESISTANCE",
  *             "values": {
- *                 "R": 100.0,
- *                 "Pd": 1000.0
+ *                 "resistance": 100.0,
+ *                 "pressure_distal": 1000.0
  *             }
  *         }
  *     }
@@ -78,7 +78,8 @@ class ResistanceBC : public Block {
   ResistanceBC(int id, Model* model)
       : Block(id, model, BlockType::resistance_bc,
               BlockClass::boundary_condition,
-              {{"R", InputParameter()}, {"Pd", InputParameter()}}) {}
+              {{"resistance", InputParameter()},
+               {"pressure_distal", InputParameter()}}) {}
 
   /**
    * @brief Set up the degrees of freedom (DOF) of the block

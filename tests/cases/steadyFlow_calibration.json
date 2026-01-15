@@ -3,15 +3,21 @@
     "INFLOW": {
       "type": "FLOW",
       "values": {
-        "Q": [5.0, 5.0],
-        "t": [0.0, 1.0]
+        "flow": [
+          5.0,
+          5.0
+        ],
+        "time": [
+          0.0,
+          1.0
+        ]
       }
     },
     "OUT": {
       "type": "RESISTANCE",
       "values": {
-        "Pd": 100.0,
-        "R": 100.0
+        "pressure_distal": 100.0,
+        "resistance": 100.0
       }
     }
   },
@@ -19,14 +25,20 @@
     "branch0_seg0": {
       "type": "BloodVessel",
       "values": {
-        "C": 0.0001,
-        "L": 1.0,
-        "R_poiseuille": 100.0
+        "capacitance": 0.0001,
+        "inductance": 1.0,
+        "resistance": 100.0
       }
     }
   },
   "connections": [
-    ["INFLOW", "branch0_seg0"],
-    ["branch0_seg0", "OUT"]
+    [
+      "INFLOW",
+      "branch0_seg0"
+    ],
+    [
+      "branch0_seg0",
+      "OUT"
+    ]
   ]
 }

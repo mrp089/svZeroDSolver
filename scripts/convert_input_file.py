@@ -26,6 +26,72 @@ import sys
 from pathlib import Path
 
 
+# Parameter name mappings (old -> new)
+PARAM_RENAMES = {
+    # BloodVessel
+    "R_poiseuille": "resistance",
+    "C": "capacitance",
+    "L": "inductance",
+    "stenosis_coefficient": "stenosis",
+    # ResistanceBC
+    "R": "resistance",
+    "Pd": "pressure_distal",
+    # WindkesselBC / RCR
+    "Rp": "resistance_proximal",
+    "Rd": "resistance_distal",
+    # ValveTanh
+    "Rmax": "resistance_max",
+    "Rmin": "resistance_min",
+    "Steepness": "steepness",
+    # Time-dependent values
+    "t": "time",
+    "Q": "flow",
+    "P": "pressure",
+    # OpenLoopCoronaryBC
+    "Ra1": "resistance_artery1",
+    "Ra2": "resistance_artery2",
+    "Rv1": "resistance_vein1",
+    "Ca": "capacitance_artery",
+    "Cc": "capacitance_im",
+    "Pim": "pressure_im",
+    "P_v": "pressure_venous",
+    # ClosedLoopCoronaryBC
+    "Ra": "resistance_artery",
+    "Ram": "resistance_micro",
+    "Rv": "resistance_vein",
+    "Cim": "capacitance_im",
+    # ChamberElastanceInductor
+    "Emax": "elastance_max",
+    "Emin": "elastance_min",
+    "Vrd": "volume_rest_diastolic",
+    "Vrs": "volume_rest_systolic",
+    "t_active": "time_active",
+    "t_twitch": "time_twitch",
+    "Impedance": "impedance",
+    # ChamberSphere
+    "rho": "density",
+    "thick0": "thickness_ref",
+    "radius0": "radius_ref",
+    "W1": "material_constant_1",
+    "W2": "material_constant_2",
+    "eta": "viscosity",
+    "sigma_max": "stress_max",
+    "tsys": "time_systole",
+    "tdias": "time_diastole",
+}
+
+
+def rename_params(values: dict) -> dict:
+    """Rename parameter keys according to PARAM_RENAMES mapping."""
+    if not isinstance(values, dict):
+        return values
+    new_values = {}
+    for key, value in values.items():
+        new_key = PARAM_RENAMES.get(key, key)
+        new_values[new_key] = value
+    return new_values
+
+
 def convert_boundary_conditions(old_bcs: list) -> dict:
     """Convert boundary_conditions from array to dict format."""
     new_bcs = {}
@@ -33,7 +99,7 @@ def convert_boundary_conditions(old_bcs: list) -> dict:
         name = bc["bc_name"]
         new_bcs[name] = {
             "type": bc["bc_type"],
-            "values": bc["bc_values"]
+            "values": rename_params(bc["bc_values"])
         }
     return new_bcs
 
@@ -56,7 +122,7 @@ def convert_vessels(old_vessels: list, connections: list) -> dict:
 
         new_vessels[name] = {
             "type": vessel["zero_d_element_type"],
-            "values": vessel["zero_d_element_values"]
+            "values": rename_params(vessel["zero_d_element_values"])
         }
 
         # Extract boundary condition connections
@@ -113,7 +179,7 @@ def convert_junctions(old_junctions: list, vessel_id_map: dict, connections: lis
             }
 
             if "junction_values" in junction:
-                new_junction["values"] = junction["junction_values"]
+                new_junction["values"] = rename_params(junction["junction_values"])
 
             if inlet_names:
                 new_junction["inlet"] = inlet_names
@@ -172,7 +238,7 @@ def convert_valves(old_valves: list) -> dict:
         # Rename 'params' to 'values', keeping upstream_block/downstream_block
         new_valves[name] = {
             "type": valve["type"],
-            "values": valve.get("params", {})
+            "values": rename_params(valve.get("params", {}))
         }
 
     return new_valves
@@ -186,7 +252,7 @@ def convert_chambers(old_chambers: list) -> dict:
         name = chamber["name"]
         new_chambers[name] = {
             "type": chamber["type"],
-            "values": chamber.get("values", {})
+            "values": rename_params(chamber.get("values", {}))
         }
 
     return new_chambers
@@ -202,7 +268,7 @@ def convert_external_coupling(old_blocks: list) -> dict:
             "type": block["type"],
             "location": block["location"],
             "connected_block": block["connected_block"],
-            "values": block.get("values", {})
+            "values": rename_params(block.get("values", {}))
         }
         # Copy periodic if present
         if "periodic" in block:

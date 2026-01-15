@@ -82,28 +82,27 @@
  *
  * ### Usage in json configuration file
  *
- *     "boundary_conditions": [
- *         {
- *             "bc_name": "OUT",
- *             "bc_type": "CORONARY",
- *             "bc_values": {
- *                 "Ca": 0.0001,
- *                 "Cc": 0.0001,
- *                 "Pim": [
+ *     "boundary_conditions": {
+ *         "OUT": {
+ *             "type": "CORONARY",
+ *             "values": {
+ *                 "capacitance_artery": 0.0001,
+ *                 "capacitance_im": 0.0001,
+ *                 "pressure_im": [
  *                     1000.0,
  *                     1000.0
  *                 ],
- *                 "P_v": 0.0,
- *                 "Ra1": 100.0,
- *                 "Ra2": 100.0,
- *                 "Rv1": 100.0,
- *                 "t": [
+ *                 "pressure_venous": 0.0,
+ *                 "resistance_artery1": 100.0,
+ *                 "resistance_artery2": 100.0,
+ *                 "resistance_vein1": 100.0,
+ *                 "time": [
  *                     0.0,
  *                     1.0
  *                 ]
  *             }
  *         }
- *     ]
+ *     }
  *
  * ### Internal variables
  *
@@ -123,14 +122,14 @@ class OpenLoopCoronaryBC : public Block {
   OpenLoopCoronaryBC(int id, Model* model)
       : Block(id, model, BlockType::open_loop_coronary_bc,
               BlockClass::boundary_condition,
-              {{"Ra1", InputParameter()},
-               {"Ra2", InputParameter()},
-               {"Rv1", InputParameter()},
-               {"Ca", InputParameter()},
-               {"Cc", InputParameter()},
-               {"t", InputParameter(false, true)},
-               {"Pim", InputParameter(false, true)},
-               {"P_v", InputParameter()},
+              {{"resistance_artery1", InputParameter()},
+               {"resistance_artery2", InputParameter()},
+               {"resistance_vein1", InputParameter()},
+               {"capacitance_artery", InputParameter()},
+               {"capacitance_im", InputParameter()},
+               {"time", InputParameter(false, true)},
+               {"pressure_im", InputParameter(false, true)},
+               {"pressure_venous", InputParameter()},
                {"closed_loop_outlet", InputParameter(true, false, false)}}) {}
 
   /**

@@ -5,7 +5,7 @@
   "simulation_parameters": {
     "number_of_cardiac_cycles": 10,
     "number_of_time_pts_per_cardiac_cycle": 100,
-    "absolute_tolerance": 1e-9,
+    "absolute_tolerance": 1e-09,
     "steady_initial": false
   },
   "boundary_conditions": {
@@ -13,31 +13,31 @@
       "type": "ClosedLoopCoronaryLeft",
       "values": {
         "_comment_": "Ra_total = 67.540250*0.361748 = 24.432550357, Ra = (0.32/0.84)*Ra_total, Ram = (0.52/0.84)*Ra_total, Ca = 0.000110*5.022065, Rv = 12.864810*2.586199, Cim = 0.000890*4.198904",
-        "Ra": 9.307638231,
-        "Ram": 15.124912126,
-        "Rv": 33.270958757,
-        "Cim": 0.003737025,
-        "Ca": 0.000552427
+        "resistance_artery": 9.307638231,
+        "resistance_micro": 15.124912126,
+        "resistance_vein": 33.270958757,
+        "capacitance_im": 0.003737025,
+        "capacitance_artery": 0.000552427
       }
     },
     "RCA": {
       "type": "ClosedLoopCoronaryRight",
       "values": {
         "_comment_": "Ra_total = 41.778304*0.361748 = 15.113217915, Ra = (0.32/0.84)*Ra_total, Ram = (0.52/0.84)*Ra_total, Ca = 0.000110*9.599613, Rv = 7.957772*2.586199, Cim = 0.000890*3.891162",
-        "Ra": 5.757416349,
-        "Ram": 9.355801566,
-        "Rv": 20.580381989,
-        "Cim": 0.003463134,
-        "Ca": 0.001055957
+        "resistance_artery": 5.757416349,
+        "resistance_micro": 9.355801566,
+        "resistance_vein": 20.580381989,
+        "capacitance_im": 0.003463134,
+        "capacitance_artery": 0.001055957
       }
     },
     "RCR_aorta": {
       "type": "ClosedLoopRCR",
       "values": {
         "_comment_": "R_total = 1.570879*0.948914 = 1.490629075, Rp = 0.09*R_total, Rd = 0.91*R_total, C = 0.228215*1.044637",
-        "Rp": 0.134156617,
-        "Rd": 1.356472458,
-        "C": 0.238401833,
+        "resistance_proximal": 0.134156617,
+        "resistance_distal": 1.356472458,
+        "capacitance": 0.238401833,
         "closed_loop_outlet": true
       }
     },
@@ -45,9 +45,9 @@
       "type": "ClosedLoopRCR",
       "values": {
         "_comment_": "R_total = 6.922824*0.948914 = 6.569164613, Rp = 0.09*R_total, Rd = 0.91*R_total, C = 0.051785*1.044637",
-        "Rp": 0.591224815,
-        "Rd": 5.977939798,
-        "C": 0.054096527,
+        "resistance_proximal": 0.591224815,
+        "resistance_distal": 5.977939798,
+        "capacitance": 0.054096527,
         "closed_loop_outlet": true
       }
     }
@@ -57,32 +57,32 @@
       "type": "BloodVessel",
       "values": {
         "_comment_": "R = 4.464119/1333.34, L = 5.25/1333.34",
-        "R_poiseuille": 0.003348073,
-        "L": 0.00393748
+        "resistance": 0.003348073,
+        "inductance": 0.00393748
       }
     },
     "branch1_seg0": {
       "type": "BloodVessel",
       "values": {
         "_comment_": "R = 111.152028/1333.34, L = 5.25/1333.34",
-        "R_poiseuille": 0.083363604,
-        "L": 0.00393748
+        "resistance": 0.083363604,
+        "inductance": 0.00393748
       }
     },
     "branch2_seg0": {
       "type": "BloodVessel",
       "values": {
         "_comment_": "R = 5855.832840/1333.34, L = 10.0/1333.34",
-        "R_poiseuille": 4.391852671,
-        "L": 0.007499963
+        "resistance": 4.391852671,
+        "inductance": 0.007499963
       }
     },
     "branch3_seg0": {
       "type": "BloodVessel",
       "values": {
         "_comment_": "R = 3013.987966/1333.34, L = 10.0/1333.34",
-        "R_poiseuille": 2.260479672,
-        "L": 0.007499963
+        "resistance": 2.260479672,
+        "inductance": 0.007499963
       }
     }
   },
@@ -120,14 +120,31 @@
         "Vaso_la": 9.355754
       },
       "cardiac_cycle_period": 1.0169,
-      "outlet": ["branch0_seg0", "branch1_seg0", "branch2_seg0", "branch3_seg0"]
+      "outlet": [
+        "branch0_seg0",
+        "branch1_seg0",
+        "branch2_seg0",
+        "branch3_seg0"
+      ]
     }
   },
   "connections": [
-    ["branch0_seg0", "RCR_aorta"],
-    ["branch1_seg0", "RCR_aorta_br"],
-    ["branch2_seg0", "LCA"],
-    ["branch3_seg0", "RCA"]
+    [
+      "branch0_seg0",
+      "RCR_aorta"
+    ],
+    [
+      "branch1_seg0",
+      "RCR_aorta_br"
+    ],
+    [
+      "branch2_seg0",
+      "LCA"
+    ],
+    [
+      "branch3_seg0",
+      "RCA"
+    ]
   ],
   "initial_condition": {
     "V_RA:CLH": 38.43,

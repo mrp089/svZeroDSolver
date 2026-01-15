@@ -105,11 +105,11 @@ class ClosedLoopCoronaryBC : public Block {
    */
   ClosedLoopCoronaryBC(int id, Model* model, BlockType block_type)
       : Block(id, model, block_type, BlockClass::closed_loop,
-              {{"Ra", InputParameter()},
-               {"Ram", InputParameter()},
-               {"Rv", InputParameter()},
-               {"Ca", InputParameter()},
-               {"Cim", InputParameter()}}) {}
+              {{"resistance_artery", InputParameter()},
+               {"resistance_micro", InputParameter()},
+               {"resistance_vein", InputParameter()},
+               {"capacitance_artery", InputParameter()},
+               {"capacitance_im", InputParameter()}}) {}
 
   /**
    * @brief Local IDs of the parameters

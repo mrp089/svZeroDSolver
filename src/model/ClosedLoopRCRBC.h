@@ -84,19 +84,17 @@
  *
  * ### Usage in json configuration file
  *
- *     "boundary_conditions": [
- *         {
- *             "bc_name": "RCR_aorta",
- *             "bc_type": "ClosedLoopRCR",
- *             "bc_values": {
- *                 "_comment_": "R_total = 1.570879*0.948914 = 1.490629075, Rp =
- * 0.09*R_total, Rd = 0.91*R_total, C = 0.228215*1.044637", "Rp": 0.134156617,
- *                 "Rd": 1.356472458,
- *                 "C": 0.238401833,
+ *     "boundary_conditions": {
+ *         "RCR_aorta": {
+ *             "type": "ClosedLoopRCR",
+ *             "values": {
+ *                 "resistance_proximal": 0.134156617,
+ *                 "resistance_distal": 1.356472458,
+ *                 "capacitance": 0.238401833,
  *                 "closed_loop_outlet": true
  *             }
  *         }
- *     ]
+ *     }
  *
  * ### Internal variables
  *
@@ -116,9 +114,9 @@ class ClosedLoopRCRBC : public Block {
   ClosedLoopRCRBC(int id, Model* model)
       : Block(id, model, BlockType::closed_loop_rcr_bc,
               BlockClass::boundary_condition,
-              {{"Rp", InputParameter()},
-               {"C", InputParameter()},
-               {"Rd", InputParameter()},
+              {{"resistance_proximal", InputParameter()},
+               {"capacitance", InputParameter()},
+               {"resistance_distal", InputParameter()},
                {"closed_loop_outlet", InputParameter(true, false, false)}}) {}
 
   /**

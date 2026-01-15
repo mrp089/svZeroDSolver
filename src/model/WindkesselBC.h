@@ -82,10 +82,10 @@
  *         "OUT": {
  *             "type": "RCR",
  *             "values": {
- *                 "C": 0.0001,
- *                 "Pd": 0.0,
- *                 "Rd": 1000.0,
- *                 "Rp": 1000.0
+ *                 "resistance_proximal": 1000.0,
+ *                 "capacitance": 0.0001,
+ *                 "resistance_distal": 1000.0,
+ *                 "pressure_distal": 0.0
  *             }
  *         }
  *     }
@@ -108,10 +108,10 @@ class WindkesselBC : public Block {
   WindkesselBC(int id, Model* model)
       : Block(id, model, BlockType::windkessel_bc,
               BlockClass::boundary_condition,
-              {{"Rp", InputParameter()},
-               {"C", InputParameter()},
-               {"Rd", InputParameter()},
-               {"Pd", InputParameter(true)}}) {}
+              {{"resistance_proximal", InputParameter()},
+               {"capacitance", InputParameter()},
+               {"resistance_distal", InputParameter()},
+               {"pressure_distal", InputParameter(true)}}) {}
 
   /**
    * @brief Set up the degrees of freedom (DOF) of the block
