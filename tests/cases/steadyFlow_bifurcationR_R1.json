@@ -69,7 +69,9 @@
   "connections": [
     ["INFLOW", "branch0_seg0"],
     ["branch1_seg0", "OUT1"],
-    ["branch2_seg0", "OUT2"],
-    ["branch0_seg0", ["branch1_seg0", "branch2_seg0"]]
-  ]
+    ["branch2_seg0", "OUT2"]
+  ],
+  "junctions": {
+    "J0": ["branch0_seg0", ["branch1_seg0", "branch2_seg0"]]
+  }
 }

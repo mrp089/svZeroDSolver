@@ -228,17 +228,14 @@ void load_simulation_model(const svzero_json& config, Model& model) {
   create_boundary_conditions(model, config, component, bc_type_map,
                              closed_loop_bcs);
 
-  // Create explicit junctions (e.g., BloodVesselJunction with parameters)
+  // Create junctions (both parameterized and simple bifurcation/confluence)
   component = "junctions";
   if (config.contains(component)) {
     create_junctions(model, connections, config, component);
   }
 
-  // Collect top-level connections and analyze for auto-junction creation
-  // Connections can be:
-  //   [A, B] - A connects to B (simple)
-  //   [A, [B, C]] - A connects to B and C (bifurcation)
-  //   [[A, B], C] - A and B both connect to C (confluence)
+  // Collect top-level connections (simple [A, B] format only)
+  // Bifurcations/confluences are defined in the junctions section
   std::vector<std::tuple<std::string, std::string>> raw_connections;
 
   // Helper lambda to add a connection and update vessel types
@@ -275,123 +272,27 @@ void load_simulation_model(const svzero_json& config, Model& model) {
 
   if (config.contains("connections")) {
     for (const auto& conn : config["connections"]) {
-      bool first_is_array = conn[0].is_array();
-      bool second_is_array = conn[1].is_array();
-
-      if (!first_is_array && !second_is_array) {
-        // Simple connection: [A, B]
-        add_connection(conn[0], conn[1]);
-      } else if (!first_is_array && second_is_array) {
-        // Bifurcation: [A, [B, C, ...]]
-        std::string upstream = conn[0];
-        for (const auto& downstream : conn[1]) {
-          add_connection(upstream, downstream);
-        }
-      } else if (first_is_array && !second_is_array) {
-        // Confluence: [[A, B, ...], C]
-        std::string downstream = conn[1];
-        for (const auto& upstream : conn[0]) {
-          add_connection(upstream, downstream);
-        }
-      } else {
+      // Connections must be simple [A, B] format
+      // Bifurcations/confluences should be in the junctions section
+      if (!conn.is_array() || conn.size() != 2) {
         throw std::runtime_error(
-            "Invalid connection format: both elements cannot be arrays");
+            "Invalid connection format. Connections must be [A, B] arrays. "
+            "For bifurcations/confluences, use the 'junctions' section.");
       }
+      if (conn[0].is_array() || conn[1].is_array()) {
+        throw std::runtime_error(
+            "Bifurcations and confluences should be defined in the 'junctions' "
+            "section, not in 'connections'. Use format: \"junctions\": "
+            "{\"J0\": [\"upstream\", [\"downstream1\", \"downstream2\"]]}");
+      }
+      add_connection(conn[0], conn[1]);
     }
   }
 
-  // Auto-create NORMAL_JUNCTIONs where blocks have multiple inlets or outlets
-  // Build maps: block -> list of downstream blocks, block -> list of upstream
-  // blocks
-  std::map<std::string, std::vector<std::string>> downstream_map;
-  std::map<std::string, std::vector<std::string>> upstream_map;
+  // Process simple connections (already validated as [A, B] format)
+  // Junction connections are handled by create_junctions()
   for (const auto& conn : raw_connections) {
-    downstream_map[std::get<0>(conn)].push_back(std::get<1>(conn));
-    upstream_map[std::get<1>(conn)].push_back(std::get<0>(conn));
-  }
-
-  // Track which junctions we create to avoid duplicates
-  std::set<std::string> auto_junctions;
-
-  // Create junctions for blocks with multiple outlets (bifurcations)
-  for (const auto& [block_name, downstreams] : downstream_map) {
-    if (downstreams.size() > 1) {
-      // Check if block already exists (could be an explicit junction)
-      if (model.has_block(block_name)) {
-        // Block exists, check if it's already a junction
-        Block* block = model.get_block(block_name);
-        if (block->block_class == BlockClass::junction) {
-          // Already a junction, just add connections
-          for (const auto& ds : downstreams) {
-            connections.push_back({block_name, ds});
-          }
-          continue;
-        }
-      }
-      // Need to create an auto-junction after this block
-      std::string junction_name = "J_" + block_name + "_outlet";
-      if (auto_junctions.find(junction_name) == auto_junctions.end()) {
-        generate_block(model, {}, "NORMAL_JUNCTION", junction_name);
-        auto_junctions.insert(junction_name);
-        DEBUG_MSG("Auto-created junction " << junction_name);
-      }
-      // Connect: block -> junction -> each downstream
-      connections.push_back({block_name, junction_name});
-      for (const auto& ds : downstreams) {
-        connections.push_back({junction_name, ds});
-      }
-    } else if (downstreams.size() == 1) {
-      // Single downstream, direct connection
-      connections.push_back({block_name, downstreams[0]});
-    }
-  }
-
-  // Create junctions for blocks with multiple inlets (confluences)
-  for (const auto& [block_name, upstreams] : upstream_map) {
-    if (upstreams.size() > 1) {
-      // Check if connections already go through an auto-junction
-      bool already_handled = false;
-      for (const auto& us : upstreams) {
-        std::string potential_junction = "J_" + us + "_outlet";
-        if (auto_junctions.find(potential_junction) != auto_junctions.end()) {
-          // This upstream already has an outlet junction, check if it connects
-          // to block_name
-          already_handled = true;
-          break;
-        }
-      }
-      if (already_handled) {
-        continue;  // Connections already added via outlet junction
-      }
-
-      // Check if block already exists and is a junction
-      if (model.has_block(block_name)) {
-        Block* block = model.get_block(block_name);
-        if (block->block_class == BlockClass::junction) {
-          continue;  // Already handled by explicit junction
-        }
-      }
-
-      // Need to create an auto-junction before this block
-      std::string junction_name = "J_" + block_name + "_inlet";
-      if (auto_junctions.find(junction_name) == auto_junctions.end()) {
-        generate_block(model, {}, "NORMAL_JUNCTION", junction_name);
-        auto_junctions.insert(junction_name);
-        DEBUG_MSG("Auto-created junction " << junction_name);
-      }
-      // Connect: each upstream -> junction -> block
-      for (const auto& us : upstreams) {
-        // Remove any existing direct connection that was added
-        auto it = std::find(connections.begin(), connections.end(),
-                            std::make_tuple(us, block_name));
-        if (it != connections.end()) {
-          connections.erase(it);
-        }
-        connections.push_back({us, junction_name});
-      }
-      connections.push_back({junction_name, block_name});
-    }
-    // Single upstream connections are already handled in the downstream loop
+    connections.push_back(conn);
   }
 
   // Create closed-loop blocks
@@ -556,29 +457,69 @@ void create_junctions(
     Model& model,
     std::vector<std::tuple<std::string, std::string>>& connections,
     const svzero_json& config, const std::string& component) {
-  // Loop all junctions (dictionary format: name -> {type, values, inlet,
-  // outlet})
+  // Loop all junctions (dictionary format: name -> config)
+  // Supports two formats:
+  // 1. Parameterized: {"type": "BloodVesselJunction", "inlet": [...], ...}
+  // 2. Simple array: ["upstream", ["downstream1", "downstream2"]] (bifurcation)
+  //                  [["upstream1", "upstream2"], "downstream"] (confluence)
   for (auto& [junction_name, junction_config] : config[component].items()) {
-    std::string j_type = junction_config["type"];
+    // Check if this is a simple array format (bifurcation/confluence)
+    if (junction_config.is_array()) {
+      // Simple format: [upstream(s), downstream(s)]
+      bool first_is_array = junction_config[0].is_array();
+      bool second_is_array = junction_config[1].is_array();
 
-    if (!junction_config.contains("values")) {
-      generate_block(model, {}, j_type, junction_name);
+      if (!first_is_array && second_is_array) {
+        // Bifurcation: ["upstream", ["downstream1", "downstream2"]]
+        std::string upstream = junction_config[0];
+        // Create NORMAL_JUNCTION block
+        generate_block(model, {}, "NORMAL_JUNCTION", junction_name);
+        // Add connections: upstream -> junction -> each downstream
+        connections.push_back({upstream, junction_name});
+        for (const auto& downstream : junction_config[1]) {
+          connections.push_back({junction_name, downstream});
+        }
+        DEBUG_MSG("Created bifurcation junction " << junction_name);
+      } else if (first_is_array && !second_is_array) {
+        // Confluence: [["upstream1", "upstream2"], "downstream"]
+        std::string downstream = junction_config[1];
+        // Create NORMAL_JUNCTION block
+        generate_block(model, {}, "NORMAL_JUNCTION", junction_name);
+        // Add connections: each upstream -> junction -> downstream
+        for (const auto& upstream : junction_config[0]) {
+          connections.push_back({upstream, junction_name});
+        }
+        connections.push_back({junction_name, downstream});
+        DEBUG_MSG("Created confluence junction " << junction_name);
+      } else {
+        throw std::runtime_error(
+            "Invalid junction format for '" + junction_name +
+            "': array format must be [upstream, [downstreams]] for "
+            "bifurcation or [[upstreams], downstream] for confluence");
+      }
     } else {
-      generate_block(model, junction_config["values"], j_type, junction_name);
-    }
+      // Object format: {"type": "...", "inlet": [...], "outlet": [...], ...}
+      std::string j_type = junction_config["type"];
 
-    // Check for connections to inlets and outlets (using block names)
-    if (junction_config.contains("inlet")) {
-      for (const auto& block_name : junction_config["inlet"]) {
-        connections.push_back({block_name, junction_name});
+      if (!junction_config.contains("values")) {
+        generate_block(model, {}, j_type, junction_name);
+      } else {
+        generate_block(model, junction_config["values"], j_type, junction_name);
       }
-    }
-    if (junction_config.contains("outlet")) {
-      for (const auto& block_name : junction_config["outlet"]) {
-        connections.push_back({junction_name, block_name});
+
+      // Check for connections to inlets and outlets (using block names)
+      if (junction_config.contains("inlet")) {
+        for (const auto& block_name : junction_config["inlet"]) {
+          connections.push_back({block_name, junction_name});
+        }
       }
+      if (junction_config.contains("outlet")) {
+        for (const auto& block_name : junction_config["outlet"]) {
+          connections.push_back({junction_name, block_name});
+        }
+      }
+      DEBUG_MSG("Created junction " << junction_name);
     }
-    DEBUG_MSG("Created junction " << junction_name);
   }
 }
 

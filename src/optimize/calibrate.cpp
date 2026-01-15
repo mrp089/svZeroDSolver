@@ -46,72 +46,84 @@ svzero_json calibrate(const svzero_json& config) {
     DEBUG_MSG("Created vessel " << vessel_name);
   }
 
-  // Create junctions (dictionary format: name -> {type, values, inlet, outlet})
+  // Create junctions (dictionary format: name -> config)
+  // Supports two formats:
+  // 1. Parameterized: {"type": "BloodVesselJunction", "inlet": [...], ...}
+  // 2. Simple array: ["upstream", ["downstream1", "downstream2"]] (bifurcation)
+  //                  [["upstream1", "upstream2"], "downstream"] (confluence)
   if (config.contains("junctions")) {
     for (auto const& [junction_name, junction_config] :
          config["junctions"].items()) {
-      auto const& outlets = junction_config["outlet"];
-      int num_outlets = outlets.size();
+      // Check if this is a simple array format (bifurcation/confluence)
+      if (junction_config.is_array()) {
+        bool first_is_array = junction_config[0].is_array();
+        bool second_is_array = junction_config[1].is_array();
 
-      if (num_outlets == 1) {
-        model.add_block("NORMAL_JUNCTION", {}, junction_name);
+        if (!first_is_array && second_is_array) {
+          // Bifurcation: ["upstream", ["downstream1", "downstream2"]]
+          std::string upstream = junction_config[0];
+          model.add_block("NORMAL_JUNCTION", {}, junction_name);
+          connections.push_back({upstream, junction_name});
+          for (const auto& downstream : junction_config[1]) {
+            connections.push_back({junction_name, downstream});
+          }
+        } else if (first_is_array && !second_is_array) {
+          // Confluence: [["upstream1", "upstream2"], "downstream"]
+          std::string downstream = junction_config[1];
+          model.add_block("NORMAL_JUNCTION", {}, junction_name);
+          for (const auto& upstream : junction_config[0]) {
+            connections.push_back({upstream, junction_name});
+          }
+          connections.push_back({junction_name, downstream});
+        }
+        DEBUG_MSG("Created junction " << junction_name);
       } else {
-        std::vector<int> param_ids;
-        for (size_t i = 0; i < (num_outlets * (num_params - 1)); i++)
-          param_ids.push_back(param_counter++);
-        model.add_block("BloodVesselJunction", param_ids, junction_name);
-      }
+        // Object format: {"type": "...", "inlet": [...], "outlet": [...], ...}
+        auto const& outlets = junction_config["outlet"];
+        int num_outlets = outlets.size();
 
-      // Check for connections to inlet and outlet blocks
-      for (auto const& block_name : junction_config["inlet"]) {
-        connections.push_back({block_name, junction_name});
-      }
+        if (num_outlets == 1) {
+          model.add_block("NORMAL_JUNCTION", {}, junction_name);
+        } else {
+          std::vector<int> param_ids;
+          for (size_t i = 0; i < (num_outlets * (num_params - 1)); i++)
+            param_ids.push_back(param_counter++);
+          model.add_block("BloodVesselJunction", param_ids, junction_name);
+        }
 
-      for (auto const& block_name : outlets) {
-        connections.push_back({junction_name, block_name});
+        // Check for connections to inlet and outlet blocks
+        for (auto const& block_name : junction_config["inlet"]) {
+          connections.push_back({block_name, junction_name});
+        }
+        for (auto const& block_name : outlets) {
+          connections.push_back({junction_name, block_name});
+        }
+        DEBUG_MSG("Created junction " << junction_name);
       }
-      DEBUG_MSG("Created junction " << junction_name);
     }
   }
 
   // Process top-level connections array
-  // Connections can be: [A, B] - simple connection between named blocks
-  // For BC-to-vessel connections, the BC name is used directly
+  // Connections must be simple [A, B] format
+  // Bifurcations/confluences should be in the junctions section
   if (config.contains("connections")) {
     for (const auto& conn : config["connections"]) {
-      bool first_is_array = conn[0].is_array();
-      bool second_is_array = conn[1].is_array();
+      // Simple connection: [A, B]
+      std::string upstream = conn[0];
+      std::string downstream = conn[1];
+      // Check if upstream/downstream are vessels (have blocks) or BCs (no
+      // blocks)
+      bool upstream_is_vessel = model.has_block(upstream);
+      bool downstream_is_vessel = model.has_block(downstream);
 
-      if (!first_is_array && !second_is_array) {
-        // Simple connection: [A, B]
-        std::string upstream = conn[0];
-        std::string downstream = conn[1];
-        // Check if upstream/downstream are vessels (have blocks) or BCs (no
-        // blocks)
-        bool upstream_is_vessel = model.has_block(upstream);
-        bool downstream_is_vessel = model.has_block(downstream);
-
-        if (upstream_is_vessel && downstream_is_vessel) {
-          connections.push_back({upstream, downstream});
-        } else if (!upstream_is_vessel && downstream_is_vessel) {
-          // BC -> vessel (inlet)
-          inlet_connections.push_back({upstream, downstream});
-        } else if (upstream_is_vessel && !downstream_is_vessel) {
-          // vessel -> BC (outlet)
-          outlet_connections.push_back({upstream, downstream});
-        }
-      } else if (!first_is_array && second_is_array) {
-        // Bifurcation: [A, [B, C, ...]]
-        std::string upstream = conn[0];
-        for (const auto& downstream : conn[1]) {
-          connections.push_back({upstream, downstream});
-        }
-      } else if (first_is_array && !second_is_array) {
-        // Confluence: [[A, B, ...], C]
-        std::string downstream = conn[1];
-        for (const auto& upstream : conn[0]) {
-          connections.push_back({upstream, downstream});
-        }
+      if (upstream_is_vessel && downstream_is_vessel) {
+        connections.push_back({upstream, downstream});
+      } else if (!upstream_is_vessel && downstream_is_vessel) {
+        // BC -> vessel (inlet)
+        inlet_connections.push_back({upstream, downstream});
+      } else if (upstream_is_vessel && !downstream_is_vessel) {
+        // vessel -> BC (outlet)
+        outlet_connections.push_back({upstream, downstream});
       }
     }
   }
@@ -189,6 +201,12 @@ svzero_json calibrate(const svzero_json& config) {
   if (output_config.contains("junctions")) {
     for (auto& [junction_name, junction_config] :
          output_config["junctions"].items()) {
+      // Skip array-format junctions (bifurcations/confluences) - they have no
+      // parameters
+      if (junction_config.is_array()) {
+        continue;
+      }
+
       DEBUG_MSG("Reading initial alpha for " << junction_name);
       auto block = model.get_block(junction_name);
       int num_outlets = block->outlet_nodes.size();
@@ -249,6 +267,12 @@ svzero_json calibrate(const svzero_json& config) {
   if (output_config.contains("junctions")) {
     for (auto& [junction_name, junction_config] :
          output_config["junctions"].items()) {
+      // Skip array-format junctions (bifurcations/confluences) - they have no
+      // parameters
+      if (junction_config.is_array()) {
+        continue;
+      }
+
       auto block = model.get_block(junction_name);
       int num_outlets = block->outlet_nodes.size();
 

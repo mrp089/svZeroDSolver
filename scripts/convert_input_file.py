@@ -139,7 +139,10 @@ def convert_vessels(old_vessels: list, connections: list) -> dict:
 def convert_junctions(old_junctions: list, vessel_id_map: dict, connections: list) -> dict:
     """Convert junctions from array to dict format.
 
-    For NORMAL_JUNCTION: converts to direct connections (auto-junction will be created)
+    For NORMAL_JUNCTION:
+      - 1-to-1: adds to connections as simple [A, B]
+      - Bifurcation: adds to junctions as [inlet, [outlets]]
+      - Confluence: adds to junctions as [[inlets], outlet]
     For other junction types (e.g., BloodVesselJunction): keeps as explicit junction
 
     Converts inlet_vessels/outlet_vessels (using IDs) to inlet/outlet (using names).
@@ -165,25 +168,23 @@ def convert_junctions(old_junctions: list, vessel_id_map: dict, connections: lis
         else:
             outlet_names = []
 
-        # For NORMAL_JUNCTION, just add connections (auto-junction will be created)
+        # For NORMAL_JUNCTION, convert to appropriate format
         if junction_type == "NORMAL_JUNCTION":
-            # Use nested array syntax:
-            #   Bifurcation: [inlet, [outlet1, outlet2, ...]]
-            #   Confluence: [[inlet1, inlet2, ...], outlet]
             if len(inlet_names) == 1 and len(outlet_names) == 1:
-                # Simple 1-to-1 connection
+                # Simple 1-to-1 connection (no junction needed)
                 connections.append([inlet_names[0], outlet_names[0]])
             elif len(inlet_names) == 1 and len(outlet_names) > 1:
                 # Bifurcation: [inlet, [outlet1, outlet2, ...]]
-                connections.append([inlet_names[0], outlet_names])
+                new_junctions[name] = [inlet_names[0], outlet_names]
             elif len(inlet_names) > 1 and len(outlet_names) == 1:
                 # Confluence: [[inlet1, inlet2, ...], outlet]
-                connections.append([inlet_names, outlet_names[0]])
+                new_junctions[name] = [inlet_names, outlet_names[0]]
             else:
-                # General case: multiple inlets and outlets - use separate connections
-                for inlet in inlet_names:
-                    for outlet in outlet_names:
-                        connections.append([inlet, outlet])
+                # General case: multiple inlets and outlets - not supported
+                raise ValueError(
+                    f"Junction '{name}' has multiple inlets and outlets. "
+                    "This topology is not supported with the simplified format."
+                )
         else:
             # For other junction types (e.g., BloodVesselJunction), keep explicit
             new_junction = {
