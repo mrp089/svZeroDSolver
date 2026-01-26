@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "pulsatile flow -> R -> coronary",
+    "description of test case": "Single vessel with resistance. Time-varying (pulsatile) sinusoidal inflow at inlet and coronary boundary condition at outlet. Tests transient coronary flow dynamics with myocardial compression effects.",
     "analytical results": [
       "Notes:",
       "Let t0 = start of cardiac cycle",

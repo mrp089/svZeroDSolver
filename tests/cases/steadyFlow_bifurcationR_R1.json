@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "steady flow -> bifurcation (with R's) -> R",
+    "description of test case": "Bifurcating network: one inlet vessel splits into two outlet vessels at a junction. Constant (steady) inflow at inlet and resistance boundary conditions at both outlets. Tests flow splitting based on downstream resistances (symmetric case with equal resistances).",
     "analytical results": [
       "Boundary conditions:",
       "inlet:",

@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "steady flow -> confluence (with R's) -> R",
+    "description of test case": "Converging network: two inlet vessels merge into one outlet vessel at a junction (confluence). Constant (steady) inflow at both inlets and resistance boundary condition at outlet. Tests mass conservation at confluences.",
     "analytical results": [
       "Boundary conditions:",
       "inlet0:",

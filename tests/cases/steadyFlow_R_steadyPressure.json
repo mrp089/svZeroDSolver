@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "steady flow -> R -> steady pressure",
+    "description of test case": "Single vessel with resistance. Constant (steady) inflow at inlet and constant pressure boundary condition at outlet. Tests basic pressure-flow relationship with fixed outlet pressure.",
     "analytical results": [
       "Boundary conditions:",
       "inlet:",

@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "Closed-loop circulation with one vessel (aorta) connected on either side to the heart model."
+    "description of test case": "Closed-loop heart model with a single vessel (aorta). Tests case where cardiac_period (0.67s) differs from the heart model's internal period - expected to fail (xfail)."
   },
   "simulation_parameters": {
     "number_of_cardiac_cycles": 1,

@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "steady flow -> bifurcation (with R's) -> R",
+    "description of test case": "Bifurcating network with custom block names. Identical to steadyFlow_bifurcationR_R1 but tests that custom naming of vessels and boundary conditions works correctly.",
     "analytical results": [
       "Boundary conditions:",
       "inlet:",

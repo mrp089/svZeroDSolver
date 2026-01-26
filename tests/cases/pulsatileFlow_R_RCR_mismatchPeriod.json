@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "pulsatile flow -> R -> RCR",
+    "description of test case": "Single vessel with resistance. Pulsatile sinusoidal inflow at inlet and RCR (Windkessel) boundary condition at outlet. Tests case where cardiac_period (1.2s) differs from BC waveform period (1.0s) - expected to fail (xfail).",
     "analytical results": [
       "Notes:",
       "Let t0 = start of cardiac cycle",

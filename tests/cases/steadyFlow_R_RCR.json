@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "steady flow -> R -> RCR",
+    "description of test case": "Single vessel with resistance. Constant (steady) inflow at inlet and RCR (Windkessel) boundary condition at outlet. Tests steady-state behavior where the capacitor is fully charged.",
     "analytical results": [
       "Notes:",
       "At steady state for constant flow, capacitor is fully charged",

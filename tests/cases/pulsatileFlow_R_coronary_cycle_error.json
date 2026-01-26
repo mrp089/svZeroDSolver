@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "pulsatile flow -> R -> coronary"
+    "description of test case": "Single vessel with resistance. Pulsatile inflow at inlet and coronary boundary condition at outlet. Uses cycle-to-cycle error convergence criterion to automatically determine when periodic steady state is reached."
   },
   "boundary_conditions": [
     {

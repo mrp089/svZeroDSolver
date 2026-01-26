@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "sine flow -> C + stenosis -> constant pressure",
+    "description of test case": "Single vessel with capacitance and stenosis coefficient. Sinusoidal inflow at inlet and constant pressure at outlet. Tests nonlinear stenosis pressure drop (proportional to Q*|Q|) combined with capacitive effects.",
     "analytical results": [
       "Boundary conditions:",
       "inlet:",

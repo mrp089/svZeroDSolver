@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "steady flow -> blood vessel junction -> R",
+    "description of test case": "Bifurcating network with a BloodVesselJunction. Unlike a normal junction, BloodVesselJunction has resistance and inductance parameters at the junction itself. Constant (steady) inflow at inlet and resistance boundary conditions at outlets.",
     "analytical results": [
       "Boundary conditions:",
       "inlet:",

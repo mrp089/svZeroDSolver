@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "pulsatile pressure -> valve -> chamber -> valve -> RC -> R",
+    "description of test case": "Cardiac chamber model (ChamberElastanceInductor) with inlet and outlet valves. Pulsatile pressure at inlet and resistance at outlet. The chamber has time-varying elastance that models ventricular contraction with parameters Emax, Emin, and activation timing.",
     "analytical results": [
       "Boundary conditions:",
       "inlet:",

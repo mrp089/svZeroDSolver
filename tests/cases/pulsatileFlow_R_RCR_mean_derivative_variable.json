@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "pulsatile flow -> R -> RCR",
+    "description of test case": "Single vessel with resistance. Pulsatile sinusoidal inflow at inlet and RCR (Windkessel) boundary condition at outlet. Combines output_mean_only, output_derivative, and output_variable_based options.",
     "analytical results": [
       "Notes:",
       "Let t0 = start of cardiac cycle",

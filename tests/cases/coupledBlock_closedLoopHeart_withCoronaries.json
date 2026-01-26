@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "Coupled block specifying inflow (from different simulation) into two RCR blocks and two coronary blocks, all connected to closed-loop heart model. Outlet flow from heart model is also specified using coupled block."
+    "description of test case": "Closed-loop heart model with coronaries and coupled blocks. Uses GenericExternalBlock to couple external boundary conditions (from another simulation) with the heart model, systemic RCR outlets, and coronary circulation. Tests multi-physics coupling capabilities."
   },
   "simulation_parameters": {
     "number_of_cardiac_cycles": 100,

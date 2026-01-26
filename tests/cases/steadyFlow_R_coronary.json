@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "steady flow -> R -> coronary",
+    "description of test case": "Single vessel with resistance. Constant (steady) inflow at inlet and coronary boundary condition at outlet. The coronary BC models myocardial compression effects on coronary arteries. At steady state, capacitors are fully charged.",
     "analytical results": [
       "Notes:",
       "At steady state for constant flow, capacitors are fully charged",

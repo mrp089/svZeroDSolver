@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "Closed-loop circulation with two RCR outlets and two coronary outlets"
+    "description of test case": "Closed-loop heart model with coronary arteries. Includes left ventricle, valves, multiple vessels, two RCR outlets for systemic circulation, and two coronary outlets (left and right) with intramyocardial pressure effects."
   },
   "simulation_parameters": {
     "number_of_cardiac_cycles": 10,

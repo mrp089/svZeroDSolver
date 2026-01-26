@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "steady flow -> RLC -> R",
+    "description of test case": "Single vessel with resistance, inductance, and capacitance (RLC). Constant (steady) inflow at inlet and resistance boundary condition at outlet. At steady state, dQ/dt=0 and capacitor is fully charged.",
     "analytical results": [
       "Notes:",
       "At steady state for constant flow, dQ/dt = 0 and capacitor is fully charged",

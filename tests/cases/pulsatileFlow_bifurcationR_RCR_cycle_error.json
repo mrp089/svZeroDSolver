@@ -1,6 +1,6 @@
 {
   "description": {
-    "description of test case": "pulsatile flow -> bifurcation (with R's) -> RCR",
+    "description of test case": "Bifurcating network: one inlet vessel splits into two outlet vessels. Pulsatile sinusoidal inflow at inlet and RCR (Windkessel) boundary conditions at both outlets. Uses cycle-to-cycle error convergence criterion to automatically determine when periodic steady state is reached.",
     "analytical results": [
       "Boundary conditions:",
       "inlet:",

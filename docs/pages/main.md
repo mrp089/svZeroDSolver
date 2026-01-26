@@ -6,6 +6,7 @@ An overview of svZeroDSolver, its features, and applications is available [on th
 
 Below are links to important sections of the documentation:
 
+* [Input File Guide](@ref input_file_guide) - How to create JSON configuration files
 * [Installing svZeroDSolver](https://simvascular.github.io/documentation/rom_simulation.html#0d-solver-install)
 * [User guide for svZeroDSolver](https://simvascular.github.io/documentation/rom_simulation.html#0d-solver-user-guide)
 * [User guide for svZeroDCalibrator](https://simvascular.github.io/documentation/rom_simulation.html#0d-solver-calibrator)
