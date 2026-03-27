@@ -2,12 +2,22 @@
 // University of California, and others. SPDX-License-Identifier: BSD-3-Clause
 #include "ClosedLoopCoronaryLeftBC.h"
 
+#include "ClosedLoopHeartPulmonary.h"
 #include "Model.h"
 
 void ClosedLoopCoronaryLeftBC::setup_model_dependent_params() {
-  auto heart_block = model->get_block("CLH");
-  im_param_id =
-      heart_block->global_param_ids[ClosedLoopHeartPulmonary::ParamId::IML];
-  ventricle_var_id =
-      heart_block->global_var_ids[13];  // Solution ID for LV pressure
+  if (!ventricle_block_name.empty()) {
+    // Decomposed mode: read im from own parameters and look up ventricle by
+    // name
+    im_param_id = global_param_ids[ParamId::IM];
+    auto ventricle_block = model->get_block(ventricle_block_name);
+    ventricle_var_id = ventricle_block->global_var_ids[0];  // P_in of chamber
+  } else {
+    // Monolithic mode: reach into CLH block
+    auto heart_block = model->get_block("CLH");
+    im_param_id =
+        heart_block->global_param_ids[ClosedLoopHeartPulmonary::ParamId::IML];
+    ventricle_var_id =
+        heart_block->global_var_ids[13];  // Solution ID for LV pressure
+  }
 }

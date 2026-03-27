@@ -200,4 +200,197 @@ def test_decomposed_closedLoopHeart():
     assert np.mean(decomp_aorta["pressure_in"].values) > 0
     assert np.mean(decomp_aorta["flow_out"].values) > 0
 
+
+def test_decomposed_closedLoopHeart_withCoronaries():
+    """Four-chamber heart with coronary BCs: decomposed vs monolithic."""
+    import pandas as pd
+
+    shared = {"number_of_time_pts_per_cardiac_cycle": 500,
+              "number_of_cardiac_cycles": 10,
+              "output_all_cycles": False}
+
+    # ---- run monolithic ----
+    mono_config = load_config("closedLoopHeart_withCoronaries.json")
+    mono_config["simulation_parameters"].update(shared)
+    mono_config["simulation_parameters"]["output_variable_based"] = True
+    mono_r = pysvzerod.simulate(mono_config)
+
+    mono_config2 = load_config("closedLoopHeart_withCoronaries.json")
+    mono_config2["simulation_parameters"].update(shared)
+    mono_v = pysvzerod.simulate(mono_config2)
+
+    # ---- run decomposed ----
+    decomp_config = load_config("closedLoopHeart_withCoronaries_decomposed.json")
+    decomp_config["simulation_parameters"].update(shared)
+    decomp_config["simulation_parameters"]["output_variable_based"] = True
+    decomp_r = pysvzerod.simulate(decomp_config)
+
+    decomp_config2 = load_config("closedLoopHeart_withCoronaries_decomposed.json")
+    decomp_config2["simulation_parameters"].update(shared)
+    decomp_v = pysvzerod.simulate(decomp_config2)
+
+    # Convert to DataFrames
+    mono_r = pd.DataFrame(mono_r)
+    decomp_r = pd.DataFrame(decomp_r)
+    mono_v = pd.DataFrame(mono_v)
+    decomp_v = pd.DataFrame(decomp_v)
+
+    # ---- variable name mappings ----
+    chamber_map = [
+        ("RA", "V_RA:CLH", "Vc:RA"),
+        ("RV", "V_RV:CLH", "Vc:RV"),
+        ("LA", "V_LA:CLH", "Vc:LA"),
+        ("LV", "V_LV:CLH", "Vc:LV"),
+    ]
+    pressure_map = [
+        ("RA", "pressure:J_heart_inlet:CLH", "pressure:J_return:RA"),
+        ("RV", "P_RV:CLH", "pressure:TV:RV"),
+        ("LA", "P_LA:CLH", "pressure:J_pul:LA"),
+        ("LV", "P_LV:CLH", "pressure:MV:LV"),
+    ]
+    flow_map = [
+        ("Q_RA (tricuspid)", "Q_RA:CLH", "flow:RA:TV"),
+        ("Q_RV (pulmonary)", "Q_RV:CLH", "flow:RV:PV"),
+        ("Q_LA (mitral)",    "Q_LA:CLH", "flow:LA:MV"),
+        ("Q_LV (aortic)",    "Q_LV:CLH", "flow:LV:AV"),
+    ]
+
+    os.makedirs(plot_dir, exist_ok=True)
+
+    def save_fig(fig, name):
+        path = os.path.join(plot_dir, name)
+        fig.savefig(path, dpi=150)
+        plt.close(fig)
+        print(f"  Saved {path}")
+
+    # ---- 1: Aortic pressure and flow ----
+    mono_aorta = get_vessel(mono_v, "branch0_seg0")
+    decomp_aorta = get_vessel(decomp_v, "branch0_seg0")
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    fig.suptitle("Aortic Pressure and Flow (with Coronaries)", fontsize=14)
+    for ax, col, title in [
+        (axes[0, 0], "pressure_in", "Aortic Inlet Pressure"),
+        (axes[0, 1], "pressure_out", "Aortic Outlet Pressure"),
+        (axes[1, 0], "flow_in", "Aortic Inlet Flow"),
+        (axes[1, 1], "flow_out", "Aortic Outlet Flow"),
+    ]:
+        ax.plot(mono_aorta["time"].values, mono_aorta[col].values,
+                "k-", lw=1.5, label="Monolithic")
+        ax.plot(decomp_aorta["time"].values, decomp_aorta[col].values,
+                "r--", lw=1.5, label="Decomposed")
+        ax.set_title(title); ax.set_xlabel("Time [s]")
+        ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    save_fig(fig, "coronary_01_aortic.png")
+
+    # ---- 2: PV loops for all 4 chambers ----
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    fig.suptitle("Pressure-Volume Loops (with Coronaries)", fontsize=14)
+    for ax, (label, m_vol, d_vol) in zip(axes.flat, chamber_map):
+        _, m_v = get_var(mono_r, m_vol)
+        _, d_v = get_var(decomp_r, d_vol)
+        m_p_entry = [p for p in pressure_map if p[0] == label][0]
+        _, m_p = get_var(mono_r, m_p_entry[1])
+        _, d_p = get_var(decomp_r, m_p_entry[2])
+        n = min(len(m_v), len(m_p), len(d_v), len(d_p))
+        ax.plot(m_v[:n], m_p[:n], "k-", lw=1.5, label="Monolithic")
+        ax.plot(d_v[:n], d_p[:n], "r--", lw=1.5, label="Decomposed")
+        ax.set_title(f"{label} PV Loop"); ax.set_xlabel("Volume")
+        ax.set_ylabel("Pressure")
+        ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    save_fig(fig, "coronary_02_pv_loops.png")
+
+    # ---- 3: Valve flows ----
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    fig.suptitle("Valve Flows (with Coronaries)", fontsize=14)
+    for ax, (label, m_name, d_name) in zip(axes.flat, flow_map):
+        m_t, m_q = get_var(mono_r, m_name)
+        d_t, d_q = get_var(decomp_r, d_name)
+        ax.plot(m_t, m_q, "k-", lw=1.5, label="Monolithic")
+        ax.plot(d_t, d_q, "r--", lw=1.5, label="Decomposed")
+        ax.set_title(label); ax.set_xlabel("Time [s]"); ax.set_ylabel("Flow")
+        ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    save_fig(fig, "coronary_03_valve_flows.png")
+
+    # ---- 4: Coronary flows ----
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    fig.suptitle("Coronary Flows", fontsize=14)
+    coronary_vessel_map = [
+        ("LCA vessel inlet flow", "branch2_seg0", "flow_in"),
+        ("LCA vessel outlet flow", "branch2_seg0", "flow_out"),
+        ("RCA vessel inlet flow", "branch3_seg0", "flow_in"),
+        ("RCA vessel outlet flow", "branch3_seg0", "flow_out"),
+    ]
+    for ax, (title, vessel, col) in zip(axes.flat, coronary_vessel_map):
+        m = get_vessel(mono_v, vessel)
+        d = get_vessel(decomp_v, vessel)
+        ax.plot(m["time"].values, m[col].values, "k-", lw=1.5,
+                label="Monolithic")
+        ax.plot(d["time"].values, d[col].values, "r--", lw=1.5,
+                label="Decomposed")
+        ax.set_title(title); ax.set_xlabel("Time [s]")
+        ax.set_ylabel("Flow")
+        ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    save_fig(fig, "coronary_04_coronary_flows.png")
+
+    # ---- 5: Coronary intramyocardial volumes ----
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    fig.suptitle("Coronary Intramyocardial Volumes", fontsize=14)
+    for ax, (label, bc_name) in zip(axes.flat,
+                                     [("LCA", "LCA"), ("RCA", "RCA")]):
+        m_t, m_vim = get_var(mono_r, f"volume_im:{bc_name}")
+        d_t, d_vim = get_var(decomp_r, f"volume_im:{bc_name}")
+        ax.plot(m_t, m_vim, "k-", lw=1.5, label="Monolithic")
+        ax.plot(d_t, d_vim, "r--", lw=1.5, label="Decomposed")
+        ax.set_title(f"{label} V_im"); ax.set_xlabel("Time [s]")
+        ax.set_ylabel("Volume")
+        ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    save_fig(fig, "coronary_05_vim.png")
+
+    # ---- 6: Chamber volumes ----
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    fig.suptitle("Chamber Volumes (with Coronaries)", fontsize=14)
+    for ax, (label, m_name, d_name) in zip(axes.flat, chamber_map):
+        m_t, m_v = get_var(mono_r, m_name)
+        d_t, d_v = get_var(decomp_r, d_name)
+        ax.plot(m_t, m_v, "k-", lw=1.5, label="Monolithic")
+        ax.plot(d_t, d_v, "r--", lw=1.5, label="Decomposed")
+        ax.set_title(f"{label} Volume"); ax.set_xlabel("Time [s]")
+        ax.set_ylabel("Volume")
+        ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    save_fig(fig, "coronary_06_volumes.png")
+
+    # ---- numerical comparison ----
+    print("\n" + "=" * 80)
+    print("Coronary test: individual blocks vs monolithic (last cycle, 500 pts)")
+    print("=" * 80)
+
+    all_pass = True
+    rtol = 0.15
+
+    for vessel in ["branch0_seg0", "branch1_seg0",
+                    "branch2_seg0", "branch3_seg0"]:
+        m = get_vessel(mono_v, vessel)
+        d = get_vessel(decomp_v, vessel)
+        for col, label in [("pressure_in", "P_in"), ("flow_in", "Q_in")]:
+            mm = np.mean(m[col].values)
+            dm = np.mean(d[col].values)
+            rd = abs(mm - dm) / max(abs(mm), 1e-10)
+            status = "PASS" if rd <= rtol else "FAIL"
+            if status == "FAIL":
+                all_pass = False
+            print(f"  {vessel:16s} {label:5s}: mono={mm:10.4f}"
+                  f"  decomp={dm:10.4f}  rel_diff={rd:.4f}  [{status}]")
+
+    print("=" * 80)
+    assert all_pass
+
+
 test_decomposed_closedLoopHeart()
+test_decomposed_closedLoopHeart_withCoronaries()
