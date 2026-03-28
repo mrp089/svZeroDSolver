@@ -25,7 +25,6 @@ enum class BlockType {
   closed_loop_coronary_left_bc = 9,
   closed_loop_coronary_right_bc = 10,
   closed_loop_rcr_bc = 11,
-  closed_loop_heart_pulmonary = 12,
   valve_tanh = 13,
   chamber_elastance_inductor = 14,
   chamber_sphere = 15,
@@ -35,7 +34,6 @@ enum class BlockType {
   open_loop_coronary_var_res_bc = 19,
   open_loop_coronary_detailed_bc = 20,
   blood_vessel_rc = 21,
-  closed_loop_heart_pulmonary_smooth = 22,
   chamber_elastance_inductor_exponential = 23
 };
 

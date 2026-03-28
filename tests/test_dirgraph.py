@@ -17,14 +17,14 @@ results_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'cases/dir
 # List of files to exclude
 excluded_files = [
     'closedLoopHeart_singleVessel.json',
+    'closedLoopHeart_singleVessel_mistmatchPeriod.json',
+    'closedLoopHeart_singleVessel_decomposed.json',
     'closedLoopHeart_withCoronaries.json',
+    'closedLoopHeart_withCoronaries_decomposed.json',
     'coupledBlock_closedLoopHeart_singleVessel.json',
     'coupledBlock_closedLoopHeart_withCoronaries.json',
     'pulsatileFlow_CRL.json',
     'piecewise_Chamber_and_Valve.json',
-    'closedLoopHeart_singleVessel_mistmatchPeriod.json',
-    'closedLoopHeart_singleVessel_decomposed.json',
-    'closedLoopHeart_withCoronaries_decomposed.json',
     'pulsatileFlow_CStenosis_steadyPressure_definedPeriod.json',
     'pulsatileFlow_R_RCR_mismatchPeriod.json'
 ]

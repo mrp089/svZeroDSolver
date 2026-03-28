@@ -26,7 +26,6 @@
 #include "ChamberSphere.h"
 #include "ClosedLoopCoronaryLeftBC.h"
 #include "ClosedLoopCoronaryRightBC.h"
-#include "ClosedLoopHeartPulmonary.h"
 #include "ClosedLoopRCRBC.h"
 #include "DOFHandler.h"
 #include "FlowReferenceBC.h"

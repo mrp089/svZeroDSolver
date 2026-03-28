@@ -17,8 +17,6 @@ Model::Model() {
       {"BloodVesselJunction", block_factory<BloodVesselJunction>()},
       {"ClosedLoopCoronaryLeft", block_factory<ClosedLoopCoronaryLeftBC>()},
       {"ClosedLoopCoronaryRight", block_factory<ClosedLoopCoronaryRightBC>()},
-      {"ClosedLoopHeartAndPulmonary",
-       block_factory<ClosedLoopHeartPulmonary>()},
       {"ClosedLoopRCR", block_factory<ClosedLoopRCRBC>()},
       {"CORONARY", block_factory<OpenLoopCoronaryBC>()},
       {"CORONARY_VAR_RES", block_factory<OpenLoopCoronaryVarResBC>()},

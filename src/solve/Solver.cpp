@@ -413,13 +413,6 @@ std::vector<double> Solver::read_block_params(const std::string& block_name) {
 }
 
 void Solver::sanity_checks() {
-  // Check that steady initial is not used with ClosedLoopHeartAndPulmonary
-  if ((simparams.sim_steady_initial == true) &&
-      (this->model->has_block("CLH"))) {
-    std::runtime_error(
-        "ERROR: Steady initial condition is not compatible with "
-        "ClosedLoopHeartAndPulmonary block.");
-  }
 }
 
 void Solver::write_result_to_csv(const std::string& filename) const {

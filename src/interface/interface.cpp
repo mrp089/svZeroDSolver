@@ -93,14 +93,6 @@ void initialize(std::string input_file_arg, int& problem_id, int& pts_per_cycle,
   load_simulation_model(config, *model.get());
   auto state = load_initial_condition(config, *model.get());
 
-  // Check that steady initial is not set when ClosedLoopHeartAndPulmonary is
-  // used
-  if ((simparams.sim_steady_initial == true) && (model->has_block("CLH"))) {
-    std::runtime_error(
-        "ERROR: Steady initial condition is not compatible with "
-        "ClosedLoopHeartAndPulmonary block.");
-  }
-
   // Set default cardiac cycle period if not set by model
   if (model->cardiac_cycle_period < 0.0) {
     model->cardiac_cycle_period =

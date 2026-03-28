@@ -297,12 +297,6 @@ void load_simulation_model(const nlohmann::json& config, Model& model) {
     create_junctions(model, connections, config, component, vessel_id_map);
   }
 
-  // Create closed-loop blocks
-  component = "closed_loop_blocks";
-  if (config.contains(component)) {
-    create_closed_loop(model, connections, config, component, closed_loop_bcs);
-  }
-
   // Create valvescomponent
   component = "valves";
   if (config.contains(component)) {
@@ -428,31 +422,26 @@ void create_external_coupling(
     std::string connected_block = coupling_config["connected_block"];
     std::string connected_type;
     int found_block = 0;
-    if (connected_block == "ClosedLoopHeartAndPulmonary") {
-      connected_type = "ClosedLoopHeartAndPulmonary";
+    try {
+      connected_type = bc_type_map.at(connected_block);
       found_block = 1;
-    } else {
-      try {
-        connected_type = bc_type_map.at(connected_block);
-        found_block = 1;
-      } catch (...) {
-      }
-      if (found_block == 0) {
-        // Search for connected_block in the list of vessel names
-        for (auto const vessel : vessel_id_map) {
-          if (connected_block == vessel.second) {
-            connected_type = "BloodVessel";
-            found_block = 1;
-            break;
-          }
+    } catch (...) {
+    }
+    if (found_block == 0) {
+      // Search for connected_block in the list of vessel names
+      for (auto const vessel : vessel_id_map) {
+        if (connected_block == vessel.second) {
+          connected_type = "BloodVessel";
+          found_block = 1;
+          break;
         }
       }
-      if (found_block == 0) {
-        std::cout << "Error! Could not connected type for block: "
-                  << connected_block << std::endl;
-        throw std::runtime_error("Terminating.");
-      }
-    }  // connected_block != "ClosedLoopHeartAndPulmonary"
+    }
+    if (found_block == 0) {
+      std::cout << "Error! Could not connected type for block: "
+                << connected_block << std::endl;
+      throw std::runtime_error("Terminating.");
+    }
     // Create connections
     if (coupling_loc == "inlet") {
       std::vector<std::string> possible_types = {"RESISTANCE",
@@ -472,20 +461,14 @@ void create_external_coupling(
       connections.push_back({coupling_name, connected_block});
     } else if (coupling_loc == "outlet") {
       std::vector<std::string> possible_types = {
-          "ClosedLoopRCR", "ClosedLoopHeartAndPulmonary", "BloodVessel"};
+          "ClosedLoopRCR", "BloodVessel"};
       if (std::find(std::begin(possible_types), std::end(possible_types),
                     connected_type) == std::end(possible_types)) {
         throw std::runtime_error(
             "Error: The specified connection type for outlet "
             "external_coupling_block is invalid.");
       }
-      // Add connection only for closedLoopRCR and BloodVessel. Connection to
-      // ClosedLoopHeartAndPulmonary will be handled in
-      // ClosedLoopHeartAndPulmonary creation.
-      if ((connected_type == "ClosedLoopRCR") ||
-          (connected_type == "BloodVessel")) {
-        connections.push_back({connected_block, coupling_name});
-      }  // connected_type == "ClosedLoopRCR"
+      connections.push_back({connected_block, coupling_name});
     }  // coupling_loc
   }  // for (size_t i = 0; i < coupling_configs.length(); i++)
 }
@@ -532,63 +515,6 @@ void create_junctions(
   }
 }
 
-void create_closed_loop(
-    Model& model,
-    std::vector<std::tuple<std::string, std::string>>& connections,
-    const nlohmann::json& config, const std::string& component,
-    std::vector<std::string>& closed_loop_bcs) {
-  ///< Flag to check if heart block is present (requires different handling)
-  bool heartpulmonary_block_present = false;
-
-  // Loop all closed loop blocks
-  for (size_t i = 0; i < config[component].size(); i++) {
-    const auto& closed_loop_config = JsonWrapper(config, component, "name", i);
-    std::string closed_loop_type = closed_loop_config["closed_loop_type"];
-    if (closed_loop_type == "ClosedLoopHeartAndPulmonary" ||
-        closed_loop_type == "ClosedLoopHeartAndPulmonarySmooth") {
-      if (heartpulmonary_block_present == false) {
-        heartpulmonary_block_present = true;
-        std::string heartpulmonary_name = "CLH";
-        double cycle_period = closed_loop_config["cardiac_cycle_period"];
-        if ((model.cardiac_cycle_period > 0.0) &&
-            (cycle_period != model.cardiac_cycle_period)) {
-          throw std::runtime_error(
-              "Inconsistent cardiac cycle period defined in "
-              "ClosedLoopHeartAndPulmonary.");
-        } else {
-          model.cardiac_cycle_period = cycle_period;
-        }
-        const auto& heart_params = closed_loop_config["parameters"];
-
-        generate_block(model, heart_params, closed_loop_type,
-                       heartpulmonary_name);
-
-        // Junction at inlet to heart
-        std::string heart_inlet_junction_name = "J_heart_inlet";
-        connections.push_back({heart_inlet_junction_name, heartpulmonary_name});
-        generate_block(model, {}, "NORMAL_JUNCTION", heart_inlet_junction_name);
-
-        for (auto heart_inlet_elem : closed_loop_bcs) {
-          connections.push_back({heart_inlet_elem, heart_inlet_junction_name});
-        }
-
-        // Junction at outlet from heart
-        std::string heart_outlet_junction_name = "J_heart_outlet";
-        connections.push_back(
-            {heartpulmonary_name, heart_outlet_junction_name});
-        generate_block(model, {}, "NORMAL_JUNCTION",
-                       heart_outlet_junction_name);
-        for (auto& outlet_block : closed_loop_config["outlet_blocks"]) {
-          connections.push_back({heart_outlet_junction_name, outlet_block});
-        }
-      } else {
-        throw std::runtime_error(
-            "Error. Only one ClosedLoopHeartAndPulmonary can be included.");
-      }
-    }
-  }
-}
-
 void create_valves(
     Model& model,
     std::vector<std::tuple<std::string, std::string>>& connections,
@@ -612,7 +538,7 @@ void create_chambers(
     std::vector<std::tuple<std::string, std::string>>& connections,
     const nlohmann::json& config, const std::string& component) {
   // Set cardiac period from simulation_parameters so activation functions have
-  // it. May already be set by closed_loop_blocks.
+  // it.
   if (model.cardiac_cycle_period < 0.0 &&
       config.contains("simulation_parameters") &&
       config["simulation_parameters"].contains("cardiac_period")) {

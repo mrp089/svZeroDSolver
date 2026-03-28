@@ -18,7 +18,6 @@ set(CXXSRCS
   ClosedLoopCoronaryBC.cpp
   ClosedLoopCoronaryLeftBC.cpp
   ClosedLoopCoronaryRightBC.cpp
-  ClosedLoopHeartPulmonary.cpp
   ClosedLoopRCRBC.cpp
   DOFHandler.cpp
   FlowReferenceBC.cpp
@@ -51,7 +50,6 @@ set(HDRS
   ClosedLoopCoronaryBC.h
   ClosedLoopCoronaryLeftBC.h
   ClosedLoopCoronaryRightBC.h
-  ClosedLoopHeartPulmonary.h
   ClosedLoopRCRBC.h
   DOFHandler.h
   FlowReferenceBC.h

@@ -253,22 +253,6 @@ void create_junctions(
     std::map<int, std::string>& vessel_id_map);
 
 /**
- * @brief Handle the creation of closed-loop blocks and associated connections
- *
- * @param model The model the block is associated with
- * @param connections Vector storing the connections between blocks
- * @param config The JSON configuration
- * @param component Name of the component to retrieve from config
- * @param closed_loop_bcs List of boundary conditions that should be connected
- * to a closed loop heart block
- */
-void create_closed_loop(
-    Model& model,
-    std::vector<std::tuple<std::string, std::string>>& connections,
-    const nlohmann::json& config, const std::string& component,
-    std::vector<std::string>& closed_loop_bcs);
-
-/**
  * @brief Handle the creation of valves and their associated connections
  *
  * @param model The model the block is associated with
