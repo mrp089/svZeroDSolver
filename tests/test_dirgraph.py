@@ -24,6 +24,7 @@ excluded_files = [
     'piecewise_Chamber_and_Valve.json',
     'closedLoopHeart_singleVessel_mistmatchPeriod.json',
     'closedLoopHeart_singleVessel_decomposed.json',
+    'closedLoopHeart_withCoronaries_decomposed.json',
     'pulsatileFlow_CStenosis_steadyPressure_definedPeriod.json',
     'pulsatileFlow_R_RCR_mismatchPeriod.json'
 ]

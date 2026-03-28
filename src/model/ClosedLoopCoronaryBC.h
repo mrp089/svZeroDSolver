@@ -7,8 +7,9 @@
 #ifndef SVZERODSOLVER_MODEL_CLOSEDLOOPCORONARYBC_HPP_
 #define SVZERODSOLVER_MODEL_CLOSEDLOOPCORONARYBC_HPP_
 
+#include <string>
+
 #include "Block.h"
-#include "ClosedLoopHeartPulmonary.h"
 #include "SparseSystem.h"
 
 /**
@@ -109,13 +110,15 @@ class ClosedLoopCoronaryBC : public Block {
                {"Ram", InputParameter()},
                {"Rv", InputParameter()},
                {"Ca", InputParameter()},
-               {"Cim", InputParameter()}}) {}
+               {"Cim", InputParameter()},
+               {"im", InputParameter(true)},
+               {"ventricle_block", InputParameter(true, false, false)}}) {}
 
   /**
    * @brief Local IDs of the parameters
    *
    */
-  enum ParamId { RA = 0, RAM = 1, RV = 2, CA = 3, CIM = 4 };
+  enum ParamId { RA = 0, RAM = 1, RV = 2, CA = 3, CIM = 4, IM = 5 };
 
   /**
    * @brief Set up the degrees of freedom (DOF) of the block
@@ -163,6 +166,9 @@ class ClosedLoopCoronaryBC : public Block {
    * (relevant for sparse memory reservation)
    */
   TripletsContributions num_triplets{9, 5, 0};
+
+ public:
+  std::string ventricle_block_name;  ///< Name of the ventricle block
 
  protected:
   int ventricle_var_id;  ///< Variable index of either left or right ventricle

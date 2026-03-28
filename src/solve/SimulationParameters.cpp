@@ -2,6 +2,8 @@
 // University of California, and others. SPDX-License-Identifier: BSD-3-Clause
 #include "SimulationParameters.h"
 
+#include "ClosedLoopCoronaryBC.h"
+
 bool get_param_scalar(const nlohmann::json& data, const std::string& name,
                       const InputParameter& param, double& val) {
   if (data.contains(name)) {
@@ -381,6 +383,15 @@ void create_boundary_conditions(Model& model, const nlohmann::json& config,
       double time_constant = Rd * C;
       model.update_largest_windkessel_time_constant(std::max(
           model.get_largest_windkessel_time_constant(), time_constant));
+    }
+
+    // Read ventricle_block for coronary BCs in decomposed mode
+    if ((block->block_type == BlockType::closed_loop_coronary_left_bc ||
+         block->block_type == BlockType::closed_loop_coronary_right_bc) &&
+        bc_values.contains("ventricle_block")) {
+      auto coronary_block =
+          static_cast<ClosedLoopCoronaryBC*>(model.get_block(block_id));
+      coronary_block->ventricle_block_name = bc_values["ventricle_block"];
     }
 
     if (block->block_type == BlockType::closed_loop_rcr_bc) {
