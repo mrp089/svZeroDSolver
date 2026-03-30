@@ -23,6 +23,8 @@ excluded_files = [
     'closedLoopHeart_withCoronaries_decomposed.json',
     'coupledBlock_closedLoopHeart_singleVessel.json',
     'coupledBlock_closedLoopHeart_withCoronaries.json',
+    'coupledBlock_closedLoopHeart_singleVessel_decomposed.json',
+    'coupledBlock_closedLoopHeart_withCoronaries_decomposed.json',
     'pulsatileFlow_CRL.json',
     'piecewise_Chamber_and_Valve.json',
     'pulsatileFlow_CStenosis_steadyPressure_definedPeriod.json',

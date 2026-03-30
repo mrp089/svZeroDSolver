@@ -50,7 +50,9 @@ EXPECTED_FAILURES = {
                                       'pulsatileFlow_CRL.json',
                                       'pulsatileFlow_R_coronary_varres.json',
                                       'closedLoopHeart_singleVessel_decomposed.json',
-                                      'closedLoopHeart_withCoronaries_decomposed.json'
+                                      'closedLoopHeart_withCoronaries_decomposed.json',
+                                      'coupledBlock_closedLoopHeart_singleVessel_decomposed.json',
+                                      'coupledBlock_closedLoopHeart_withCoronaries_decomposed.json'
                                       ])
 def test_solver(testfile):
     '''
