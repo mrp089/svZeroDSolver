@@ -4,9 +4,17 @@ import pytest
 
 import numpy as np
 
-from .utils import execute_pysvzerod, RTOL_PRES
+from .utils import execute_pysvzerod
 
 this_file_dir = os.path.abspath(os.path.dirname(__file__))
+
+# The calibrator should recover the input parameters used to generate the y
+# observations. With y from the forward solver and dy reconstructed via the
+# gen-alpha update relation, that recovery is bound only by the forward
+# solver's nonlinear tolerance — the steady case drifts by about 1e-9 on R,
+# the VMR cases match to machine precision.
+RTOL = 1e-10
+ATOL = 1e-9
 
 
 def test_steady_flow_calibration():
@@ -17,12 +25,17 @@ def test_steady_flow_calibration():
     calibrated_parameters = result["vessels"][0]["zero_d_element_values"]
 
     assert np.isclose(
-        np.mean(calibrated_parameters["R_poiseuille"]), 100, rtol=RTOL_PRES
+        np.mean(calibrated_parameters["R_poiseuille"]), 100, rtol=RTOL, atol=ATOL
     )
-    assert np.isclose(np.mean(calibrated_parameters["C"]), 0.0001, rtol=RTOL_PRES)
-    assert np.isclose(np.mean(calibrated_parameters["L"]), 1.0, rtol=RTOL_PRES)
     assert np.isclose(
-        np.mean(calibrated_parameters["stenosis_coefficient"]), 0.0, rtol=RTOL_PRES
+        np.mean(calibrated_parameters["C"]), 0.0001, rtol=RTOL, atol=ATOL
+    )
+    assert np.isclose(np.mean(calibrated_parameters["L"]), 1.0, rtol=RTOL, atol=ATOL)
+    assert np.isclose(
+        np.mean(calibrated_parameters["stenosis_coefficient"]),
+        0.0,
+        rtol=RTOL,
+        atol=ATOL,
     )
 
 
@@ -47,7 +60,8 @@ def test_calibration_vmr(model_id):
             assert np.isclose(
                 result["vessels"][i]["zero_d_element_values"][key],
                 value,
-                rtol=RTOL_PRES,
+                rtol=RTOL,
+                atol=ATOL,
             )
 
     for i, junction in enumerate(reference["junctions"]):
@@ -56,5 +70,6 @@ def test_calibration_vmr(model_id):
                 assert np.allclose(
                     result["junctions"][i]["junction_values"][key],
                     value,
-                    rtol=RTOL_PRES,
+                    rtol=RTOL,
+                    atol=ATOL,
                 )
