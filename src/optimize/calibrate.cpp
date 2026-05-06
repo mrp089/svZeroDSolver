@@ -114,11 +114,26 @@ nlohmann::json calibrate(const nlohmann::json& config) {
 
   DEBUG_MSG("Number of parameters " << param_counter);
 
+  // Read the observation time vector. The user must supply this so we can
+  // compute the time derivative without guessing the time step or cardiac
+  // period.
+  if (!config.contains("t")) {
+    std::cout << "ERROR: Missing observation time vector 't'" << std::endl;
+    exit(1);
+  }
+  auto t_obs = config["t"].get<std::vector<double>>();
+  int num_obs = static_cast<int>(t_obs.size());
+  if (num_obs < 2) {
+    std::cout << "ERROR: Observation time vector 't' must have at least 2 "
+                 "entries"
+              << std::endl;
+    exit(1);
+  }
+
   // Read observations of the state vector y from the forward solver
   DEBUG_MSG("Reading observations");
-  int num_obs = 0;
   int num_vars = model.dofhandler.get_num_variables();
-  std::vector<std::vector<double>> y_all;
+  std::vector<std::vector<double>> y_all(num_obs);
   auto y_values = config["y"];
   for (size_t i = 0; i < num_vars; i++) {
     std::string var_name = model.dofhandler.variables[i];
@@ -129,9 +144,11 @@ nlohmann::json calibrate(const nlohmann::json& config) {
       exit(1);
     }
     auto y_array = y_values[var_name].get<std::vector<double>>();
-    num_obs = y_array.size();
-    if (i == 0) {
-      y_all.resize(num_obs);
+    if (static_cast<int>(y_array.size()) != num_obs) {
+      std::cout << "ERROR: y observation for '" << var_name
+                << "' has length " << y_array.size()
+                << " but time vector 't' has length " << num_obs << std::endl;
+      exit(1);
     }
     for (size_t j = 0; j < num_obs; j++) {
       y_all[j].push_back(y_array[j]);
@@ -142,46 +159,26 @@ nlohmann::json calibrate(const nlohmann::json& config) {
   // Compute the time derivative dy from y consistent with the forward
   // solver's generalized-alpha integration. The forward solver produces
   // (y_n, ydot_n) pairs satisfying
-  //     y_{n+1} = y_n + dt * ((1 - gamma) * ydot_n + gamma * ydot_{n+1}).
-  // Solving for ydot_{n+1} gives the recurrence
-  //     ydot_{n+1} = (y_{n+1} - y_n) / (dt*gamma) + (1 - 1/gamma) * ydot_n.
+  //     y_{n+1} = y_n + dt_n * ((1 - gamma) * ydot_n + gamma * ydot_{n+1}),
+  // where dt_n = t_{n+1} - t_n. Solving for ydot_{n+1} gives the recurrence
+  //     ydot_{n+1} = (y_{n+1} - y_n) / (dt_n*gamma) + (1 - 1/gamma) * ydot_n.
   // We close the recurrence with the periodic assumption ydot_0 = ydot_{N-1},
   // which holds for cycle-converged simulation output.
   DEBUG_MSG("Computing dy from y consistent with generalized-alpha");
   double rho_infty = 0.5;
-  double cardiac_period = -1.0;
   if (config.contains("simulation_parameters")) {
-    auto const& sp = config["simulation_parameters"];
-    rho_infty = sp.value("rho_infty", 0.5);
-    cardiac_period = sp.value("cardiac_period", -1.0);
+    rho_infty = config["simulation_parameters"].value("rho_infty", 0.5);
   }
-  if (cardiac_period <= 0.0 && config.contains("boundary_conditions")) {
-    for (auto const& bc : config["boundary_conditions"]) {
-      if (bc.contains("bc_values") && bc["bc_values"].contains("t")) {
-        auto const& t_array = bc["bc_values"]["t"];
-        if (t_array.is_array() && t_array.size() >= 2) {
-          cardiac_period = t_array.back().get<double>() -
-                           t_array.front().get<double>();
-          break;
-        }
-      }
-    }
-  }
-  if (cardiac_period <= 0.0) {
-    cardiac_period = 1.0;
-  }
-
   GenAlphaCoefficients ga(rho_infty);
-  double dt = cardiac_period / static_cast<double>(num_obs - 1);
-  double dt_gamma = dt * ga.gamma;
 
   std::vector<std::vector<double>> dy_all(num_obs,
                                           std::vector<double>(num_vars, 0.0));
   for (size_t v = 0; v < num_vars; v++) {
-    // Forcing terms c_n = (y_n - y_{n-1}) / (dt*gamma) for n = 1, ..., N-1.
+    // Forcing terms c_n = (y_n - y_{n-1}) / (dt_{n-1} * gamma).
     std::vector<double> c(num_obs, 0.0);
     for (int n = 1; n < num_obs; n++) {
-      c[n] = (y_all[n][v] - y_all[n - 1][v]) / dt_gamma;
+      double dt = t_obs[n] - t_obs[n - 1];
+      c[n] = (y_all[n][v] - y_all[n - 1][v]) / (dt * ga.gamma);
     }
     // Solve ydot_0 = sum_{k=1}^{N-1} r^{N-1-k} c_k / (1 - r^{N-1})
     // by accumulating from k = N-1 down to k = 1.
@@ -323,6 +320,7 @@ nlohmann::json calibrate(const nlohmann::json& config) {
 
   output_config.erase("y");
   output_config.erase("dy");
+  output_config.erase("t");
   output_config.erase("calibration_parameters");
 
   return output_config;
