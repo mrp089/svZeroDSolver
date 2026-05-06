@@ -3,16 +3,19 @@
 
 #include "Integrator.h"
 
-Integrator::Integrator(Model* model, double time_step_size, double rho,
-                       double atol, int max_iter) {
-  this->model = model;
-  alpha_m = 0.5 * (3.0 - rho) / (1.0 + rho);
-  alpha_f = 1.0 / (1.0 + rho);
+GenAlphaCoefficients::GenAlphaCoefficients(double rho_infty) {
+  alpha_m = 0.5 * (3.0 - rho_infty) / (1.0 + rho_infty);
+  alpha_f = 1.0 / (1.0 + rho_infty);
   gamma = 0.5 + alpha_m - alpha_f;
   ydot_init_coeff = 1.0 - 1.0 / gamma;
+}
 
-  y_coeff = gamma * time_step_size;
-  y_coeff_jacobian = alpha_f * y_coeff;
+Integrator::Integrator(Model* model, double time_step_size, double rho,
+                       double atol, int max_iter)
+    : ga(rho) {
+  this->model = model;
+  y_coeff = ga.gamma * time_step_size;
+  y_coeff_jacobian = ga.alpha_f * y_coeff;
 
   size = model->dofhandler.size();
   system = SparseSystem(size);
@@ -40,8 +43,8 @@ void Integrator::clean() {
 
 void Integrator::update_params(double time_step_size) {
   this->time_step_size = time_step_size;
-  y_coeff = gamma * time_step_size;
-  y_coeff_jacobian = alpha_f * y_coeff;
+  y_coeff = ga.gamma * time_step_size;
+  y_coeff_jacobian = ga.alpha_f * y_coeff;
   model->update_constant(system);
   model->update_time(system, 0.0);
 }
@@ -49,11 +52,11 @@ void Integrator::update_params(double time_step_size) {
 State Integrator::step(const State& old_state, double time) {
   // Predictor: Constant y, consistent ydot
   State new_state = State::Zero(size);
-  new_state.ydot += old_state.ydot * ydot_init_coeff;
+  new_state.ydot += old_state.ydot * ga.ydot_init_coeff;
   new_state.y += old_state.y;
 
   // Determine new time (evaluate terms at generalized mid-point)
-  double new_time = time + alpha_f * time_step_size;
+  double new_time = time + ga.alpha_f * time_step_size;
 
   // Evaluate time-dependent element contributions in system
   model->update_time(system, new_time);
@@ -66,8 +69,8 @@ State Integrator::step(const State& old_state, double time) {
     // Initiator: Evaluate the iterates at the intermediate time levels
     ydot_am.setZero();
     y_af.setZero();
-    ydot_am += old_state.ydot + (new_state.ydot - old_state.ydot) * alpha_m;
-    y_af += old_state.y + (new_state.y - old_state.y) * alpha_f;
+    ydot_am += old_state.ydot + (new_state.ydot - old_state.ydot) * ga.alpha_m;
+    y_af += old_state.y + (new_state.y - old_state.y) * ga.alpha_f;
 
     // Update solution-dependent element contribitions
     model->update_solution(system, y_af, ydot_am);
@@ -88,7 +91,7 @@ State Integrator::step(const State& old_state, double time) {
     }
 
     // Evaluate Jacobian
-    system.update_jacobian(alpha_m, y_coeff_jacobian);
+    system.update_jacobian(ga.alpha_m, y_coeff_jacobian);
 
     // Solve system for increment in ydot
     system.solve();

@@ -13,6 +13,21 @@
 #include "State.h"
 
 /**
+ * @brief Coefficients of the generalized-\f$\alpha\f$ method derived from
+ * the spectral radius \f$\rho_\infty\f$. Shared by the time integrator and
+ * any other code that needs to be consistent with it (e.g. the calibrator).
+ */
+struct GenAlphaCoefficients {
+  double alpha_m{0.0};
+  double alpha_f{0.0};
+  double gamma{0.0};
+  double ydot_init_coeff{0.0};  ///< \f$1 - 1/\gamma\f$, used as predictor
+
+  GenAlphaCoefficients() = default;
+  explicit GenAlphaCoefficients(double rho_infty);
+};
+
+/**
  * @brief Generalized-alpha integrator
  *
  * This class handles the time integration scheme for solving 0D blood
@@ -25,11 +40,8 @@
 
 class Integrator {
  private:
-  double alpha_m{0.0};
-  double alpha_f{0.0};
-  double gamma{0.0};
+  GenAlphaCoefficients ga;
   double time_step_size{0.0};
-  double ydot_init_coeff{0.0};
   double y_coeff{0.0};
   double y_coeff_jacobian{0.0};
   double atol{0.0};

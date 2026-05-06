@@ -4,6 +4,7 @@
 
 #include <cmath>
 
+#include "Integrator.h"
 #include "LevenbergMarquardtOptimizer.h"
 #include "SimulationParameters.h"
 
@@ -170,12 +171,9 @@ nlohmann::json calibrate(const nlohmann::json& config) {
     cardiac_period = 1.0;
   }
 
-  double alpha_m = 0.5 * (3.0 - rho_infty) / (1.0 + rho_infty);
-  double alpha_f = 1.0 / (1.0 + rho_infty);
-  double gamma = 0.5 + alpha_m - alpha_f;
+  GenAlphaCoefficients ga(rho_infty);
   double dt = cardiac_period / static_cast<double>(num_obs - 1);
-  double r = 1.0 - 1.0 / gamma;
-  double dt_gamma = dt * gamma;
+  double dt_gamma = dt * ga.gamma;
 
   std::vector<std::vector<double>> dy_all(num_obs,
                                           std::vector<double>(num_vars, 0.0));
@@ -191,15 +189,15 @@ nlohmann::json calibrate(const nlohmann::json& config) {
     double rk = 1.0;
     for (int k = num_obs - 1; k >= 1; k--) {
       sum += rk * c[k];
-      rk *= r;
+      rk *= ga.ydot_init_coeff;
     }
-    double r_N1 = std::pow(r, num_obs - 1);
+    double r_N1 = std::pow(ga.ydot_init_coeff, num_obs - 1);
     double ydot0 = sum / (1.0 - r_N1);
 
     // Forward propagate to get ydot at each observation.
     dy_all[0][v] = ydot0;
     for (int n = 1; n < num_obs; n++) {
-      dy_all[n][v] = c[n] + r * dy_all[n - 1][v];
+      dy_all[n][v] = c[n] + ga.ydot_init_coeff * dy_all[n - 1][v];
     }
   }
 
