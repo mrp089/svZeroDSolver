@@ -2,6 +2,8 @@
 // University of California, and others. SPDX-License-Identifier: BSD-3-Clause
 #include "calibrate.h"
 
+#include <cmath>
+
 #include "LevenbergMarquardtOptimizer.h"
 #include "SimulationParameters.h"
 
@@ -111,14 +113,13 @@ nlohmann::json calibrate(const nlohmann::json& config) {
 
   DEBUG_MSG("Number of parameters " << param_counter);
 
-  // Read observations
+  // Read observations of the state vector y from the forward solver
   DEBUG_MSG("Reading observations");
   int num_obs = 0;
+  int num_vars = model.dofhandler.get_num_variables();
   std::vector<std::vector<double>> y_all;
-  std::vector<std::vector<double>> dy_all;
   auto y_values = config["y"];
-  auto dy_values = config["dy"];
-  for (size_t i = 0; i < model.dofhandler.get_num_variables(); i++) {
+  for (size_t i = 0; i < num_vars; i++) {
     std::string var_name = model.dofhandler.variables[i];
     DEBUG_MSG("Reading observations for variable " << var_name);
     if (!y_values.contains(var_name)) {
@@ -126,24 +127,81 @@ nlohmann::json calibrate(const nlohmann::json& config) {
                 << std::endl;
       exit(1);
     }
-    if (!dy_values.contains(var_name)) {
-      std::cout << "ERROR: Missing dy observation for '" << var_name << "'"
-                << std::endl;
-      exit(1);
-    }
     auto y_array = y_values[var_name].get<std::vector<double>>();
-    auto dy_array = dy_values[var_name].get<std::vector<double>>();
     num_obs = y_array.size();
     if (i == 0) {
       y_all.resize(num_obs);
-      dy_all.resize(num_obs);
     }
     for (size_t j = 0; j < num_obs; j++) {
       y_all[j].push_back(y_array[j]);
-      dy_all[j].push_back(dy_array[j]);
     }
   }
   DEBUG_MSG("Number of observations: " << num_obs);
+
+  // Compute the time derivative dy from y consistent with the forward
+  // solver's generalized-alpha integration. The forward solver produces
+  // (y_n, ydot_n) pairs satisfying
+  //     y_{n+1} = y_n + dt * ((1 - gamma) * ydot_n + gamma * ydot_{n+1}).
+  // Solving for ydot_{n+1} gives the recurrence
+  //     ydot_{n+1} = (y_{n+1} - y_n) / (dt*gamma) + (1 - 1/gamma) * ydot_n.
+  // We close the recurrence with the periodic assumption ydot_0 = ydot_{N-1},
+  // which holds for cycle-converged simulation output.
+  DEBUG_MSG("Computing dy from y consistent with generalized-alpha");
+  double rho_infty = 0.5;
+  double cardiac_period = -1.0;
+  if (config.contains("simulation_parameters")) {
+    auto const& sp = config["simulation_parameters"];
+    rho_infty = sp.value("rho_infty", 0.5);
+    cardiac_period = sp.value("cardiac_period", -1.0);
+  }
+  if (cardiac_period <= 0.0 && config.contains("boundary_conditions")) {
+    for (auto const& bc : config["boundary_conditions"]) {
+      if (bc.contains("bc_values") && bc["bc_values"].contains("t")) {
+        auto const& t_array = bc["bc_values"]["t"];
+        if (t_array.is_array() && t_array.size() >= 2) {
+          cardiac_period = t_array.back().get<double>() -
+                           t_array.front().get<double>();
+          break;
+        }
+      }
+    }
+  }
+  if (cardiac_period <= 0.0) {
+    cardiac_period = 1.0;
+  }
+
+  double alpha_m = 0.5 * (3.0 - rho_infty) / (1.0 + rho_infty);
+  double alpha_f = 1.0 / (1.0 + rho_infty);
+  double gamma = 0.5 + alpha_m - alpha_f;
+  double dt = cardiac_period / static_cast<double>(num_obs - 1);
+  double r = 1.0 - 1.0 / gamma;
+  double dt_gamma = dt * gamma;
+
+  std::vector<std::vector<double>> dy_all(num_obs,
+                                          std::vector<double>(num_vars, 0.0));
+  for (size_t v = 0; v < num_vars; v++) {
+    // Forcing terms c_n = (y_n - y_{n-1}) / (dt*gamma) for n = 1, ..., N-1.
+    std::vector<double> c(num_obs, 0.0);
+    for (int n = 1; n < num_obs; n++) {
+      c[n] = (y_all[n][v] - y_all[n - 1][v]) / dt_gamma;
+    }
+    // Solve ydot_0 = sum_{k=1}^{N-1} r^{N-1-k} c_k / (1 - r^{N-1})
+    // by accumulating from k = N-1 down to k = 1.
+    double sum = 0.0;
+    double rk = 1.0;
+    for (int k = num_obs - 1; k >= 1; k--) {
+      sum += rk * c[k];
+      rk *= r;
+    }
+    double r_N1 = std::pow(r, num_obs - 1);
+    double ydot0 = sum / (1.0 - r_N1);
+
+    // Forward propagate to get ydot at each observation.
+    dy_all[0][v] = ydot0;
+    for (int n = 1; n < num_obs; n++) {
+      dy_all[n][v] = c[n] + r * dy_all[n - 1][v];
+    }
+  }
 
   // Setup start parameter vector
   Eigen::Matrix<double, Eigen::Dynamic, 1> alpha =
