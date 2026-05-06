@@ -44,7 +44,7 @@ def test_calibration_vmr(model_id):
 
     for i, vessel in enumerate(reference["vessels"]):
         for key, value in vessel["zero_d_element_values"].items():
-            np.isclose(
+            assert np.isclose(
                 result["vessels"][i]["zero_d_element_values"][key],
                 value,
                 rtol=RTOL_PRES,
@@ -53,7 +53,7 @@ def test_calibration_vmr(model_id):
     for i, junction in enumerate(reference["junctions"]):
         if "junction_values" in junction:
             for key, value in junction["junction_values"].items():
-                np.allclose(
+                assert np.allclose(
                     result["junctions"][i]["junction_values"][key],
                     value,
                     rtol=RTOL_PRES,
