@@ -26,6 +26,36 @@ def test_steady_flow_calibration():
     )
 
 
+def test_chamber_sphere_pq_calibration():
+    """Calibrate a subset of ChamberSphere parameters from port pressure/flow
+    only.
+
+    The fixture ``chamber_sphere_pq_calibration.json`` provides ``y`` containing
+    only the four port variables (pressure/flow at the inlet and outlet) plus a
+    ``time`` vector. The chamber's hidden volume/radius state is reconstructed by
+    integrating the net flow (absolute volume fixed to the reference state), and
+    a selected parameter subset (``_calibrate_subset``) is fit to the active
+    stress equation. The starting point is perturbed by 20%; the calibrator must
+    recover the true values of the calibrated subset.
+
+    All twelve parameters are not jointly identifiable from a single P-Q cycle
+    (the problem is severely under-determined), so only an identifiable subset is
+    calibrated here.
+    """
+    testfile = os.path.join(
+        this_file_dir, "cases", "chamber_sphere_pq_calibration.json"
+    )
+
+    result, config = execute_pysvzerod(testfile, "calibrator")
+
+    calibrated = result["vessels"][0]["zero_d_element_values"]
+    for name in config["_calibrate_subset"]:
+        true_value = config["_true_values"][name]
+        assert np.isclose(calibrated[name], true_value, rtol=1e-3), (
+            f"{name}: got {calibrated[name]}, expected {true_value}"
+        )
+
+
 @pytest.mark.parametrize(
     "test_case",
     [

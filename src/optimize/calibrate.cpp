@@ -4,6 +4,7 @@
 
 #include <set>
 
+#include "ChamberSpherePQ.h"
 #include "LevenbergMarquardtOptimizer.h"
 #include "SimulationParameters.h"
 
@@ -29,6 +30,14 @@ int param_stride(const Block& block, int num_outlets) {
 }  // namespace
 
 nlohmann::json calibrate(const nlohmann::json& config) {
+  // A ChamberSphere is calibrated only from its port pressure/flow: its
+  // volume/radius is a hidden integrator of flow, so it cannot be calibrated
+  // point-wise like the other blocks. The dedicated reconstruction-based path
+  // assumes the data are P/Q only.
+  if (is_chamber_pq_mode(config)) {
+    return calibrate_chamber_pq(config);
+  }
+
   auto output_config = nlohmann::json(config);
 
   // Read calibration parameters
