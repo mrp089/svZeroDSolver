@@ -19,31 +19,17 @@ enum P { RHO, THICK0, RADIUS0, W1, W2, ETA, SIGMA, AMAX, AMIN, TSYS, TDIAS, STEE
 
 using Vec = std::vector<double>;
 
-// Cumulative trapezoidal integral with I[0] = 0.
+// Cumulative trapezoidal integral with I[0] = 0. This is the only numerical
+// operation on the time series: the absolute cavity volume is the time-integral
+// of the net flow (flow alone gives volume change). All time-derivatives are
+// taken from the supplied ``ydot`` analytically, so no finite differences are
+// used.
 Vec cumint(const Vec& f, const Vec& t) {
   Vec out(f.size(), 0.0);
   for (size_t i = 1; i < f.size(); i++) {
     out[i] = out[i - 1] + 0.5 * (f[i] + f[i - 1]) * (t[i] - t[i - 1]);
   }
   return out;
-}
-
-// Second-order central derivative on a (possibly non-uniform) grid; first-order
-// one-sided at the boundaries (matches numpy.gradient).
-Vec ddt(const Vec& x, const Vec& t) {
-  const size_t n = x.size();
-  Vec g(n, 0.0);
-  if (n < 2) return g;
-  g[0] = (x[1] - x[0]) / (t[1] - t[0]);
-  g[n - 1] = (x[n - 1] - x[n - 2]) / (t[n - 1] - t[n - 2]);
-  for (size_t i = 1; i + 1 < n; i++) {
-    const double hs = t[i] - t[i - 1];
-    const double hd = t[i + 1] - t[i];
-    g[i] = -hd / (hs * (hs + hd)) * x[i - 1] +
-           (hd - hs) / (hs * hd) * x[i] +
-           hs / (hd * (hs + hd)) * x[i + 1];
-  }
-  return g;
 }
 
 // Per-time-point activation value and its parameter derivatives, mirroring
@@ -61,19 +47,18 @@ Activation activation(double tc, const double* a) {
   const double f = Sp * Sm;
   const double act_t = a[AMAX] * f + a[AMIN] * (1.0 - f);
   const double sech2s = 1.0 - ths * ths, sech2d = 1.0 - thd * thd;
-  // df/d(timing params)
   const double df_dtsys = (-0.5 * sech2s / steep) * Sm;
   const double df_dtdias = Sp * (0.5 * sech2d / steep);
   const double df_dsteep =
       (0.5 * sech2s * (-(tc - a[TSYS]) / (steep * steep))) * Sm +
       Sp * (0.5 * sech2d * ((tc - a[TDIAS]) / (steep * steep)));
-  const double damin_factor = a[AMAX] - a[AMIN];
+  const double da = a[AMAX] - a[AMIN];
   double dact_t[12] = {0};
   dact_t[AMAX] = f;
   dact_t[AMIN] = 1.0 - f;
-  dact_t[TSYS] = damin_factor * df_dtsys;
-  dact_t[TDIAS] = damin_factor * df_dtdias;
-  dact_t[STEEP] = damin_factor * df_dsteep;
+  dact_t[TSYS] = da * df_dtsys;
+  dact_t[TDIAS] = da * df_dtdias;
+  dact_t[STEEP] = da * df_dsteep;
 
   Activation r{};
   r.act = std::abs(act_t);
@@ -87,119 +72,51 @@ Activation activation(double tc, const double* a) {
   return r;
 }
 
-// Reconstructed internal trajectory and the active-stress residual G.
+// Reconstructed internal trajectory and the active-stress residual G. The wall
+// inertia term (rho) is neglected, so stress = P*R/thick0 and every quantity is
+// algebraic in (P, dP, R, velo, dvelo) with velo/dvelo obtained analytically
+// from the net flow and its supplied derivative.
 struct Recon {
-  Vec R, velo, dvelo, stress, tau, dtau, G;
+  Vec R, velo, dvelo, tau, dtau, G;
   std::vector<Activation> act;
 };
 
-Recon reconstruct(const double* a, const Vec& t, const Vec& P, const Vec& F,
-                  const Vec& Iflow, double period) {
+Recon reconstruct(const double* a, const Vec& t, const Vec& Pp, const Vec& dPp,
+                  const Vec& F, const Vec& dF, const Vec& Iflow, double period) {
   const size_t n = t.size();
-  const double r0 = a[RADIUS0];
+  const double r0 = a[RADIUS0], thick0 = a[THICK0], W1v = a[W1], W2v = a[W2],
+               eta = a[ETA], sigma = a[SIGMA];
   Recon rc;
-  rc.R.resize(n);
-  rc.velo.resize(n);
-  rc.stress.resize(n);
-  rc.tau.resize(n);
-  rc.act.resize(n);
+  rc.R.resize(n); rc.velo.resize(n); rc.dvelo.resize(n);
+  rc.tau.resize(n); rc.dtau.resize(n); rc.G.resize(n); rc.act.resize(n);
   for (size_t i = 0; i < n; i++) {
-    // Reference-state V0 = 4/3 pi r0^3 ; absolute cavity volume from net flow.
     const double Vcav = (4.0 / 3.0) * M_PI * r0 * r0 * r0 + Iflow[i];
     const double R = std::cbrt(3.0 * Vcav / (4.0 * M_PI));
     const double velo = F[i] / (4.0 * M_PI * R * R);
-    rc.R[i] = R;
-    rc.velo[i] = velo;
-  }
-  rc.dvelo = ddt(rc.velo, t);
-  for (size_t i = 0; i < n; i++) {
-    const double R = rc.R[i], velo = rc.velo[i], dvelo = rc.dvelo[i];
-    const double CG = (R / r0) * (R / r0);
-    const double dCG = 2.0 * R * velo / (r0 * r0);
-    const double stress =
-        (P[i] * CG - a[RHO] * a[THICK0] * dvelo) * r0 * r0 / (a[THICK0] * R);
-    const double passive = 4.0 * (1.0 - std::pow(CG, -3)) * (a[W1] + CG * a[W2]) +
-                           a[ETA] * dCG * (1.0 + 2.0 * std::pow(CG, -6));
-    rc.stress[i] = stress;
-    rc.tau[i] = stress - passive;
+    const double dvelo = dF[i] / (4.0 * M_PI * R * R) - 2.0 * velo * velo / R;
+    const double Pi = Pp[i], dP = dPp[i];
+
+    const double tau =
+        Pi * R / thick0 -
+        2 * R * eta * velo * (1 + 2 * pow(r0, 12) / pow(R, 12)) / pow(r0, 2) -
+        (4 - 4 * pow(r0, 6) / pow(R, 6)) * (pow(R, 2) * W2v / pow(r0, 2) + W1v);
+    const double dtau =
+        -2 * R * velo *
+            (4 * W2v * (1 - pow(r0, 6) / pow(R, 6)) +
+             12 * pow(r0, 8) * (pow(R, 2) * W2v / pow(r0, 2) + W1v) / pow(R, 8)) /
+            pow(r0, 2) -
+        eta * ((1 + 2 * pow(r0, 12) / pow(R, 12)) *
+                   (2 * R * dvelo + 2 * pow(velo, 2)) / pow(r0, 2) -
+               48 * pow(r0, 10) * pow(velo, 2) / pow(R, 12)) +
+        (Pi * velo + R * dP) / thick0;
+
+    rc.R[i] = R; rc.velo[i] = velo; rc.dvelo[i] = dvelo;
+    rc.tau[i] = tau; rc.dtau[i] = dtau;
     const double tc = period > 0.0 ? std::fmod(t[i], period) : t[i];
     rc.act[i] = activation(tc, a);
-  }
-  rc.dtau = ddt(rc.tau, t);
-  rc.G.resize(n);
-  for (size_t i = 0; i < n; i++) {
-    rc.G[i] = rc.dtau[i] + rc.act[i].act * rc.tau[i] - a[SIGMA] * rc.act[i].act_plus;
+    rc.G[i] = dtau + rc.act[i].act * tau - sigma * rc.act[i].act_plus;
   }
   return rc;
-}
-
-// d(tau)/d(param) array for a single non-activation parameter (RHO..ETA,
-// RADIUS0). Returns zeros for SIGMA and activation params.
-Vec dtau_dparam(int p, const double* a, const Vec& t, const Vec& P,
-                const Vec& F, const Recon& rc) {
-  const size_t n = t.size();
-  const double r0 = a[RADIUS0];
-  Vec d(n, 0.0);
-  if (p == SIGMA || p >= AMAX) return d;  // tau independent of these
-
-  // For radius0, tau depends on r0 both explicitly and through R, velo, dvelo.
-  Vec dvelo_dr0, ddvelo_dr0;
-  if (p == RADIUS0) {
-    dvelo_dr0.resize(n);
-    for (size_t i = 0; i < n; i++) {
-      const double R = rc.R[i];
-      dvelo_dr0[i] = -2.0 * rc.velo[i] * r0 * r0 / (R * R * R);
-    }
-    ddvelo_dr0 = ddt(dvelo_dr0, t);
-  }
-
-  for (size_t i = 0; i < n; i++) {
-    const double R = rc.R[i], velo = rc.velo[i], dvelo = rc.dvelo[i];
-    switch (p) {
-      case RHO:
-        d[i] = -dvelo * r0 * r0 / R;
-        break;
-      case THICK0:
-        d[i] = -P[i] * R / (a[THICK0] * a[THICK0]);
-        break;
-      case W1:
-        d[i] = -4.0 + 4.0 * std::pow(r0, 6) / std::pow(R, 6);
-        break;
-      case W2:
-        d[i] = 4.0 * (-std::pow(R, 6) + std::pow(r0, 6)) /
-               (std::pow(R, 4) * r0 * r0);
-        break;
-      case ETA:
-        d[i] = -2.0 * velo * (std::pow(R, 12) + 2.0 * std::pow(r0, 12)) /
-               (std::pow(R, 11) * r0 * r0);
-        break;
-      case RADIUS0: {
-        const double dR_dr0 = r0 * r0 / (R * R);
-        const double dtau_dr0_expl =
-            8.0 * R * R * a[W2] / std::pow(r0, 3) +
-            4.0 * R * a[ETA] * velo / std::pow(r0, 3) -
-            2.0 * dvelo * r0 * a[RHO] / R +
-            16.0 * a[W2] * std::pow(r0, 3) / std::pow(R, 4) +
-            24.0 * a[W1] * std::pow(r0, 5) / std::pow(R, 6) -
-            40.0 * a[ETA] * std::pow(r0, 9) * velo / std::pow(R, 11);
-        const double dtau_dR =
-            P[i] / a[THICK0] - 8.0 * R * a[W2] / (r0 * r0) -
-            2.0 * a[ETA] * velo / (r0 * r0) +
-            dvelo * r0 * r0 * a[RHO] / (R * R) -
-            16.0 * a[W2] * std::pow(r0, 4) / std::pow(R, 5) -
-            24.0 * a[W1] * std::pow(r0, 6) / std::pow(R, 7) +
-            44.0 * a[ETA] * std::pow(r0, 10) * velo / std::pow(R, 12);
-        const double dtau_dvelo =
-            -2.0 * a[ETA] * (std::pow(R, 12) + 2.0 * std::pow(r0, 12)) /
-            (std::pow(R, 11) * r0 * r0);
-        const double dtau_ddvelo = -r0 * r0 * a[RHO] / R;
-        d[i] = dtau_dr0_expl + dtau_dR * dR_dr0 +
-               dtau_dvelo * dvelo_dr0[i] + dtau_ddvelo * ddvelo_dr0[i];
-        break;
-      }
-    }
-  }
-  return d;
 }
 
 }  // namespace
@@ -245,33 +162,43 @@ nlohmann::json calibrate_chamber_pq(const nlohmann::json& config) {
   const std::string innode = inbc + ":" + name;
   const std::string outnode = name + ":" + outbc;
 
-  // Read observations: port pressure (P = outlet = inlet pressure) and net flow.
+  // Read port observations and their supplied derivatives (ydot). P = outlet
+  // (= inlet) pressure; net flow F = Qin - Qout.
+  if (!config.contains("y") || !config.contains("dy") ||
+      !config.contains("time")) {
+    throw std::runtime_error(
+        "[svzerodcalibrator] P/Q ChamberSphere calibration requires 'y', 'dy' "
+        "and 'time'.");
+  }
   const auto& y = config["y"];
-  auto get = [&](const std::string& key) {
-    if (!y.contains(key)) {
+  const auto& dy = config["dy"];
+  auto get = [](const nlohmann::json& src, const std::string& key) {
+    if (!src.contains(key)) {
       throw std::runtime_error(
           "[svzerodcalibrator] P/Q ChamberSphere calibration: missing "
           "observation '" + key + "'.");
     }
-    return y[key].get<Vec>();
+    return src[key].get<Vec>();
   };
-  const Vec Pout = get("pressure:" + outnode);
-  const Vec Qin = get("flow:" + innode);
-  const Vec Qout = get("flow:" + outnode);
-  if (!config.contains("time")) {
-    throw std::runtime_error(
-        "[svzerodcalibrator] P/Q ChamberSphere calibration requires a 'time' "
-        "vector.");
-  }
+  const Vec Pp = get(y, "pressure:" + outnode);
+  const Vec Qin = get(y, "flow:" + innode);
+  const Vec Qout = get(y, "flow:" + outnode);
+  const Vec dPp = get(dy, "pressure:" + outnode);
+  const Vec dQin = get(dy, "flow:" + innode);
+  const Vec dQout = get(dy, "flow:" + outnode);
   const Vec t = config["time"].get<Vec>();
   const size_t n = t.size();
-  if (Pout.size() != n || Qin.size() != n || Qout.size() != n) {
+  if (Pp.size() != n || Qin.size() != n || Qout.size() != n ||
+      dPp.size() != n || dQin.size() != n || dQout.size() != n) {
     throw std::runtime_error(
         "[svzerodcalibrator] P/Q ChamberSphere calibration: observation and "
         "time lengths differ.");
   }
-  Vec F(n);
-  for (size_t i = 0; i < n; i++) F[i] = Qin[i] - Qout[i];
+  Vec F(n), dF(n);
+  for (size_t i = 0; i < n; i++) {
+    F[i] = Qin[i] - Qout[i];
+    dF[i] = dQin[i] - dQout[i];
+  }
   const Vec Iflow = cumint(F, t);  // parameter-independent
 
   // Calibration parameters.
@@ -292,6 +219,12 @@ nlohmann::json calibrate_chamber_pq(const nlohmann::json& config) {
     for (const auto& s : (*vessel)["calibrate"])
       calib.insert(s.get<std::string>());
   }
+  if (calib.count("rho")) {
+    throw std::runtime_error(
+        "[svzerodcalibrator] 'rho' cannot be calibrated from P/Q: the wall "
+        "inertia term it scales is neglected, so it has no effect on the "
+        "observed pressure/flow. Remove it from 'calibrate'.");
+  }
   std::vector<int> active;
   for (int k = 0; k < 12; k++)
     if (calib.count(kParamNames[k])) active.push_back(k);
@@ -302,29 +235,133 @@ nlohmann::json calibrate_chamber_pq(const nlohmann::json& config) {
   }
   const int na = static_cast<int>(active.size());
 
-  // Levenberg-Marquardt loop on the active-stress residual G.
+  // Levenberg-Marquardt loop on the active-stress residual G. The Jacobian is
+  // fully analytic.
   Eigen::VectorXd vec_old;
   for (int it = 0; it < max_iter; it++) {
-    Recon rc = reconstruct(alpha, t, Pout, F, Iflow, period);
+    Recon rc = reconstruct(alpha, t, Pp, dPp, F, dF, Iflow, period);
+    const double r0 = alpha[RADIUS0], thick0 = alpha[THICK0], W1v = alpha[W1],
+                 W2v = alpha[W2], eta = alpha[ETA], sigma = alpha[SIGMA];
 
-    // Assemble Jacobian J (n x na) of G with respect to active parameters.
     Eigen::MatrixXd J(n, na);
     for (int c = 0; c < na; c++) {
       const int p = active[c];
-      const Vec dtau = dtau_dparam(p, alpha, t, Pout, F, rc);
-      Vec dG(n, 0.0);
-      if (p == SIGMA) {
-        for (size_t i = 0; i < n; i++) dG[i] = -rc.act[i].act_plus;
-      } else if (p >= AMAX) {
-        for (size_t i = 0; i < n; i++)
-          dG[i] = rc.act[i].dact[p] * rc.tau[i] -
-                  alpha[SIGMA] * rc.act[i].dact_plus[p];
-      } else {
-        const Vec dditau = ddt(dtau, t);
-        for (size_t i = 0; i < n; i++)
-          dG[i] = dditau[i] + rc.act[i].act * dtau[i];
+      for (size_t i = 0; i < n; i++) {
+        const double R = rc.R[i], velo = rc.velo[i], dvelo = rc.dvelo[i];
+        const double Pi = Pp[i], dP = dPp[i];
+        const double act = rc.act[i].act;
+        double tau_dp = 0.0, dtau_dp = 0.0, dG = 0.0;
+        switch (p) {
+          case THICK0:
+            tau_dp = -Pi * R / pow(thick0, 2);
+            dtau_dp = -(Pi * velo + R * dP) / pow(thick0, 2);
+            dG = dtau_dp + act * tau_dp;
+            break;
+          case W1:
+            tau_dp = -4 + 4 * pow(r0, 6) / pow(R, 6);
+            dtau_dp = -24 * pow(r0, 6) * velo / pow(R, 7);
+            dG = dtau_dp + act * tau_dp;
+            break;
+          case W2:
+            tau_dp = -pow(R, 2) * (4 - 4 * pow(r0, 6) / pow(R, 6)) / pow(r0, 2);
+            dtau_dp =
+                -2 * R * velo * (4 + 8 * pow(r0, 6) / pow(R, 6)) / pow(r0, 2);
+            dG = dtau_dp + act * tau_dp;
+            break;
+          case ETA:
+            tau_dp =
+                -2 * R * velo * (1 + 2 * pow(r0, 12) / pow(R, 12)) / pow(r0, 2);
+            dtau_dp = -(1 + 2 * pow(r0, 12) / pow(R, 12)) *
+                          (2 * R * dvelo + 2 * pow(velo, 2)) / pow(r0, 2) +
+                      48 * pow(r0, 10) * pow(velo, 2) / pow(R, 12);
+            dG = dtau_dp + act * tau_dp;
+            break;
+          case RADIUS0: {
+            // Chain through R, velo, dvelo (all functions of r0).
+            const double dR = r0 * r0 / (R * R);
+            const double dvelo_dr0 = -2 * velo * r0 * r0 / (R * R * R);
+            const double ddvelo_dr0 =
+                -dF[i] * r0 * r0 / (2 * M_PI * pow(R, 5)) +
+                10 * velo * velo * r0 * r0 / pow(R, 4);
+            const double tau_dr0e =
+                2 * pow(R, 2) * W2v * (4 - 4 * pow(r0, 6) / pow(R, 6)) /
+                    pow(r0, 3) +
+                4 * R * eta * velo * (1 + 2 * pow(r0, 12) / pow(R, 12)) /
+                    pow(r0, 3) +
+                24 * pow(r0, 5) * (pow(R, 2) * W2v / pow(r0, 2) + W1v) /
+                    pow(R, 6) -
+                48 * eta * pow(r0, 9) * velo / pow(R, 11);
+            const double tau_dR =
+                Pi / thick0 -
+                2 * R * W2v * (4 - 4 * pow(r0, 6) / pow(R, 6)) / pow(r0, 2) -
+                2 * eta * velo * (1 + 2 * pow(r0, 12) / pow(R, 12)) /
+                    pow(r0, 2) -
+                24 * pow(r0, 6) * (pow(R, 2) * W2v / pow(r0, 2) + W1v) /
+                    pow(R, 7) +
+                48 * eta * pow(r0, 10) * velo / pow(R, 12);
+            const double tau_dvelo =
+                -2 * R * eta * (1 + 2 * pow(r0, 12) / pow(R, 12)) / pow(r0, 2);
+            const double dtau_dr0e =
+                -2 * R * velo *
+                    (-48 * W2v * pow(r0, 5) / pow(R, 6) +
+                     96 * pow(r0, 7) * (pow(R, 2) * W2v / pow(r0, 2) + W1v) /
+                         pow(R, 8)) /
+                    pow(r0, 2) +
+                4 * R * velo *
+                    (4 * W2v * (1 - pow(r0, 6) / pow(R, 6)) +
+                     12 * pow(r0, 8) * (pow(R, 2) * W2v / pow(r0, 2) + W1v) /
+                         pow(R, 8)) /
+                    pow(r0, 3) -
+                eta * (-2 * (1 + 2 * pow(r0, 12) / pow(R, 12)) *
+                           (2 * R * dvelo + 2 * pow(velo, 2)) / pow(r0, 3) -
+                       480 * pow(r0, 9) * pow(velo, 2) / pow(R, 12) +
+                       24 * pow(r0, 9) * (2 * R * dvelo + 2 * pow(velo, 2)) /
+                           pow(R, 12));
+            const double dtau_dR =
+                -2 * R * velo *
+                    (48 * W2v * pow(r0, 6) / pow(R, 7) -
+                     96 * pow(r0, 8) * (pow(R, 2) * W2v / pow(r0, 2) + W1v) /
+                         pow(R, 9)) /
+                    pow(r0, 2) +
+                dP / thick0 -
+                eta * (2 * dvelo * (1 + 2 * pow(r0, 12) / pow(R, 12)) /
+                           pow(r0, 2) +
+                       576 * pow(r0, 10) * pow(velo, 2) / pow(R, 13) -
+                       24 * pow(r0, 10) * (2 * R * dvelo + 2 * pow(velo, 2)) /
+                           pow(R, 13)) -
+                2 * velo *
+                    (4 * W2v * (1 - pow(r0, 6) / pow(R, 6)) +
+                     12 * pow(r0, 8) * (pow(R, 2) * W2v / pow(r0, 2) + W1v) /
+                         pow(R, 8)) /
+                    pow(r0, 2);
+            const double dtau_dvelo =
+                Pi / thick0 -
+                2 * R *
+                    (4 * W2v * (1 - pow(r0, 6) / pow(R, 6)) +
+                     12 * pow(r0, 8) * (pow(R, 2) * W2v / pow(r0, 2) + W1v) /
+                         pow(R, 8)) /
+                    pow(r0, 2) -
+                eta * (4 * velo * (1 + 2 * pow(r0, 12) / pow(R, 12)) /
+                           pow(r0, 2) -
+                       96 * pow(r0, 10) * velo / pow(R, 12));
+            const double dtau_ddvelo =
+                -2 * R * eta * (1 + 2 * pow(r0, 12) / pow(R, 12)) / pow(r0, 2);
+            tau_dp = tau_dr0e + tau_dR * dR + tau_dvelo * dvelo_dr0;
+            dtau_dp = dtau_dr0e + dtau_dR * dR + dtau_dvelo * dvelo_dr0 +
+                      dtau_ddvelo * ddvelo_dr0;
+            dG = dtau_dp + act * tau_dp;
+            break;
+          }
+          case SIGMA:
+            dG = -rc.act[i].act_plus;
+            break;
+          default:  // AMAX, AMIN, TSYS, TDIAS, STEEP
+            dG = rc.act[i].dact[p] * rc.tau[i] -
+                 sigma * rc.act[i].dact_plus[p];
+            break;
+        }
+        J(i, c) = dG;
       }
-      for (size_t i = 0; i < n; i++) J(i, c) = dG[i];
     }
     Eigen::Map<const Eigen::VectorXd> G(rc.G.data(), n);
 
@@ -334,7 +371,8 @@ nlohmann::json calibrate_chamber_pq(const nlohmann::json& config) {
     if (it > 0 && vec_old.norm() > 0.0) lambda *= vec.norm() / vec_old.norm();
     vec_old = vec;
     Eigen::MatrixXd JtJ = J.transpose() * J;
-    Eigen::MatrixXd mat = JtJ + lambda * Eigen::MatrixXd(JtJ.diagonal().asDiagonal());
+    Eigen::MatrixXd mat =
+        JtJ + lambda * Eigen::MatrixXd(JtJ.diagonal().asDiagonal());
     Eigen::VectorXd delta = mat.ldlt().solve(vec);
 
     for (int c = 0; c < na; c++) alpha[active[c]] -= delta[c];
@@ -346,7 +384,8 @@ nlohmann::json calibrate_chamber_pq(const nlohmann::json& config) {
   for (auto& v : out["vessels"]) {
     if (v.value("zero_d_element_type", std::string()) == "ChamberSphere" &&
         v["vessel_name"] == name) {
-      for (int k = 0; k < 12; k++) v["zero_d_element_values"][kParamNames[k]] = alpha[k];
+      for (int k = 0; k < 12; k++)
+        v["zero_d_element_values"][kParamNames[k]] = alpha[k];
     }
   }
   out.erase("y");

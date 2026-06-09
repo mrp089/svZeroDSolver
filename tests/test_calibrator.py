@@ -30,17 +30,21 @@ def test_chamber_sphere_pq_calibration():
     """Calibrate a subset of ChamberSphere parameters from port pressure/flow
     only.
 
-    The fixture ``chamber_sphere_pq_calibration.json`` provides ``y`` containing
-    only the four port variables (pressure/flow at the inlet and outlet) plus a
-    ``time`` vector. The chamber's hidden volume/radius state is reconstructed by
-    integrating the net flow (absolute volume fixed to the reference state), and
-    a selected parameter subset (``_calibrate_subset``) is fit to the active
-    stress equation. The starting point is perturbed by 20%; the calibrator must
-    recover the true values of the calibrated subset.
+    The fixture ``chamber_sphere_pq_calibration.json`` provides ``y`` and ``dy``
+    containing only the four port variables (pressure/flow at the inlet and
+    outlet) and their time derivatives, plus a ``time`` vector. The chamber's
+    hidden volume/radius state is reconstructed by integrating the net flow
+    (absolute volume fixed to the reference state); every time derivative comes
+    from the supplied ``dy`` (no finite differences), and the wall-inertia term
+    is neglected so the residual and its parameter Jacobian are fully analytic. A
+    selected parameter subset (``_calibrate_subset``) is fit to the active-stress
+    equation. The starting point is perturbed by 20%; the calibrator must recover
+    the true values of the calibrated subset.
 
     All twelve parameters are not jointly identifiable from a single P-Q cycle
     (the problem is severely under-determined), so only an identifiable subset is
-    calibrated here.
+    calibrated here. The tolerance reflects the sub-percent bias from neglecting
+    inertia plus the differentiated test data.
     """
     testfile = os.path.join(
         this_file_dir, "cases", "chamber_sphere_pq_calibration.json"
@@ -51,7 +55,7 @@ def test_chamber_sphere_pq_calibration():
     calibrated = result["vessels"][0]["zero_d_element_values"]
     for name in config["_calibrate_subset"]:
         true_value = config["_true_values"][name]
-        assert np.isclose(calibrated[name], true_value, rtol=1e-3), (
+        assert np.isclose(calibrated[name], true_value, rtol=1e-2), (
             f"{name}: got {calibrated[name]}, expected {true_value}"
         )
 
