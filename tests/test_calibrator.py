@@ -45,9 +45,15 @@ def test_calibration_vmr(test_case):
     test = os.path.join(
         this_file_dir, "cases", "vmr", "input", f"{test_case}.json"
     )
-    model_id = test_case[:9]
+    # Most cases calibrate every parameter and share the ``*_optimal_from_0d``
+    # reference. The R-only case optimizes a different objective (only
+    # R_poiseuille, with the remaining parameters held fixed), so it has its
+    # own reference.
+    reference_name = {
+        "0104_0001_calibrate_R_only": "0104_0001_optimal_R_only",
+    }.get(test_case, f"{test_case[:9]}_optimal_from_0d")
     reference_file = os.path.join(
-        this_file_dir, "cases", "vmr", "reference", f"{model_id}_optimal_from_0d.json"
+        this_file_dir, "cases", "vmr", "reference", f"{reference_name}.json"
     )
     with open(reference_file) as ff:
         reference = json.load(ff)

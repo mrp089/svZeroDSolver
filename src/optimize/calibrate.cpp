@@ -4,6 +4,7 @@
 
 #include <set>
 
+#include "Integrator.h"
 #include "LevenbergMarquardtOptimizer.h"
 #include "SimulationParameters.h"
 
@@ -164,13 +165,20 @@ nlohmann::json calibrate(const nlohmann::json& config) {
 
   DEBUG_MSG("Number of parameters " << param_counter);
 
-  // Read observations
+  // Read observations. The calibrator takes the state time series ``y`` and a
+  // time vector ``t``; the consistent time derivatives ``dy`` are reconstructed
+  // from ``y`` using the same generalized-alpha relation as the time
+  // integrator, so the user no longer supplies ``dy`` directly.
   DEBUG_MSG("Reading observations");
-  int num_obs = 0;
-  std::vector<std::vector<double>> y_all;
-  std::vector<std::vector<double>> dy_all;
+  if (!config.contains("t")) {
+    std::cout << "ERROR: Missing time vector 't' in calibration input"
+              << std::endl;
+    exit(1);
+  }
+  auto times = config["t"].get<std::vector<double>>();
+  int num_times = static_cast<int>(times.size());
+  std::vector<std::vector<double>> y_nodes(num_times);
   auto y_values = config["y"];
-  auto dy_values = config["dy"];
   for (size_t i = 0; i < model.dofhandler.get_num_variables(); i++) {
     std::string var_name = model.dofhandler.variables[i];
     DEBUG_MSG("Reading observations for variable " << var_name);
@@ -179,23 +187,31 @@ nlohmann::json calibrate(const nlohmann::json& config) {
                 << std::endl;
       exit(1);
     }
-    if (!dy_values.contains(var_name)) {
-      std::cout << "ERROR: Missing dy observation for '" << var_name << "'"
-                << std::endl;
+    auto y_array = y_values[var_name].get<std::vector<double>>();
+    if (static_cast<int>(y_array.size()) != num_times) {
+      std::cout << "ERROR: Number of y observations for '" << var_name
+                << "' does not match length of time vector 't'" << std::endl;
       exit(1);
     }
-    auto y_array = y_values[var_name].get<std::vector<double>>();
-    auto dy_array = dy_values[var_name].get<std::vector<double>>();
-    num_obs = y_array.size();
-    if (i == 0) {
-      y_all.resize(num_obs);
-      dy_all.resize(num_obs);
-    }
-    for (size_t j = 0; j < num_obs; j++) {
-      y_all[j].push_back(y_array[j]);
-      dy_all[j].push_back(dy_array[j]);
+    for (size_t j = 0; j < num_times; j++) {
+      y_nodes[j].push_back(y_array[j]);
     }
   }
+
+  // Reconstruct consistent time derivatives from the states and evaluate the
+  // residual at the generalized-alpha collocation points (not the time nodes),
+  // matching how the integrator enforces the 0D residual. This makes the
+  // calibration consistent with the time-stepping scheme and recovers the
+  // generating parameters at any sampling resolution. The spectral radius
+  // matches the solver default unless overridden in ``simulation_parameters``.
+  double rho = 0.5;
+  if (config.contains("simulation_parameters")) {
+    rho = config["simulation_parameters"].value("rho_infty", rho);
+  }
+  std::vector<std::vector<double>> y_all;
+  std::vector<std::vector<double>> dy_all;
+  Integrator::compute_collocation(y_nodes, times, rho, y_all, dy_all);
+  int num_obs = static_cast<int>(y_all.size());
   DEBUG_MSG("Number of observations: " << num_obs);
 
   // Setup start parameter vector
@@ -295,7 +311,7 @@ nlohmann::json calibrate(const nlohmann::json& config) {
   }
 
   output_config.erase("y");
-  output_config.erase("dy");
+  output_config.erase("t");
   output_config.erase("calibration_parameters");
 
   return output_config;

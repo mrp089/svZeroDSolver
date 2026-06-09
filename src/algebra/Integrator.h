@@ -8,6 +8,7 @@
 #define SVZERODSOLVER_ALGEBRA_INTEGRATOR_HPP_
 
 #include <Eigen/Dense>
+#include <vector>
 
 #include "Model.h"
 #include "State.h"
@@ -97,6 +98,68 @@ class Integrator {
    *
    */
   double avg_nonlin_iter();
+
+  /**
+   * @brief Reconstruct consistent time derivatives from a state time series
+   *
+   * Computes the time derivatives \f$\dot{\boldsymbol{y}}\f$ that are consistent
+   * with a given time series of states \f$\boldsymbol{y}\f$ under the same
+   * generalized-\f$\alpha\f$ relation used by step(). Over a single step the
+   * scheme enforces
+   * \f[
+   *   \dot{\boldsymbol{y}}_{n+1} =
+   *     \frac{\boldsymbol{y}_{n+1} - \boldsymbol{y}_n}{\gamma \, \Delta t_n}
+   *     + \left(1 - \frac{1}{\gamma}\right) \dot{\boldsymbol{y}}_n,
+   * \f]
+   * with \f$\gamma\f$ derived from the spectral radius \f$\rho\f$. The free
+   * initial derivative is fixed by assuming the series is periodic, i.e.
+   * \f$\dot{\boldsymbol{y}}_0 = \dot{\boldsymbol{y}}_{N-1}\f$, which is the
+   * natural choice for calibration data spanning full cardiac cycles. This
+   * lets the calibrator take only the states and a time vector as input and
+   * derive consistent derivatives instead of requiring them as a separate
+   * input.
+   *
+   * @param y_series State time series indexed as [time point][variable]
+   * @param times Time vector, one entry per time point
+   * @param rho Spectral radius of generalized-alpha
+   * @return Time derivatives with the same shape as y_series
+   */
+  static std::vector<std::vector<double>> compute_ydot(
+      const std::vector<std::vector<double>>& y_series,
+      const std::vector<double>& times, double rho);
+
+  /**
+   * @brief Build generalized-alpha collocation states from a state time series
+   *
+   * The generalized-alpha integrator does not enforce the 0D residual at the
+   * time nodes, but at the intermediate collocation points
+   * \f$\boldsymbol{y}_{n+\alpha_f}\f$ and \f$\dot{\boldsymbol{y}}_{n+\alpha_m}\f$.
+   * Evaluating the calibration residual at the nodes therefore leaves an
+   * \f$O(\Delta t)\f$ inconsistency that limits parameter recovery at coarse
+   * sampling. This helper reconstructs the nodal derivatives with
+   * compute_ydot() and then forms, for each of the \f$N-1\f$ intervals, the
+   * collocation states
+   * \f[
+   *   \boldsymbol{y}_{n+\alpha_f} = \boldsymbol{y}_n
+   *     + \alpha_f (\boldsymbol{y}_{n+1} - \boldsymbol{y}_n), \qquad
+   *   \dot{\boldsymbol{y}}_{n+\alpha_m} = \dot{\boldsymbol{y}}_n
+   *     + \alpha_m (\dot{\boldsymbol{y}}_{n+1} - \dot{\boldsymbol{y}}_n).
+   * \f]
+   * Evaluating the residual at these points makes it exactly consistent with
+   * the integrator, so the calibrator recovers the generating parameters at any
+   * sampling resolution.
+   *
+   * @param y_series State time series indexed as [time point][variable]
+   * @param times Time vector, one entry per time point
+   * @param rho Spectral radius of generalized-alpha
+   * @param[out] y_collocation Collocation states, [interval][variable], size N-1
+   * @param[out] ydot_collocation Collocation derivatives, same shape
+   */
+  static void compute_collocation(
+      const std::vector<std::vector<double>>& y_series,
+      const std::vector<double>& times, double rho,
+      std::vector<std::vector<double>>& y_collocation,
+      std::vector<std::vector<double>>& ydot_collocation);
 };
 
 #endif  // SVZERODSOLVER_ALGEBRA_INTEGRATOR_HPP_

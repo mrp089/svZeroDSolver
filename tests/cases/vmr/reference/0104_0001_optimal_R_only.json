@@ -130,7 +130,7 @@
   ],
   "junctions": [
     {
-      "calibrate": ["R_poiseuille", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "inlet_vessels": [0],
       "junction_name": "J0",
       "junction_type": "BloodVesselJunction",
@@ -142,7 +142,7 @@
       "outlet_vessels": [1, 5, 9]
     },
     {
-      "calibrate": ["R_poiseuille", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "inlet_vessels": [1],
       "junction_name": "J1",
       "junction_type": "BloodVesselJunction",
@@ -154,7 +154,7 @@
       "outlet_vessels": [2, 15]
     },
     {
-      "calibrate": ["R_poiseuille", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "inlet_vessels": [5],
       "junction_name": "J2",
       "junction_type": "BloodVesselJunction",
@@ -239,252 +239,252 @@
       "boundary_conditions": {
         "inlet": "INFLOW"
       },
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 0,
       "vessel_length": 5.462738535526542,
       "vessel_name": "branch0_seg0",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 2.7452804175627816e-6,
-        "L": 1.702647766240664,
-        "R_poiseuille": 0.4777727237178152,
-        "stenosis_coefficient": -6.033353748156296e-6
+        "C": 2.7452803065095692e-6,
+        "L": 1.7026477662281492,
+        "R_poiseuille": 0.4777727233165191,
+        "stenosis_coefficient": -6.0333518268674465e-6
       }
     },
     {
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 1,
       "vessel_length": 1.2615694946168765,
       "vessel_name": "branch1_seg0",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 1.7727615921979759e-7,
-        "L": 1.4079913663513934,
-        "R_poiseuille": 1.4083288585141671,
-        "stenosis_coefficient": -4.64642776167355e-5
+        "C": 1.772761524728445e-7,
+        "L": 1.407991366380127,
+        "R_poiseuille": 1.4083288595070251,
+        "stenosis_coefficient": -4.6464294457291044e-5
       }
     },
     {
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 2,
       "vessel_length": 3.066087671068054,
       "vessel_name": "branch2_seg0",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 1.3144264818623037e-7,
-        "L": 11.188143094171478,
-        "R_poiseuille": 36.5255446943308,
-        "stenosis_coefficient": 0.006578552404355313
+        "C": 1.3144264322377128e-7,
+        "L": 11.188143094378043,
+        "R_poiseuille": 36.52554470156924,
+        "stenosis_coefficient": 0.006578552177730159
       }
     },
     {
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 3,
       "vessel_length": 0.386387365444609,
       "vessel_name": "branch2_seg1",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 1.3183794387331598e-8,
-        "L": 1.7717603249524674,
-        "R_poiseuille": 7.268308124308199,
-        "stenosis_coefficient": 0.002211570665741893
+        "C": 1.3183794010597983e-8,
+        "L": 1.771760324984766,
+        "R_poiseuille": 7.268308125435722,
+        "stenosis_coefficient": 0.0022115706304455655
       }
     },
     {
       "boundary_conditions": {
         "outlet": "RCR_0"
       },
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 4,
       "vessel_length": 1.0711328524532193,
       "vessel_name": "branch2_seg2",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 3.6054950973916363e-8,
-        "L": 4.979501312466239,
-        "R_poiseuille": 20.70895604090187,
-        "stenosis_coefficient": 0.0001475578377714566
+        "C": 3.6054949996933236e-8,
+        "L": 4.979501312553903,
+        "R_poiseuille": 20.708956043961845,
+        "stenosis_coefficient": 0.00014755774195687285
       }
     },
     {
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 5,
       "vessel_length": 0.6541411252008914,
       "vessel_name": "branch3_seg0",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 8.671566700855485e-8,
-        "L": 0.7736880636005489,
-        "R_poiseuille": 0.8196063981276711,
-        "stenosis_coefficient": 0.02677767609253355
+        "C": 8.671566365517948e-8,
+        "L": 0.7736880635783858,
+        "R_poiseuille": 0.8196063976944882,
+        "stenosis_coefficient": 0.026777676095912573
       }
     },
     {
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 6,
       "vessel_length": 3.9035420097681923,
       "vessel_name": "branch4_seg0",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 6.954635801849969e-7,
-        "L": 3.4347071501132382,
-        "R_poiseuille": 2.6960139490637376,
-        "stenosis_coefficient": 0.006464519950550547
+        "C": 6.954635533767153e-7,
+        "L": 3.4347071500331667,
+        "R_poiseuille": 2.69601394713778,
+        "stenosis_coefficient": 0.006464519966371423
       }
     },
     {
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 7,
       "vessel_length": 1.6172339670911955,
       "vessel_name": "branch4_seg1",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 2.8751550522326007e-7,
-        "L": 1.4277752315066292,
-        "R_poiseuille": 1.1244860462786765,
-        "stenosis_coefficient": 0.00582935916302242
+        "C": 2.8751549478742754e-7,
+        "L": 1.4277752314716303,
+        "R_poiseuille": 1.1244860454506331,
+        "stenosis_coefficient": 0.005829359169821435
       }
     },
     {
       "boundary_conditions": {
         "outlet": "RCR_1"
       },
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 8,
       "vessel_length": 10.404354538354355,
       "vessel_name": "branch4_seg2",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 1.82561074507055e-6,
-        "L": 9.314130469765624,
-        "R_poiseuille": 7.475199821507015,
-        "stenosis_coefficient": 0.00224501770419375
+        "C": 1.8256106805995246e-6,
+        "L": 9.314130469472266,
+        "R_poiseuille": 7.47519981428182,
+        "stenosis_coefficient": 0.0022450177635880667
       }
     },
     {
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 9,
       "vessel_length": 2.0528043053140657,
       "vessel_name": "branch5_seg0",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 1.4338922109183856e-7,
-        "L": 4.6066824109327165,
-        "R_poiseuille": 9.252848523859667,
-        "stenosis_coefficient": -0.0002136100099130111
+        "C": 1.433892156097748e-7,
+        "L": 4.606682411029632,
+        "R_poiseuille": 9.252848527284959,
+        "stenosis_coefficient": -0.0002136101334142752
       }
     },
     {
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 10,
       "vessel_length": 1.8557246843610942,
       "vessel_name": "branch5_seg1",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 6.083977215112237e-8,
-        "L": 8.834086988741673,
-        "R_poiseuille": 37.62295230961591,
-        "stenosis_coefficient": 0.09831393978585691
+        "C": 6.083976992899144e-8,
+        "L": 8.834086988916406,
+        "R_poiseuille": 37.62295231578777,
+        "stenosis_coefficient": 0.09831393956330917
       }
     },
     {
       "boundary_conditions": {
         "outlet": "RCR_2"
       },
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 11,
       "vessel_length": 1.6295908330522304,
       "vessel_name": "branch5_seg2",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 5.6356499193960416e-8,
-        "L": 7.37023815496618,
-        "R_poiseuille": 29.819620438301087,
-        "stenosis_coefficient": 6.27584075951677e-7
+        "C": 5.6356497509633646e-8,
+        "L": 7.370238155103511,
+        "R_poiseuille": 29.819620443144245,
+        "stenosis_coefficient": 6.27409403317757e-7
       }
     },
     {
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 12,
       "vessel_length": 1.560439375019021,
       "vessel_name": "branch6_seg0",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 5.166688483540291e-8,
-        "L": 7.3552544180795305,
-        "R_poiseuille": 31.02990369849887,
-        "stenosis_coefficient": -0.002644377004237594
+        "C": 5.166688285656661e-8,
+        "L": 7.355254416841223,
+        "R_poiseuille": 31.029903664738562,
+        "stenosis_coefficient": -0.0026443719432060414
       }
     },
     {
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 13,
       "vessel_length": 1.6347590809944081,
       "vessel_name": "branch6_seg1",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 3.848803575028923e-8,
-        "L": 10.770363728241163,
-        "R_poiseuille": 63.48802061103857,
-        "stenosis_coefficient": 0.11981496003758098
+        "C": 3.8488034320178465e-8,
+        "L": 10.77036372639733,
+        "R_poiseuille": 63.4880205607654,
+        "stenosis_coefficient": 0.11981496757776272
       }
     },
     {
       "boundary_conditions": {
         "outlet": "RCR_3"
       },
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 14,
       "vessel_length": 3.8286489278855598,
       "vessel_name": "branch6_seg2",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 7.951304816629518e-8,
-        "L": 28.494063696966112,
-        "R_poiseuille": 189.64328348033152,
-        "stenosis_coefficient": 0.09084228226263401
+        "C": 7.951304531510058e-8,
+        "L": 28.494063691908643,
+        "R_poiseuille": 189.64328334102495,
+        "stenosis_coefficient": 0.09084230317905481
       }
     },
     {
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 15,
       "vessel_length": 0.8548959459506262,
       "vessel_name": "branch7_seg0",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 2.5079464259692197e-8,
-        "L": 4.541006820522392,
-        "R_poiseuille": 21.58164274465181,
-        "stenosis_coefficient": -0.00020406860035532308
+        "C": 2.5079463327330116e-8,
+        "L": 4.54100682061056,
+        "R_poiseuille": 21.58164274765279,
+        "stenosis_coefficient": -0.0002040687113801918
       }
     },
     {
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 16,
       "vessel_length": 0.3605161548345858,
       "vessel_name": "branch7_seg1",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 9.181794518409293e-9,
-        "L": 2.200772942543018,
-        "R_poiseuille": 12.019839338080674,
-        "stenosis_coefficient": 0.0012070045422372183
+        "C": 9.181794196002474e-9,
+        "L": 2.2007729425853197,
+        "R_poiseuille": 12.019839339521253,
+        "stenosis_coefficient": 0.0012070044889376014
       }
     },
     {
       "boundary_conditions": {
         "outlet": "RCR_4"
       },
-      "calibrate": ["R_poiseuille", "C", "L", "stenosis_coefficient"],
+      "calibrate": ["R_poiseuille"],
       "vessel_id": 17,
       "vessel_length": 2.8490356278827176,
       "vessel_name": "branch7_seg2",
       "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
-        "C": 7.149237479254825e-8,
-        "L": 17.63032795849784,
-        "R_poiseuille": 97.60222668436836,
-        "stenosis_coefficient": 0.0009677701297847676
+        "C": 7.149237221369845e-8,
+        "L": 17.630327958811,
+        "R_poiseuille": 97.6022266950717,
+        "stenosis_coefficient": 0.0009677697336982867
       }
     }
   ]
