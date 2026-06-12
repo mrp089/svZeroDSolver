@@ -231,12 +231,13 @@ class ChamberSphere : public Block {
    *
    * Calibrates the chamber from a full-state observation set (the data carry the
    * internal variables radius, velo, stress, tau, volume and their derivatives).
-   * Only the six time-independent parameters (rho, thick0, radius0, W1, W2, eta)
-   * are supported: they appear solely in the momentum, spherical-stress and
-   * volume equations, which are pure functions of the state and need no time.
-   * The active-stress equation depends on time (which the point-wise calibrator
-   * does not provide), so the activation parameters cannot be calibrated here.
-   * Residual/Jacobian expressions are derived symbolically (cf.
+   * The six time-independent parameters (rho, thick0, radius0, W1, W2, eta)
+   * appear in the momentum, spherical-stress and volume equations, which are
+   * pure functions of the state. The active-stress equation (and its parameters
+   * sigma_max, alpha_max, alpha_min, tsys, tdias, steepness) depends on the
+   * observation time, supplied by the optimizer via ``model->time`` when a time
+   * vector is given; without it, only the six time-independent parameters are
+   * identifiable. Residual/Jacobian expressions are derived symbolically (cf.
    * scripts/jacobian.py).
    *
    * @param jacobian Jacobian with respect to the parameters

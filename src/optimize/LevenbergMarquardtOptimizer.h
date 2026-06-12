@@ -99,13 +99,16 @@ class LevenbergMarquardtOptimizer {
    * @param alpha Initial parameter vector alpha
    * @param y_obs Matrix (num_obs x n) with all observations for y
    * @param dy_obs Matrix (num_obs x n) with all observations for dy
+   * @param times Vector (num_obs) with the time of each observation. Used by
+   * time-dependent blocks (e.g. the ChamberSphere activation). May be empty, in
+   * which case the observation time is left unset.
    * @return Eigen::Matrix<double, Eigen::Dynamic, 1> Optimized parameter vector
    * alpha
    */
   Eigen::Matrix<double, Eigen::Dynamic, 1> run(
       Eigen::Matrix<double, Eigen::Dynamic, 1> alpha,
       std::vector<std::vector<double>>& y_obs,
-      std::vector<std::vector<double>>& dy_obs);
+      std::vector<std::vector<double>>& dy_obs, std::vector<double>& times);
 
  private:
   Eigen::SparseMatrix<double> jacobian;
@@ -130,7 +133,8 @@ class LevenbergMarquardtOptimizer {
 
   void update_gradient(Eigen::Matrix<double, Eigen::Dynamic, 1>& alpha,
                        std::vector<std::vector<double>>& y_obs,
-                       std::vector<std::vector<double>>& dy_obs);
+                       std::vector<std::vector<double>>& dy_obs,
+                       std::vector<double>& times);
 
   void update_delta(bool first_step);
 };

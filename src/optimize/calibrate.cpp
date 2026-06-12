@@ -198,6 +198,28 @@ nlohmann::json calibrate(const nlohmann::json& config) {
   }
   DEBUG_MSG("Number of observations: " << num_obs);
 
+  // Optional time vector. Time-dependent blocks (e.g. the ChamberSphere
+  // activation) need the time of each observation to calibrate time-dependent
+  // parameters; blocks that ignore time are unaffected. Left empty when not
+  // provided.
+  std::vector<double> times;
+  if (config.contains("t")) {
+    times = config["t"].get<std::vector<double>>();
+    if (static_cast<int>(times.size()) != num_obs) {
+      std::cout << "ERROR: Length of 't' (" << times.size()
+                << ") does not match the number of observations (" << num_obs
+                << ")" << std::endl;
+      exit(1);
+    }
+  }
+  // Cardiac cycle period used to map the observation time into a single cycle
+  // for periodic activation functions. When unset (<= 0), the time is used
+  // directly (i.e. assumed already within one cycle).
+  if (calibration_parameters.contains("cardiac_cycle_period")) {
+    model.cardiac_cycle_period =
+        calibration_parameters["cardiac_cycle_period"].get<double>();
+  }
+
   // Setup start parameter vector
   Eigen::Matrix<double, Eigen::Dynamic, 1> alpha =
       Eigen::Matrix<double, Eigen::Dynamic, 1>::Zero(param_counter);
@@ -256,7 +278,7 @@ nlohmann::json calibrate(const nlohmann::json& config) {
       &model, num_obs, param_counter, active_param_ids, lambda0, gradient_tol,
       increment_tol, max_iter);
 
-  alpha = lm_alg.run(alpha, y_all, dy_all);
+  alpha = lm_alg.run(alpha, y_all, dy_all, times);
 
   // Build a JSON values object for a block by reading optimized alpha values
   // out using the block's own ``input_params``.
@@ -296,6 +318,7 @@ nlohmann::json calibrate(const nlohmann::json& config) {
 
   output_config.erase("y");
   output_config.erase("dy");
+  output_config.erase("t");
   output_config.erase("calibration_parameters");
 
   return output_config;

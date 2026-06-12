@@ -27,19 +27,18 @@ def test_steady_flow_calibration():
 
 
 def test_chamber_sphere_calibration():
-    """Calibrate the time-independent ChamberSphere parameters via the normal
-    calibrator.
+    """Calibrate all twelve ChamberSphere parameters via the normal calibrator.
 
     ChamberSphere is calibrated through the standard point-wise calibrator using
     ``ChamberSphere::update_gradient``. The fixture
     ``chamber_sphere_calibration.json`` provides a full-state observation set
     (``y``/``dy`` for the ports and the internal variables radius, velo, stress,
-    tau, volume), constructed so the momentum, spherical-stress and volume
-    residuals vanish at ``_true_values``. The six time-independent parameters
-    (rho, thick0, radius0, W1, W2, eta) are calibrated from a 20%-perturbed
-    start; the activation/timing parameters need the observation time, which the
-    point-wise calibrator does not provide, so they are held fixed and not part
-    of the calibrated subset.
+    tau, volume) plus a ``t`` vector, constructed so every residual vanishes at
+    ``_true_values``. The ``t`` vector lets the optimizer set ``model->time`` per
+    observation, which makes the active-stress equation -- and hence the
+    activation/timing parameters (sigma_max, alpha_max, alpha_min, tsys, tdias,
+    steepness) -- identifiable alongside the six time-independent parameters. All
+    twelve are recovered from a 20%-perturbed start.
     """
     testfile = os.path.join(
         this_file_dir, "cases", "chamber_sphere_calibration.json"

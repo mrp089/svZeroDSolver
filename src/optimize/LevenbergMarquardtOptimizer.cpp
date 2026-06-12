@@ -31,9 +31,9 @@ LevenbergMarquardtOptimizer::LevenbergMarquardtOptimizer(
 Eigen::Matrix<double, Eigen::Dynamic, 1> LevenbergMarquardtOptimizer::run(
     Eigen::Matrix<double, Eigen::Dynamic, 1> alpha,
     std::vector<std::vector<double>>& y_obs,
-    std::vector<std::vector<double>>& dy_obs) {
+    std::vector<std::vector<double>>& dy_obs, std::vector<double>& times) {
   for (size_t i = 0; i < max_iter; i++) {
-    update_gradient(alpha, y_obs, dy_obs);
+    update_gradient(alpha, y_obs, dy_obs, times);
 
     if (i == 0) {
       update_delta(true);
@@ -63,13 +63,18 @@ Eigen::Matrix<double, Eigen::Dynamic, 1> LevenbergMarquardtOptimizer::run(
 void LevenbergMarquardtOptimizer::update_gradient(
     Eigen::Matrix<double, Eigen::Dynamic, 1>& alpha,
     std::vector<std::vector<double>>& y_obs,
-    std::vector<std::vector<double>>& dy_obs) {
+    std::vector<std::vector<double>>& dy_obs, std::vector<double>& times) {
   // Set jacobian and residual to zero
   jacobian.setZero();
   residual.setZero();
 
   // Assemble gradient and residual
   for (size_t i = 0; i < num_obs; i++) {
+    // Make the observation time available to time-dependent blocks (e.g. the
+    // ChamberSphere activation). Left unset when no time vector is provided.
+    if (!times.empty()) {
+      model->time = times[i];
+    }
     for (size_t j = 0; j < model->get_num_blocks(true); j++) {
       auto block = model->get_block(j);
       for (size_t l = 0; l < block->global_eqn_ids.size(); l++) {
