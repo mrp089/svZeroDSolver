@@ -20,6 +20,8 @@ derivatives:
   - dtau_dt
   - dvolume_dt
 
+# Order must match the ParamId enum in ChamberSphere.h so that
+# global_param_ids[ParamId::<name>] lines up with the calibration parameters.
 constants:
   - rho
   - thick0
@@ -27,20 +29,37 @@ constants:
   - W1
   - W2
   - eta
-  - act
-  - act_plus
   - sigma_max
+  - alpha_max
+  - alpha_min
+  - tsys
+  - tdias
+  - steepness
 
-time_dependent:
-  - act
-  - act_plus
+# In-cycle time of the activation. Not a state variable and not a calibration
+# parameter (no Jacobian column), but the activation depends on it.
+time_symbol: t
 
 helper_functions: |
+  from sympy import Abs, Max, tanh
+
   def CG(radius):
       return (1 + (radius / radius0)) ** 2
 
   def dCG(radius, dradius_dt):
       return 2 * (1 + (radius / radius0)) * (1 / radius0) * dradius_dt
+
+  # Active contraction activation, identical to
+  # ChamberSphere::get_elastance_values. warp_signed wraps the phase into one
+  # cardiac cycle; its derivative with respect to its argument is 1.
+  phase_tsys = warp_signed(t - tsys)
+  phase_tdias = warp_signed(t - tdias)
+  S_plus = 0.5 * (1.0 + tanh(phase_tsys / steepness))
+  S_minus = 0.5 * (1.0 - tanh(phase_tdias / steepness))
+  f = S_plus * S_minus
+  act_t = alpha_max * f + alpha_min * (1 - f)
+  act = Abs(act_t)
+  act_plus = Max(act_t, 0)
 
 residuals:
   - rho * thick0 * dvelo_dt + (thick0 / radius0) * (1 + (radius / radius0)) * stress - Pout * CG(radius)

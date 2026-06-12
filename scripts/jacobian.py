@@ -1,9 +1,43 @@
-from sympy import symbols, Matrix, simplify, pi, Abs
-from sympy.printing import ccode
+from sympy import symbols, Matrix, simplify, pi, Abs, Max, sign, Heaviside, Piecewise, Function
+from sympy.printing.c import C99CodePrinter
 import re
 import pdb
 import yaml
 import argparse
+
+
+class warp_signed(Function):
+    """Signed phase warp into one cardiac cycle, matching
+    ChamberSphere::get_elastance_values. Its derivative with respect to its
+    argument is 1 (it shifts by an integer number of periods), so it composes
+    transparently with the activation derivatives. The C++ side defines a
+    ``warp_signed`` lambda."""
+
+    def fdiff(self, argindex=1):
+        return 1
+
+    def _eval_is_real(self):
+        return True
+
+
+class CppPrinter(C99CodePrinter):
+    """C printer that emits Heaviside as a single-line ternary (and the
+    arithmetic form of sign), and prints the warp_signed helper as a function
+    call. Avoids the verbose/NaN-prone default output for activation-function
+    derivatives."""
+
+    def _print_Heaviside(self, expr):
+        return "(%s > 0 ? 1.0 : 0.0)" % self._print(expr.args[0])
+
+    def _print_warp_signed(self, expr):
+        return "warp_signed(%s)" % self._print(expr.args[0])
+
+
+_printer = CppPrinter()
+
+
+def ccode(expr):
+    return _printer.doprint(expr)
 
 def load_model(filepath):
     with open(filepath, 'r') as file:
@@ -11,11 +45,22 @@ def load_model(filepath):
 
     variables = Matrix(symbols(' '.join(data['variables']), real=True))
     derivatives = Matrix(symbols(' '.join(data['derivatives']), real=True))
-    constants = symbols(' '.join(data['constants']), real=True)
+    constant_syms = symbols(' '.join(data['constants']), real=True)
+    constants = Matrix(list(constant_syms) if hasattr(constant_syms, '__iter__')
+                       else [constant_syms])
 
     context = {str(s): s for s in list(variables) + list(derivatives) + list(constants)}
     context['pi'] = pi
     context['abs'] = Abs
+    context['warp_signed'] = warp_signed
+
+    # Optional time symbol (e.g. the activation time `t`). It is neither a state
+    # variable nor a calibration parameter (it gets no Jacobian column), but it
+    # is available to the residual/helper expressions.
+    time_symbol = None
+    if 'time_symbol' in data:
+        time_symbol = symbols(data['time_symbol'], real=True)
+        context[str(time_symbol)] = time_symbol
 
     if 'helper_functions' in data:
         exec(data['helper_functions'], context, context)
@@ -23,10 +68,12 @@ def load_model(filepath):
 
     residuals = Matrix(residual_exprs)
     time_dependent = {context[s] for s in data.get('time_dependent', [])}
+    if time_symbol is not None:
+        time_dependent.add(time_symbol)
 
     assert len(variables) == len(derivatives), f"Number of variables must be equal to number of derivatives"
 
-    return variables, derivatives, constants, residuals, time_dependent
+    return variables, derivatives, constants, residuals, time_dependent, time_symbol
 
 def extract_linear(residuals, y, dy):
     zero_subs = [(v, 0) for v in list(y) + list(dy)]
@@ -48,6 +95,16 @@ def extract_nonlinear(residuals, E, F, y, dy):
     dC_dy = simplify(C.jacobian(y))
     dC_dydot = simplify(C.jacobian(dy))
     return C, dC_dy, dC_dydot
+
+def extract_gradient(residuals, constants):
+    # Parameter Jacobian dr_i/dalpha_j used by the calibrator's update_gradient.
+    # Simplify only smooth entries; entries from differentiating Abs/Max (the
+    # activation function) are left unsimplified so they stay compact and avoid
+    # the sign = x/|x| form that NaNs at zero.
+    def smooth(e):
+        return not e.has(Abs, Max, sign, Heaviside, Piecewise)
+    jac = residuals.jacobian(constants)
+    return jac.applyfunc(lambda e: simplify(e) if smooth(e) else e)
 
 def depends_on(expr, symbols_set):
     return any(sym in expr.free_symbols for sym in symbols_set)
@@ -123,9 +180,70 @@ def print_variables(parts, y, dy):
                 index = next(i for i, sym in enumerate(vec) if sym == out)
                 print(f"  const double {out} = {name}[global_var_ids[{index}]];")
 
+def free_symbols_of(exprs):
+    nonzero = [e for e in exprs if e != 0]
+    if not nonzero:
+        return set()
+    return set().union(*(e.free_symbols for e in nonzero))
+
+def uses_warp(exprs):
+    return any(e.has(warp_signed) for e in exprs if e != 0)
+
+def print_alpha_constants(exprs, constants):
+    """Declare calibration parameters read from the ``alpha`` vector."""
+    deps = free_symbols_of(exprs)
+    for c in constants:
+        if c in deps:
+            print(f"  const double {c} = alpha[global_param_ids[ParamId::{c}]];")
+
+def print_gradient_variables(exprs, y, dy):
+    """Declare state variables (``y``) and derivatives (``dy``)."""
+    deps = free_symbols_of(exprs)
+    for name, vec in zip(['y', 'dy'], [y, dy]):
+        for index, sym in enumerate(vec):
+            if sym in deps:
+                print(f"  const double {sym} = {name}[global_var_ids[{index}]];")
+
+def print_time(exprs, time_symbol):
+    """Declare the in-cycle time and (if used) the periodic phase-warp helper."""
+    if time_symbol is None or time_symbol not in free_symbols_of(exprs):
+        return
+    print(f"  const double {time_symbol} = "
+          "model->cardiac_cycle_period > 0.0 ? "
+          "fmod(model->time, model->cardiac_cycle_period) : model->time;")
+    if uses_warp(exprs):
+        print("  const double T_cardiac = model->cardiac_cycle_period;")
+        print("  auto warp_signed = [T_cardiac](double dt) {")
+        print("    return T_cardiac > 0.0 ? "
+              "fmod(dt + 1.5 * T_cardiac, T_cardiac) - 0.5 * T_cardiac : dt;")
+        print("  };")
+
+def print_gradient(residuals, jacobian, constants, y, dy, time_symbol):
+    names = [str(c) for c in constants]
+    all_exprs = list(residuals) + [jacobian[i, j]
+                                   for i in range(jacobian.rows)
+                                   for j in range(jacobian.cols)]
+    print('update_gradient')
+    print_alpha_constants(all_exprs, constants)
+    print_gradient_variables(all_exprs, y, dy)
+    print_time(all_exprs, time_symbol)
+    print()
+    for i in range(residuals.shape[0]):
+        if residuals[i] != 0:
+            print(f"  residual(global_eqn_ids[{i}]) = {format_cpp_expr(residuals[i])};")
+    print()
+    # Group columns by parameter for readability.
+    for j in range(jacobian.cols):
+        for i in range(jacobian.rows):
+            if jacobian[i, j] != 0:
+                print(f"  jacobian.coeffRef(global_eqn_ids[{i}], "
+                      f"global_param_ids[ParamId::{names[j]}]) = "
+                      f"{format_cpp_expr(jacobian[i, j])};")
+    print()
+
 def main(yaml_path):
     # read model from yaml file
-    y, dy, constants, residuals, time_dependent = load_model(yaml_path)
+    y, dy, constants, residuals, time_dependent, time_symbol = load_model(yaml_path)
 
     # extract linear and nonlinear terms
     E, F = extract_linear(residuals, y, dy)
@@ -141,6 +259,10 @@ def main(yaml_path):
         print_variables(parts[section], y, dy)
         print_system(parts[section])
         print()
+
+    # parameter Jacobian for the calibrator (update_gradient)
+    jac = extract_gradient(residuals, constants)
+    print_gradient(residuals, jac, constants, y, dy, time_symbol)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process YAML model file to generate C++ code for svZeroDSolver')

@@ -31,6 +31,12 @@ The YAML files define the mathematical model of a block with the following struc
 
 - `time_dependent`: List of parameters that depend on time (e.g., activation functions)
 - `helper_functions`: Python code defining helper functions used in the residuals
+- `time_symbol`: Name of an in-cycle time symbol (e.g. `t`) used by the
+  residuals. It is neither a state variable nor a calibration parameter (it gets
+  no Jacobian column), but it is available to the residual/helper expressions.
+  The generated `update_gradient` reads it from `model->time`. The helper
+  `warp_signed` (a periodic phase wrap with unit derivative) is available for
+  activation functions and is emitted as a C++ lambda.
 
 ### Example
 
@@ -60,11 +66,15 @@ residuals:
 
 ## Output
 
-The script generates three C++ function implementations:
+The script generates four C++ function implementations:
 
 1. `update_constant` - Sets up constant matrix coefficients for the system
 2. `update_time` - Updates time-dependent parameters
 3. `update_solution` - Computes solution-dependent terms and Jacobians
+4. `update_gradient` - Residual and its parameter-Jacobian (`dr/dalpha`) used by
+   the calibrator. Parameters are read from the `alpha` vector and columns are
+   addressed via `global_param_ids[ParamId::<name>]`, so the `constants` order
+   must match the block's `ParamId` enum.
 
 ## Workflow
 
