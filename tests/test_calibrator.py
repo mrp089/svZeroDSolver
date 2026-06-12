@@ -26,28 +26,23 @@ def test_steady_flow_calibration():
     )
 
 
-def test_chamber_sphere_pq_calibration():
-    """Calibrate a subset of ChamberSphere parameters from port pressure/flow
-    only.
+def test_chamber_sphere_calibration():
+    """Calibrate the time-independent ChamberSphere parameters via the normal
+    calibrator.
 
-    The fixture ``chamber_sphere_pq_calibration.json`` provides ``y`` and ``dy``
-    containing only the four port variables (pressure/flow at the inlet and
-    outlet) and their time derivatives, plus a ``time`` vector. The chamber's
-    hidden volume/radius state is reconstructed by integrating the net flow
-    (absolute volume fixed to the reference state); every time derivative comes
-    from the supplied ``dy`` (no finite differences), and the wall-inertia term
-    is neglected so the residual and its parameter Jacobian are fully analytic. A
-    selected parameter subset (``_calibrate_subset``) is fit to the active-stress
-    equation. The starting point is perturbed by 20%; the calibrator must recover
-    the true values of the calibrated subset.
-
-    All twelve parameters are not jointly identifiable from a single P-Q cycle
-    (the problem is severely under-determined), so only an identifiable subset is
-    calibrated here. The tolerance reflects the sub-percent bias from neglecting
-    inertia plus the differentiated test data.
+    ChamberSphere is calibrated through the standard point-wise calibrator using
+    ``ChamberSphere::update_gradient``. The fixture
+    ``chamber_sphere_calibration.json`` provides a full-state observation set
+    (``y``/``dy`` for the ports and the internal variables radius, velo, stress,
+    tau, volume), constructed so the momentum, spherical-stress and volume
+    residuals vanish at ``_true_values``. The six time-independent parameters
+    (rho, thick0, radius0, W1, W2, eta) are calibrated from a 20%-perturbed
+    start; the activation/timing parameters need the observation time, which the
+    point-wise calibrator does not provide, so they are held fixed and not part
+    of the calibrated subset.
     """
     testfile = os.path.join(
-        this_file_dir, "cases", "chamber_sphere_pq_calibration.json"
+        this_file_dir, "cases", "chamber_sphere_calibration.json"
     )
 
     result, config = execute_pysvzerod(testfile, "calibrator")
@@ -55,7 +50,7 @@ def test_chamber_sphere_pq_calibration():
     calibrated = result["vessels"][0]["zero_d_element_values"]
     for name in config["_calibrate_subset"]:
         true_value = config["_true_values"][name]
-        assert np.isclose(calibrated[name], true_value, rtol=1e-2), (
+        assert np.isclose(calibrated[name], true_value, rtol=1e-6), (
             f"{name}: got {calibrated[name]}, expected {true_value}"
         )
 

@@ -131,3 +131,78 @@ void ChamberSphere::get_elastance_values(std::vector<double>& parameters) {
   act = std::abs(act_t);
   act_plus = std::max(act_t, 0.0);
 }
+
+void ChamberSphere::update_gradient(
+    Eigen::SparseMatrix<double>& jacobian,
+    Eigen::Matrix<double, Eigen::Dynamic, 1>& residual,
+    Eigen::Matrix<double, Eigen::Dynamic, 1>& alpha, std::vector<double>& y,
+    std::vector<double>& dy) {
+  // Only the six time-independent parameters are calibrated here. They appear
+  // exclusively in the momentum (eq 0), spherical-stress (eq 1) and volume
+  // (eq 2) equations, which are pure functions of the (full) state. The
+  // active-stress equation (eq 3) needs the time and is omitted; the remaining
+  // parameter-free equations (4, 5, 6) are included for completeness.
+  const double rho = alpha[global_param_ids[ParamId::rho]];
+  const double thick0 = alpha[global_param_ids[ParamId::thick0]];
+  const double radius0 = alpha[global_param_ids[ParamId::radius0]];
+  const double W1 = alpha[global_param_ids[ParamId::W1]];
+  const double W2 = alpha[global_param_ids[ParamId::W2]];
+  const double eta = alpha[global_param_ids[ParamId::eta]];
+
+  const double Pin = y[global_var_ids[0]];
+  const double Qin = y[global_var_ids[1]];
+  const double Pout = y[global_var_ids[2]];
+  const double Qout = y[global_var_ids[3]];
+  const double radius = y[global_var_ids[4]];
+  const double velo = y[global_var_ids[5]];
+  const double stress = y[global_var_ids[6]];
+  const double tau = y[global_var_ids[7]];
+  const double dradius_dt = dy[global_var_ids[4]];
+  const double dvelo_dt = dy[global_var_ids[5]];
+  const double dvolume_dt = dy[global_var_ids[8]];
+
+  // Residuals (active-stress equation 3 is time-dependent and omitted).
+  residual(global_eqn_ids[0]) =
+      -Pout * pow(radius / radius0 + 1, 2) + dvelo_dt * rho * thick0 +
+      stress * thick0 * (radius / radius0 + 1) / radius0;
+  residual(global_eqn_ids[1]) =
+      dradius_dt * eta * (1 + 2 / pow(radius / radius0 + 1, 12)) *
+          (2 * radius / radius0 + 2) / radius0 -
+      stress + tau +
+      (4 - 4 / pow(radius / radius0 + 1, 6)) *
+          (W1 + W2 * pow(radius / radius0 + 1, 2));
+  residual(global_eqn_ids[2]) =
+      -dvolume_dt + 4 * M_PI * pow(radius0, 2) * velo * pow(radius / radius0 + 1, 2);
+  residual(global_eqn_ids[4]) = dradius_dt - velo;
+  residual(global_eqn_ids[5]) = Qin - Qout - dvolume_dt;
+  residual(global_eqn_ids[6]) = Pin - Pout;
+
+  // Parameter Jacobian (only the six time-independent parameters).
+  jacobian.coeffRef(global_eqn_ids[0], global_param_ids[ParamId::rho]) =
+      dvelo_dt * thick0;
+  jacobian.coeffRef(global_eqn_ids[0], global_param_ids[ParamId::thick0]) =
+      dvelo_dt * rho + radius * stress / pow(radius0, 2) + stress / radius0;
+  jacobian.coeffRef(global_eqn_ids[0], global_param_ids[ParamId::radius0]) =
+      (2 * Pout * radius * (radius + radius0) - radius * stress * thick0 -
+       stress * thick0 * (radius + radius0)) /
+      pow(radius0, 3);
+  jacobian.coeffRef(global_eqn_ids[1], global_param_ids[ParamId::radius0]) =
+      -24 * W1 * radius * pow(radius0, 5) / pow(radius + radius0, 7) -
+      8 * W2 * pow(radius, 2) / pow(radius0, 3) -
+      16 * W2 * radius * pow(radius0, 3) / pow(radius + radius0, 5) -
+      8 * W2 * radius / pow(radius0, 2) +
+      40 * dradius_dt * eta * radius * pow(radius0, 9) / pow(radius + radius0, 12) -
+      4 * dradius_dt * eta * radius / pow(radius0, 3) -
+      4 * dradius_dt * eta * pow(radius0, 10) / pow(radius + radius0, 12) -
+      2 * dradius_dt * eta / pow(radius0, 2);
+  jacobian.coeffRef(global_eqn_ids[2], global_param_ids[ParamId::radius0]) =
+      8 * M_PI * velo * (radius + radius0);
+  jacobian.coeffRef(global_eqn_ids[1], global_param_ids[ParamId::W1]) =
+      -4 * pow(radius0, 6) / pow(radius + radius0, 6) + 4;
+  jacobian.coeffRef(global_eqn_ids[1], global_param_ids[ParamId::W2]) =
+      4 * (-pow(radius0, 6) + pow(radius + radius0, 6)) /
+      (pow(radius0, 2) * pow(radius + radius0, 4));
+  jacobian.coeffRef(global_eqn_ids[1], global_param_ids[ParamId::eta]) =
+      2 * dradius_dt * (2 * pow(radius0, 12) + pow(radius + radius0, 12)) /
+      (pow(radius0, 2) * pow(radius + radius0, 11));
+}

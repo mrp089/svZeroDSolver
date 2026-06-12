@@ -5,9 +5,9 @@
 
 set(lib svzero_optimize_library)
 
-set(CXXSRCS LevenbergMarquardtOptimizer.cpp calibrate.cpp ChamberSpherePQ.cpp)
+set(CXXSRCS LevenbergMarquardtOptimizer.cpp calibrate.cpp)
 
-set(HDRS LevenbergMarquardtOptimizer.h calibrate.h ChamberSpherePQ.h)
+set(HDRS LevenbergMarquardtOptimizer.h calibrate.h)
 
 add_library(${lib} OBJECT ${CXXSRCS} )
 
