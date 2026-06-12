@@ -1,4 +1,4 @@
-from sympy import symbols, Matrix, simplify, pi, Abs, Max, sign, Heaviside, Piecewise, Function
+from sympy import symbols, Matrix, simplify, pi, Abs, Max, sign, Heaviside, Piecewise, Function, cse
 from sympy.printing.c import C99CodePrinter
 import re
 import pdb
@@ -220,25 +220,38 @@ def print_time(exprs, time_symbol):
 
 def print_gradient(residuals, jacobian, constants, y, dy, time_symbol):
     names = [str(c) for c in constants]
-    all_exprs = list(residuals) + [jacobian[i, j]
-                                   for i in range(jacobian.rows)
-                                   for j in range(jacobian.cols)]
+
+    # Collect the non-zero residual and Jacobian entries. Columns are grouped by
+    # parameter for readability.
+    items = []  # (line_prefix, expr)
+    for i in range(residuals.shape[0]):
+        if residuals[i] != 0:
+            items.append((f"  residual(global_eqn_ids[{i}])", residuals[i]))
+    for j in range(jacobian.cols):
+        for i in range(jacobian.rows):
+            if jacobian[i, j] != 0:
+                items.append((f"  jacobian.coeffRef(global_eqn_ids[{i}], "
+                              f"global_param_ids[ParamId::{names[j]}])",
+                              jacobian[i, j]))
+
+    all_exprs = [expr for _, expr in items]
+
+    # Common-subexpression elimination: the activation-function derivatives share
+    # large repeated subexpressions (the tanh terms, S_plus/S_minus, ...). cse
+    # hoists them into temporaries so the columns stay compact.
+    replacements, reduced = cse(all_exprs)
+
     print('update_gradient')
     print_alpha_constants(all_exprs, constants)
     print_gradient_variables(all_exprs, y, dy)
     print_time(all_exprs, time_symbol)
     print()
-    for i in range(residuals.shape[0]):
-        if residuals[i] != 0:
-            print(f"  residual(global_eqn_ids[{i}]) = {format_cpp_expr(residuals[i])};")
-    print()
-    # Group columns by parameter for readability.
-    for j in range(jacobian.cols):
-        for i in range(jacobian.rows):
-            if jacobian[i, j] != 0:
-                print(f"  jacobian.coeffRef(global_eqn_ids[{i}], "
-                      f"global_param_ids[ParamId::{names[j]}]) = "
-                      f"{format_cpp_expr(jacobian[i, j])};")
+    for sym, sub in replacements:
+        print(f"  const double {sym} = {format_cpp_expr(sub)};")
+    if replacements:
+        print()
+    for (prefix, _), expr in zip(items, reduced):
+        print(f"{prefix} = {format_cpp_expr(expr)};")
     print()
 
 def main(yaml_path):
