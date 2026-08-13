@@ -35,13 +35,14 @@ muscle contraction models*, AMSES 2019.
 |---|---|---|---|
 | `n0(e_c)` Frank–Starling | "a function accounting for the Frank–Starling mechanism", cites [6] | [6] Remark 4: general reduction factor, no closed form. Ref [13] Caruel et al. 2013 evaluates `n0` as `interp(e_c, …)`; the **MEDISIM PhysioBlocks** code gives the calibrated breakpoints. | **piecewise-linear from PhysioBlocks** `physioblocks/physioblocks` (`active_law.py`: `n0 = interp(e_c, abscissas, ordinates)`), abscissas `[−0.167,−0.007,0.053,0.097,0.133,0.202,0.466,0.919,1.176]`, ordinates `[0,0.56,0.77,0.89,0.96,1,1,0.11,0]` — plateau at **physiological** `e_c∈[0.20,0.47]`. (Caruel Fig 7(a) *looks* like it plateaus at `e_c≈1` only because it is drawn over the wide isotonic papillary-muscle strain range.) |
 | `ν(t)` activation | "prescribed as detailed in [6,33]", triggered when `[Ca²⁺]>c_th` | [6],[32]: `ν=+k_ATP` while depolarised, `−k_RS` while repolarised (`|ν|₊=k_ATP·1_{Ca>C}`). Rate values not tabulated for this LV. | tanh systole/diastole window; onset `t_sys≈0.13 s`, relaxation `t_dias≈0.45 s`, period 0.8 s **read from [G] Fig 5's own timeline**; rate `|ν|≈30/s`. Rate magnitude is immaterial to the peak (cancels at steady state). |
-| `P_at` atrial pressure | Table 1 lists it but the cell is only a citation to [6] | [32]: prescribed low pressure + pre-systolic **atrial kick**; no number for this LV | `P_at ≈ 0.9 kPa`, read from [G] Fig 5 end-diastolic pressure (the paper's stated static end-diastolic loading). Atrial kick omitted. |
-| `P_vs` venous pressure | not in Table 1; appears in Eq. 36c | [32] uses a venous `P_ve` in its Windkessel; no value for [G] | `P_vs = 0` (documented). |
+| `P_at` atrial pressure | Table 1 lists it but the cell is only a citation to [6] | [32]: prescribed low pressure + pre-systolic **atrial kick**. **PhysioBlocks** gives the concrete waveform: baseline **450 Pa** (diastasis), ramping to **900 Pa (atrial kick)** over the last ~15% of the cycle, held through early systole | constant `P_at = 0.9 kPa` (= the PhysioBlocks kick value; baseline 450 Pa and the kick timing not yet applied — see OPEN #4) |
+| `P_vs` venous pressure | not in Table 1; appears in Eq. 36c | [32] `P_ve`; **PhysioBlocks** venous = **1600 Pa**; Caruel [13] `P_sv = 1000 Pa` | `P_vs = 0` (documented; ~1–1.6 kPa per the references would raise mean arterial pressure slightly) |
 
 ### C. Numerical choices (not physical parameters of [G])
 
 | Choice | [G] | Here | Note |
 |---|---|---|---|
+| Inertia | full dynamics (Eqs. 8,18,45) | **implemented** (`use_inertia=1`): velocity companion DOFs + consistent mass `M=∫ρ₀(Du)ᵀDu dΩ` | matches quasi-static to ~0.3% — inertia is ~1e-4 of the forces (quasi-static is the default) |
 | Incompressibility | Lagrange-multiplier (exact `J=1`), mixed `P_k/P_{k-1}` | penalty `κ(J−1)J C⁻¹`, `κ=1e7` | penalty; `κ` not a [G] parameter |
 | Spatial discretization | single high-order `P_k` element | linear `P1`, `ne≈12` + 3-pt Gauss | converged (see §3) |
 | Time integration | energy-preserving midpoint + Chapelle internal-var scheme | generalized-α or `ConsistentStiffIntegrator` | |
@@ -111,10 +112,12 @@ basal/apical constraint is needed at this operating point.)
 ### OPEN #3 — `C_valve` over-buffering (peak pressure with exact `C_valve`)
 With the exact `C_valve=9e-9` the peak pressure is buffered to ~7.5 kPa (vs 12.4
 at `C_valve=0`). The compliance stores ~0.1 L per systolic pressure swing, which
-is large relative to the stroke volume in this **quasi-static, rounded-pressure**
-model. In [G]'s energy-preserving scheme the ejection pressure is a plateau
-(`Ṗv≈0`), so `C_valve·Ṗv` in Eq. 36a is inert. This is a time-discretization
-difference (inertia + energy scheme), not a parameter mismatch.
+is large relative to the stroke volume when the ejection pressure is rounded
+rather than a flat plateau. In [G]'s energy-preserving scheme the pressure holds
+a plateau (`Ṗv≈0`), so `C_valve·Ṗv` in Eq. 36a is inert. **Adding inertia does
+not fix it** (dynamic vs quasi-static agree to ~0.3%; §1.C), confirming the cause
+is the temporal scheme (energy-preserving midpoint + Chapelle internal-variable
+update), not inertia and not a parameter mismatch.
 
 ### OPEN #4 — residual EDV/ESV (~10%) and `P_at` waveform
 EDV 124 vs 137 and ESV 58 vs 74. `P_at` is a prescribed waveform with a

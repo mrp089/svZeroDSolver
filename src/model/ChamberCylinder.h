@@ -118,6 +118,15 @@
  * \f$P_\text{in}=P_\text{out}=P_v\f$, and the rigid-body pins
  * \f$\varphi(R_i)=\eta(R_i)=0\f$.
  *
+ * With `use_inertia = 1` the full dynamic formulation of \cite genet23 (Eqs. 8,
+ * 18, 45) is used instead: the acceleration virtual power
+ * \f$P_a=\int_\Omega\varrho_0\,\ddot u\cdot\mathrm{D}u(\hat\zeta)\,\mathrm d\Omega\f$
+ * is added to the momentum, realized by velocity companion DOFs \f$w=\dot\zeta\f$
+ * and the consistent mass matrix \f$M=\int\varrho_0(\mathrm{D}u)^\top\mathrm{D}u\,
+ * \mathrm d\Omega\f$ (analytically integrated over \f$\Theta,Z\f$; \cite genet23
+ * Eqs. A5-A6). For cardiac parameters inertia is \f$\sim\!10^{-4}\f$ of the
+ * internal/pressure forces, so the response is within ~0.3% of quasi-static.
+ *
  * ### Parameters
  *
  * Parameter sequence for constructing this block:
@@ -156,6 +165,10 @@
  * * `c_valve` - Cavity/valve compliance \f$C_\text{valve}\f$ (optional, default
  *   0), adding \f$-C_\text{valve}\dot P_v\f$ to mass conservation (genet23
  *   Eq. 36); regularizes the isovolumic phases
+ * * `density` - Reference mass density \f$\varrho_0\f$ (optional, default 1000
+ *   kg/m^3 = the paper's 1 kg/L); only used when `use_inertia = 1`
+ * * `use_inertia` - 0 = quasi-static (default), 1 = full dynamics with the
+ *   consistent mass matrix and velocity companion DOFs
  *
  * ### Internal variables
  *
@@ -205,7 +218,9 @@ class ChamberCylinder : public Block {
     bcs_alpha = 24,     // BCS activation rate constant (paper's alpha)
     n0_center = 25,     // BCS Frank-Starling curve center (strain)
     n0_width = 26,      // BCS Frank-Starling curve width (strain)
-    c_valve = 27        // cavity/valve compliance (genet23 Eq. 36)
+    c_valve = 27,       // cavity/valve compliance (genet23 Eq. 36)
+    density = 28,       // reference mass density rho_0 (inertia, genet23 Eq. 18)
+    use_inertia = 29    // 0 = quasi-static (default), 1 = full dynamics (inertia)
   };
 
   /**
@@ -243,7 +258,9 @@ class ChamberCylinder : public Block {
                {"bcs_alpha", InputParameter(true, false, true, 0.0)},
                {"n0_center", InputParameter(true, false, true, 0.0)},
                {"n0_width", InputParameter(true, false, true, 1000.0)},
-               {"c_valve", InputParameter(true, false, true, 0.0)}}) {}
+               {"c_valve", InputParameter(true, false, true, 0.0)},
+               {"density", InputParameter(true, false, true, 1000.0)},
+               {"use_inertia", InputParameter(true, false, true, 0.0)}}) {}
 
   /**
    * @brief Set up the degrees of freedom (DOF) of the block
@@ -341,6 +358,14 @@ class ChamberCylinder : public Block {
   int i_kc(int q) const { return i_active0() + 3 * q + 2; }
   int n_active_var() const { return use_bcs ? 3 * n_quad : 1; }
   int i_vol() const { return i_active0() + n_active_var(); }
+  // Velocity companion DOFs (dynamics only): w = d(field)/dt, appended after
+  // the volume DOF so the quasi-static layout above is unchanged.
+  int i_vel0() const { return i_vol() + 1; }
+  int i_vrho(int a) const { return i_vel0() + a; }
+  int i_vphi(int a) const { return i_vel0() + n_node + a; }
+  int i_veta(int a) const { return i_vel0() + 2 * n_node + a; }
+  int i_vbeta() const { return i_vel0() + 3 * n_node; }
+  int i_veps() const { return i_vel0() + 3 * n_node + 1; }
 
   int e_rho(int a) const { return a; }
   int e_phi(int a) const { return n_node + a; }
@@ -355,6 +380,15 @@ class ChamberCylinder : public Block {
   int e_volume() const { return e_active0() + n_active_var(); }
   int e_mass() const { return e_volume() + 1; }
   int e_pressure() const { return e_volume() + 2; }
+  // Velocity companion equations (dynamics only): w - d(field)/dt = 0.
+  int e_vel0() const { return e_pressure() + 1; }
+  int e_vrho(int a) const { return e_vel0() + a; }
+  int e_vphi(int a) const { return e_vel0() + n_node + a; }
+  int e_veta(int a) const { return e_vel0() + 2 * n_node + a; }
+  int e_vbeta() const { return e_vel0() + 3 * n_node; }
+  int e_veps() const { return e_vel0() + 3 * n_node + 1; }
+
+  bool is_dynamic = false;  ///< full dynamics (inertia) vs quasi-static
 
   double act = 0.0;       ///< Activation rate a(t) (= |nu| for the BCS input)
   double act_plus = 0.0;  ///< max(a(t), 0) (= |nu|_+ for the BCS input)

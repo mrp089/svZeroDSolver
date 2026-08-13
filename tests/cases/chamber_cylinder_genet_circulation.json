@@ -142,7 +142,7 @@
   ],
   "junctions": [
     {
-      "junction_name": "J_ar",
+      "junction_name": "J0",
       "junction_type": "NORMAL_JUNCTION",
       "inlet_blocks": [
         "arterial"

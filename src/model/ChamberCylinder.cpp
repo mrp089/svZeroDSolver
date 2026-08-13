@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <map>
+#include <utility>
 
 #include "Model.h"
 
@@ -293,6 +295,8 @@ void ChamberCylinder::setup_dofs(DOFHandler& dofhandler) {
   n_node = n_ele + 1;
   use_bcs =
       model->get_parameter_value(global_param_ids[ParamId::active_model]) > 0.5;
+  is_dynamic =
+      model->get_parameter_value(global_param_ids[ParamId::use_inertia]) > 0.5;
 
   // Uniform nodes from endocardium (index 0, R_i) to epicardium (R_e).
   node_R.resize(n_node);
@@ -341,15 +345,27 @@ void ChamberCylinder::setup_dofs(DOFHandler& dofhandler) {
   }
   int_names.push_back("volume");
 
+  // Full dynamics: velocity companion fields w = d(field)/dt (genet23 Eqs. 8,
+  // 18, 45, A5-A6). Appended after the volume DOF; absent when quasi-static.
+  if (is_dynamic) {
+    for (int a = 0; a < n_node; a++) int_names.push_back("vrho_" + std::to_string(a));
+    for (int a = 0; a < n_node; a++) int_names.push_back("vphi_" + std::to_string(a));
+    for (int a = 0; a < n_node; a++) int_names.push_back("veta_" + std::to_string(a));
+    int_names.push_back("vbeta");
+    int_names.push_back("veps");
+  }
+
   // 3*n_node field eqns + beta + eps + active eqns + volume + mass + pressure
-  n_eqn = 3 * n_node + 2 + n_active_var() + 3;
+  const int n_vel = is_dynamic ? 3 * n_node + 2 : 0;
+  n_eqn = 3 * n_node + 2 + n_active_var() + 3 + n_vel;
   Block::setup_dofs_(dofhandler, n_eqn, int_names);
-  n_var = 4 + 3 * n_node + 2 + n_active_var() + 1;
+  n_var = 4 + 3 * n_node + 2 + n_active_var() + 1 + n_vel;
 
   // Dense block for dC_dy and dC_dydot; a few linear entries for F/E.
   num_triplets.D = n_eqn * n_var;
-  num_triplets.F = 3 * n_node + 16;
-  num_triplets.E = (use_bcs ? 1 : 4) + 1;  // +1 for the C_valve dPv/dt term
+  num_triplets.F = 3 * n_node + 16 + (is_dynamic ? 3 * n_node + 4 : 0);
+  num_triplets.E = (use_bcs ? 1 : 4) + 1 +  // +1 for the C_valve dPv/dt term
+                   (is_dynamic ? 21 * n_node + 8 : 0);  // mass + companion
 }
 
 void ChamberCylinder::update_constant(SparseSystem& system,
@@ -377,6 +393,70 @@ void ChamberCylinder::update_constant(SparseSystem& system,
   // Rigid-body pins: phi(R_i) = 0 and eta(R_i) = 0 (inner node, index 0).
   system.F.coeffRef(global_eqn_ids[e_phi(0)], global_var_ids[i_phi(0)]) = 1.0;
   system.F.coeffRef(global_eqn_ids[e_eta(0)], global_var_ids[i_eta(0)]) = 1.0;
+
+  // --- Full dynamics: consistent mass matrix + velocity companion equations ---
+  // (genet23 Eqs. 8,18,45; App. A.2 Eqs. A5-A6). The velocity field is the
+  // push-forward v = Du[zeta] zeta_dot; introducing companion DOFs w = zeta_dot
+  // turns the 2nd-order system into 1st order. The inertia force on field k is
+  // sum_j M_kj w_dot_j with the consistent mass M = int rho0 (Du)^T Du dOmega.
+  // Du (Eq. A5) is orthogonal between the radial/azimuthal (rho,phi,beta) and
+  // axial (eta,eps) groups, so after integrating Theta (2 pi) and Z the only
+  // couplings are rho-rho, eta-eta, phi-phi, eps-eps, beta-beta, phi-beta and
+  // eta-eps. The mass is evaluated at the reference configuration (R), a
+  // standard approximation - inertia is ~1e-4 of the internal/pressure forces
+  // for cardiac parameters. The O(zeta_dot^2) centrifugal term D2u(zd,zd) is
+  // likewise negligible and omitted.
+  if (is_dynamic) {
+    const double rho0 = parameters[global_param_ids[ParamId::density]];
+    const double Lp = parameters[global_param_ids[ParamId::length]];
+    const double cL1 = rho0 * 2.0 * M_PI * Lp;                    // int_Z 1  = L
+    const double cL2 = rho0 * 2.0 * M_PI * Lp * Lp / 2.0;         // int_Z Z  = L^2/2
+    const double cL3 = rho0 * 2.0 * M_PI * Lp * Lp * Lp / 3.0;    // int_Z Z^2= L^3/3
+    // Accumulate the mass over quadrature points into a local map, then ASSIGN
+    // (=) to the sparse system: update_constant may be called multiple times
+    // (e.g. per step-size change), so += into the shared matrix would double it.
+    std::map<std::pair<int, int>, double> M;
+    auto Madd = [&](int r, int c, double v) { M[{r, c}] += v; };
+    for (int q = 0; q < n_quad; q++) {
+      const QuadPoint& pt = quad[q];
+      const int A[2] = {pt.elem, pt.elem + 1};
+      const double N[2] = {pt.N[0], pt.N[1]};
+      const double R2 = pt.R * pt.R;
+      Madd(e_beta(), i_vbeta(), cL3 * pt.w * R2);   // beta-beta
+      Madd(e_eps(), i_veps(), cL3 * pt.w);          // eps-eps
+      for (int i = 0; i < 2; i++) {
+        Madd(e_beta(), i_vphi(A[i]), cL2 * pt.w * R2 * N[i]);  // beta-phi
+        Madd(e_eps(), i_veta(A[i]), cL2 * pt.w * N[i]);        // eps-eta
+        if (A[i] != 0) {  // skip the pinned phi_0/eta_0 momentum rows
+          Madd(e_phi(A[i]), i_vbeta(), cL2 * pt.w * R2 * N[i]);
+          Madd(e_eta(A[i]), i_veps(), cL2 * pt.w * N[i]);
+        }
+        for (int j = 0; j < 2; j++) {
+          const double mrr = cL1 * pt.w * N[i] * N[j];       // rho-rho / eta-eta
+          Madd(e_rho(A[i]), i_vrho(A[j]), mrr);
+          if (A[i] != 0) {
+            Madd(e_eta(A[i]), i_veta(A[j]), mrr);
+            Madd(e_phi(A[i]), i_vphi(A[j]), cL1 * pt.w * R2 * N[i] * N[j]);
+          }
+        }
+      }
+    }
+    for (const auto& kv : M)
+      system.E.coeffRef(global_eqn_ids[kv.first.first],
+                        global_var_ids[kv.first.second]) = kv.second;
+    // Velocity companion equations: w_k - d(field_k)/dt = 0.
+    auto companion = [&](int erow, int ivel, int ifield) {
+      system.F.coeffRef(global_eqn_ids[erow], global_var_ids[ivel]) = 1.0;
+      system.E.coeffRef(global_eqn_ids[erow], global_var_ids[ifield]) = -1.0;
+    };
+    for (int a = 0; a < n_node; a++) {
+      companion(e_vrho(a), i_vrho(a), i_rho(a));
+      companion(e_vphi(a), i_vphi(a), i_phi(a));
+      companion(e_veta(a), i_veta(a), i_eta(a));
+    }
+    companion(e_vbeta(), i_vbeta(), i_beta());
+    companion(e_veps(), i_veps(), i_eps());
+  }
 }
 
 void ChamberCylinder::update_time(SparseSystem& system,
