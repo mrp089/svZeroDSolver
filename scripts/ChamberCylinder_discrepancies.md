@@ -163,9 +163,22 @@ L-stable damping that the `rho=0` "stiff" integrator uses (the default here — 
 suppresses the ringing cleanly, at ~12.8 kPa peak vs the midpoint's oscillatory
 ~13.7). A faithful implementation therefore requires the bespoke integrator
 (iii)-(iv), which breaks svZeroDSolver's `E ẏ + F y + C = 0` block/integrator
-separation (the block must expose an algorithmic stress from the `(y_n, y_{n+1})`
-pair and a `√k_c` internal-variable update). Given that the midpoint test moves
-none of the beat-scale metrics, it is left unimplemented pending a decision.
+separation (the block must expose the algorithmic active stress Eq. 59 — with
+the `√k_c` change of variables Eq. 60 — from the `(y_n, y_{n+1})` pair, plumbed
+via block-stored state + midpoint reconstruction `y_{n+1}=y_n+Δt·dy`).
+
+**But (iv) alone would not deliver the goal (a clean non-dissipative run).**
+Diagnostic (rho=1 midpoint): the pressure rings *even for the simple active model
+with no `e_c` spring at all*, and a softer `k_s` rings *more*, not less. So the
+ringing is a broad property of applying a non-dissipative scheme to this stiff
+reduced model — dominated by the **penalty incompressibility** (`κ`, a stiff mode
+[G] avoids with its mixed Lagrange-multiplier `p` field) plus the other stiff
+mechanical modes — not just the active spring. A clean energy-preserving
+reproduction thus needs the temporal scheme **and** the mixed displacement-
+pressure incompressibility (item §1.C, the #1 "full 1:1" item), together — a
+multi-component reformulation of the block, not a single bespoke integrator. Per
+the midpoint test it would still leave the beat-scale figures unchanged, so it is
+left unimplemented; the L-stable "stiff" integrator remains the practical choice.
 
 ## 4. Remaining model differences (summary)
 
