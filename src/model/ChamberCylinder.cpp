@@ -223,17 +223,23 @@ void compute_g(const T xi[6], const T xidot[6], const ActiveInput& act,
   for (int i = 0; i < 6; i++) g[i] = contract<T>(S, k.dE[i]);
 }
 
-/// BCS Frank-Starling force-length function n_0(e_c): the piecewise-linear
-/// curve digitized from Caruel et al. (2014), Fig. 2(a) (\cite genet23 Ref. 13).
-/// It represents the actin-myosin overlap (length-tension) relationship: n_0
-/// rises from 0, plateaus at 1 around the optimal contractile strain, and falls
-/// back to 0. (The center/width of the earlier Gaussian placeholder are unused.)
+/// BCS Frank-Starling force-length function n_0(e_c): the calibrated
+/// piecewise-linear length-dependence curve from the MEDISIM PhysioBlocks
+/// reference implementation (n_0 = interp(e_c, abscissas, ordinates); Caruel et
+/// al. 2013, \cite genet23 Ref. 13). It represents the actin-myosin overlap
+/// (length-tension) relationship: n_0 rises from 0, plateaus at 1 over the
+/// physiological contractile strain e_c in [0.20, 0.47], and falls back to 0.
+/// NOTE: the plateau sits at e_c ~ 0.2, not ~1 as Caruel Fig. 7(a) suggests -
+/// that figure is drawn over the wide isotonic papillary-muscle strain range.
+/// (The center/width of the earlier Gaussian placeholder are unused.)
 template <typename T>
 inline T frank_starling(T e_c, double /*center*/, double /*width*/) {
-  // Breakpoints (e_c, n_0) digitized from Caruel 2014 Fig. 2(a).
-  constexpr int NP = 5;
-  static const double X[NP] = {-0.4, 0.3, 1.0, 1.3, 2.5};
-  static const double Y[NP] = {0.0, 0.4, 1.0, 1.0, 0.0};
+  // Breakpoints (e_c, n_0) from PhysioBlocks (physioblocks/physioblocks).
+  constexpr int NP = 9;
+  static const double X[NP] = {-0.1668, -0.0073, 0.0534, 0.0969, 0.1326,
+                               0.2016,  0.4663,  0.9187, 1.1762};
+  static const double Y[NP] = {0.0,    0.5614, 0.7748, 0.8933, 0.9618,
+                               1.0,    1.0,    0.1075, 0.0};
   const double x = re(e_c);
   if (x <= X[0]) return T(Y[0]);
   if (x >= X[NP - 1]) return T(Y[NP - 1]);

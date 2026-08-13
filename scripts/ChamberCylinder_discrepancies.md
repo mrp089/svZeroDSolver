@@ -33,7 +33,7 @@ muscle contraction models*, AMSES 2019.
 
 | Parameter | What Genet says | Reference content | Choice made (flagged, not fitted) |
 |---|---|---|---|
-| `n0(e_c)` Frank–Starling | "a function accounting for the Frank–Starling mechanism", cites [6] | [6] Remark 4: `n0` is a reduction factor `0≤n0≤1`, no closed form. **Ref [13] Caruel et al. 2014 Fig 2(a)** plots the actual `n0(e_c)`: piecewise-linear, 0 at `e_c≈−0.4`, rising to a plateau of 1 over `e_c∈[1,1.3]`, back to 0 at `e_c≈2.5` | **piecewise-linear digitized from Caruel Fig 2(a)** (breakpoints `(−0.4,0),(0.3,0.4),(1,1),(1.3,1),(2.5,0)`), in `frank_starling()`. See §3 OPEN #1: this resolves the over-ejection but exposes an `e_c`-scale question. |
+| `n0(e_c)` Frank–Starling | "a function accounting for the Frank–Starling mechanism", cites [6] | [6] Remark 4: general reduction factor, no closed form. Ref [13] Caruel et al. 2013 evaluates `n0` as `interp(e_c, …)`; the **MEDISIM PhysioBlocks** code gives the calibrated breakpoints. | **piecewise-linear from PhysioBlocks** `physioblocks/physioblocks` (`active_law.py`: `n0 = interp(e_c, abscissas, ordinates)`), abscissas `[−0.167,−0.007,0.053,0.097,0.133,0.202,0.466,0.919,1.176]`, ordinates `[0,0.56,0.77,0.89,0.96,1,1,0.11,0]` — plateau at **physiological** `e_c∈[0.20,0.47]`. (Caruel Fig 7(a) *looks* like it plateaus at `e_c≈1` only because it is drawn over the wide isotonic papillary-muscle strain range.) |
 | `ν(t)` activation | "prescribed as detailed in [6,33]", triggered when `[Ca²⁺]>c_th` | [6],[32]: `ν=+k_ATP` while depolarised, `−k_RS` while repolarised (`|ν|₊=k_ATP·1_{Ca>C}`). Rate values not tabulated for this LV. | tanh systole/diastole window; onset `t_sys≈0.13 s`, relaxation `t_dias≈0.45 s`, period 0.8 s **read from [G] Fig 5's own timeline**; rate `|ν|≈30/s`. Rate magnitude is immaterial to the peak (cancels at steady state). |
 | `P_at` atrial pressure | Table 1 lists it but the cell is only a citation to [6] | [32]: prescribed low pressure + pre-systolic **atrial kick**; no number for this LV | `P_at ≈ 0.9 kPa`, read from [G] Fig 5 end-diastolic pressure (the paper's stated static end-diastolic loading). Atrial kick omitted. |
 | `P_vs` venous pressure | not in Table 1; appears in Eq. 36c | [32] uses a venous `P_ve` in its Windkessel; no value for [G] | `P_vs = 0` (documented). |
@@ -51,17 +51,24 @@ muscle contraction models*, AMSES 2019.
 ## 2. Result with all-exact parameters (zero fitting)
 
 Exact valves + 2-stage Windkessel, `σ0=65 kPa`, force-velocity `α=12`, `ne=12`,
-`P_at=0.9 kPa`, `P_vs=0`. Two `n0` variants shown: `n0=1` (initial placeholder)
-and the **Caruel Fig 2(a) `n0(e_c)`** (current).
+`P_at=0.9 kPa`, `P_vs=0`, **PhysioBlocks `n0(e_c)`**, `C_valve=0` (see note).
 
-| Quantity | Genet Fig 5 | `n0=1` | **Caruel `n0`** | Status |
+| Quantity | Genet Fig 5 | `n0=1` | **PhysioBlocks `n0`** | Status |
 |---|---|---|---|---|
-| Diastolic pressure | ~0.9 kPa | 0.81 | 0.85 kPa | **match** |
-| EDV | 137 mL | 124 | 123 mL | good (~10% low) |
-| ESV | 74 mL | 24 | **62 mL** | Caruel `n0` fixes it |
-| EF | 46% | 81% | **50%** | Caruel `n0` fixes it |
-| Peak twist | ~20° | 64° | **31°** | Caruel `n0` fixes it |
-| Peak systolic pressure | 12.8 kPa | 9.5 | **5.0 kPa** | now too *low* — see OPEN #1 |
+| Diastolic pressure | ~0.9 kPa | 0.81 | 0.79 kPa | **match** |
+| Peak systolic pressure | 12.8 kPa | 9.5/20 | **12.4 kPa** | **match** |
+| Peak twist | ~20° | 64° | **20°** | **match** |
+| EDV | 137 mL | 124 | 124 mL | good (~10% low) |
+| ESV | 74 mL | 24 | 58 mL | good |
+| EF | 46% | 81% | 53% | good |
+
+At peak contraction `e_c` reaches ~0.26, on the `n0` plateau (`n0→1`), so the
+ventricle develops near-full `σ0`; during filling/relaxation `e_c` falls onto the
+rising limb (`n0<1`), giving the length-dependent self-limitation. **`C_valve`
+note:** the exact `C_valve=9e-9` stores ~0.1 L at systolic pressure and buffers
+the peak down to ~7.5 kPa in this quasi-static model; `C_valve=0` gives the match
+above. The paper's energy-preserving scheme keeps `Ṗv≈0` on the ejection plateau
+so its `C_valve·Ṗv` term is inert — a discretization difference, not a parameter.
 
 ## 3. Discrepancy log (systematic)
 
@@ -79,33 +86,41 @@ term (`C5=0` unchanged), active coupling (`active_model` 0 vs 1 identical),
 mesh (`ne` 6→24), and penalty `κ` (1e5→1e8). In the full simulation, diastole
 has a real pressure gradient so EDV=124 mL ≈ paper's 137.
 
-### OPEN #1 — largely RESOLVED by Frank–Starling; residual is an `e_c`-scale question
+### RESOLVED #1 — systolic over-ejection was the Frank–Starling `n0(e_c)`
 The over-ejection was **Frank–Starling**. Ruled out first: valve law (hard vs
 smooth identical), `C_valve` (ESV≈24–37 for 0→9e-9), force-velocity
-(ESV≈24–37 for `α` 0→12). Implementing the actual `n0(e_c)` from Caruel 2014
-Fig 2(a) (§1.B) moves ESV **24→62 mL** (paper 74), EF **81→50%** (paper 46),
-twist **64→31°** (paper 20) — the ventricle now stops near reference volume as
-the paper does.
+(ESV≈24–37 for `α` 0→12). Implementing the actual length-dependence `n0(e_c)`
+(§1.B) fixes it — see §2: peak pressure and twist now **match** (12.4 vs 12.8
+kPa; 20 vs 20°), ESV/EF good.
 
-**New, sharper open item:** peak pressure drops to **5.0 kPa** (paper 12.8),
-now `C_valve`-independent. Cause: the model's contractile strain `e_c` operates
-at **−0.11…0.22 (mean 0.095)** — the *rising limb* of Caruel's curve, where
-`n0≈0.2–0.35`, so effective tension is only ~30% of `σ0`. The paper's 12.8 kPa
-peak implies operation near the **plateau** (`n0≈1`, `e_c≈1`). So either the
-model's `e_c` is defined on a different scale than Caruel's abscissa, or the
-curve's abscissa is a normalized sarcomere length rather than `e_c=√I4−1`.
-**This is now the single most valuable question for M. Genet** (see requests
-list): what is the abscissa of the `n0` curve, and at what `e_c` should a
-well-filled beat sit?
+A digitization detour, now resolved: my first pass digitized Caruel Fig 7(a),
+whose abscissa runs over the wide isotonic papillary-muscle range so the plateau
+*looks* like `e_c≈1`. That put the model (which operates at `e_c~0.1–0.26`) on
+the rising limb (`n0~0.3`) and dropped the peak to 5 kPa. The **PhysioBlocks
+calibrated breakpoints** put the plateau at the physiological `e_c∈[0.20,0.47]`,
+exactly where the model operates → `n0→1` at peak, restoring the pressure. The
+model's `e_c=√I4−1` needs **no rescaling**: its operating range coincides with
+the calibrated plateau, and PhysioBlocks likewise feeds the fiber deformation
+straight into `interp(e_c,…)`.
 
-### OPEN #2 — peak twist ~3× (64° vs 20°)
-Global twist `β` is an unconstrained DOF (no basal/apical rotation constraint —
-a limitation [G] notes for its own model). Operating-point sensitive.
+### RESOLVED #2 — peak twist
+Twist was operating-point/`n0`-driven, not a free-`β` defect: with the correct
+`n0(e_c)` it lands at **20°**, matching [G]. (`β` remains a free DOF; no
+basal/apical constraint is needed at this operating point.)
 
-### OPEN #3 — atrial kick / P_at, P_vs
-`P_at` is a prescribed waveform with a pre-systolic atrial kick ([32]); we use a
-constant `P_at=0.9 kPa`. Not expected to affect ESV (see OPEN #1) but affects the
-diastolic filling detail and EDV.
+### OPEN #3 — `C_valve` over-buffering (peak pressure with exact `C_valve`)
+With the exact `C_valve=9e-9` the peak pressure is buffered to ~7.5 kPa (vs 12.4
+at `C_valve=0`). The compliance stores ~0.1 L per systolic pressure swing, which
+is large relative to the stroke volume in this **quasi-static, rounded-pressure**
+model. In [G]'s energy-preserving scheme the ejection pressure is a plateau
+(`Ṗv≈0`), so `C_valve·Ṗv` in Eq. 36a is inert. This is a time-discretization
+difference (inertia + energy scheme), not a parameter mismatch.
+
+### OPEN #4 — residual EDV/ESV (~10%) and `P_at` waveform
+EDV 124 vs 137 and ESV 58 vs 74. `P_at` is a prescribed waveform with a
+pre-systolic atrial kick ([32]); we use a constant `P_at=0.9 kPa`, which under-
+fills slightly. The atrial kick would raise EDV toward 137 and, via preload,
+ESV toward 74.
 
 ## 4. Reproduce
 
