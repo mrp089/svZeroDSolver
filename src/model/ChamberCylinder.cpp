@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 
 #include "Model.h"
 
@@ -12,6 +13,29 @@ namespace {
 
 using Eigen::Matrix3d;
 using Eigen::Vector3d;
+
+// The continuum + active-law kernel is templated on the scalar type so it can
+// be evaluated in double precision (residual) or with a complex perturbation
+// (complex-step differentiation) to obtain machine-accuracy tangents without
+// finite-difference cancellation.
+template <typename T>
+using Mat3 = Eigen::Matrix<T, 3, 3>;
+template <typename T>
+using Vec3 = Eigen::Matrix<T, 3, 1>;
+using cplx = std::complex<double>;
+
+/// Real part of a scalar (identity for double, Re(.) for complex) so ordering
+/// comparisons can be made on a complex-step argument.
+inline double re(double x) { return x; }
+inline double re(const cplx& x) { return x.real(); }
+
+/// Upper clamp that stays holomorphic for complex-step: below the cap the value
+/// (and its imaginary perturbation) pass through; at/above the cap it is the
+/// real constant `m` (zero derivative, matching the clamped plateau).
+template <typename T>
+inline T clamp_max(T x, double m) {
+  return re(x) < m ? x : T(m);
+}
 
 /// Material parameters passed to the continuum kernel.
 struct MatParams {
@@ -29,8 +53,10 @@ struct ActiveInput {
   double mu = 0.0;     ///< BCS active dissipation
 };
 
-/// Full contraction A:B of two symmetric 3x3 tensors.
-inline double contract(const Matrix3d& A, const Matrix3d& B) {
+/// Full contraction A:B of two symmetric 3x3 tensors (no conjugation, so it is
+/// the holomorphic bilinear form required by complex-step).
+template <typename T>
+inline T contract(const Mat3<T>& A, const Mat3<T>& B) {
   return (A.array() * B.array()).sum();
 }
 
@@ -41,28 +67,30 @@ inline double contract(const Matrix3d& A, const Matrix3d& B) {
  * Green-Lagrange strain with respect to the local kinematic quantities
  * xi = [rho, rho', phi', beta, eps, eta'] (\cite genet23 Eqs. 15, 16, 21).
  */
+template <typename T>
 struct Kinematics {
-  Matrix3d C;      ///< Right Cauchy-Green deformation tensor
-  Matrix3d dE[6];  ///< dE/dxi_k for xi=[rho,rho',phi',beta,eps,eta']
-  double J;        ///< Volume ratio det(F)
+  Mat3<T> C;      ///< Right Cauchy-Green deformation tensor
+  Mat3<T> dE[6];  ///< dE/dxi_k for xi=[rho,rho',phi',beta,eps,eta']
+  T J;            ///< Volume ratio det(F)
 };
 
 /// Build C, J and the strain derivatives from local kinematics at radius R.
-Kinematics compute_kinematics(const double xi[6], double R) {
-  const double rho = xi[0], drho = xi[1], dphi = xi[2];
-  const double beta = xi[3], eps = xi[4], deta = xi[5];
-  const double a = 1.0 + drho;      // radial stretch F_RR
-  const double b = 1.0 + rho / R;   // circumferential stretch F_ThTh
-  const double e = 1.0 + eps;       // longitudinal stretch F_ZZ
+template <typename T>
+Kinematics<T> compute_kinematics(const T xi[6], double R) {
+  const T rho = xi[0], drho = xi[1], dphi = xi[2];
+  const T beta = xi[3], eps = xi[4], deta = xi[5];
+  const T a = 1.0 + drho;      // radial stretch F_RR
+  const T b = 1.0 + rho / R;   // circumferential stretch F_ThTh
+  const T e = 1.0 + eps;       // longitudinal stretch F_ZZ
 
-  Kinematics k;
+  Kinematics<T> k;
   // Right Cauchy-Green tensor in the orthonormal (e_R, e_Th, e_Z) basis.
-  const double C00 = a * a + (R * b * dphi) * (R * b * dphi) + deta * deta;
-  const double C11 = b * b;
-  const double C22 = (R * b * beta) * (R * b * beta) + e * e;
-  const double C01 = R * b * b * dphi;
-  const double C02 = R * R * b * b * dphi * beta + deta * e;
-  const double C12 = R * b * b * beta;
+  const T C00 = a * a + (R * b * dphi) * (R * b * dphi) + deta * deta;
+  const T C11 = b * b;
+  const T C22 = (R * b * beta) * (R * b * beta) + e * e;
+  const T C01 = R * b * b * dphi;
+  const T C02 = R * R * b * b * dphi * beta + deta * e;
+  const T C12 = R * b * b * beta;
   k.C << C00, C01, C02, C01, C11, C12, C02, C12, C22;
   k.J = a * b * e;
 
@@ -70,7 +98,7 @@ Kinematics compute_kinematics(const double xi[6], double R) {
 
   // dE/drho (with d b / d rho = 1/R)
   {
-    Matrix3d& m = k.dE[0];
+    Mat3<T>& m = k.dE[0];
     m(0, 0) = R * b * dphi * dphi;
     m(1, 1) = b / R;
     m(2, 2) = R * b * beta * beta;
@@ -82,27 +110,27 @@ Kinematics compute_kinematics(const double xi[6], double R) {
   k.dE[1](0, 0) = a;
   // dE/dphi'
   {
-    Matrix3d& m = k.dE[2];
+    Mat3<T>& m = k.dE[2];
     m(0, 0) = R * R * b * b * dphi;
     m(0, 1) = m(1, 0) = 0.5 * R * b * b;
     m(0, 2) = m(2, 0) = 0.5 * R * R * b * b * beta;
   }
   // dE/dbeta
   {
-    Matrix3d& m = k.dE[3];
+    Mat3<T>& m = k.dE[3];
     m(2, 2) = R * R * b * b * beta;
     m(0, 2) = m(2, 0) = 0.5 * R * R * b * b * dphi;
     m(1, 2) = m(2, 1) = 0.5 * R * b * b;
   }
   // dE/deps
   {
-    Matrix3d& m = k.dE[4];
+    Mat3<T>& m = k.dE[4];
     m(2, 2) = e;
     m(0, 2) = m(2, 0) = 0.5 * deta;
   }
   // dE/deta'
   {
-    Matrix3d& m = k.dE[5];
+    Mat3<T>& m = k.dE[5];
     m(0, 0) = deta;
     m(0, 2) = m(2, 0) = 0.5 * e;
   }
@@ -110,10 +138,12 @@ Kinematics compute_kinematics(const double xi[6], double R) {
 }
 
 /// Myofiber structural tensor e_F (x) e_F at helix angle alpha (\cite genet23
-/// Eq. 22). e_F lies in the circumferential-longitudinal plane.
-inline Matrix3d fiber_tensor(double alpha) {
+/// Eq. 22). e_F lies in the circumferential-longitudinal plane. The angle is a
+/// fixed geometric quantity, so it is evaluated in double and cast to T.
+template <typename T>
+inline Mat3<T> fiber_tensor(double alpha) {
   const double ca = std::cos(alpha), sa = std::sin(alpha);
-  Vector3d ef(0.0, ca, sa);
+  Vec3<T> ef(T(0.0), T(ca), T(sa));
   return ef * ef.transpose();
 }
 
@@ -124,77 +154,79 @@ inline Matrix3d fiber_tensor(double alpha) {
  * (incompressibility penalty) + Sigma^v (viscous, Eq. 28) + Sigma^a (active
  * fiber stress, Eq. 29).
  */
-Matrix3d compute_stress(const Kinematics& k, const double xidot[6],
-                        const ActiveInput& act, double alpha,
-                        const MatParams& p) {
-  const Matrix3d& C = k.C;
-  const double J = k.J;
-  const Matrix3d Cinv = C.inverse();
-  const Matrix3d I = Matrix3d::Identity();
-  const Matrix3d M = fiber_tensor(alpha);
+template <typename T>
+Mat3<T> compute_stress(const Kinematics<T>& k, const T xidot[6],
+                       const ActiveInput& act, double alpha,
+                       const MatParams& p) {
+  const Mat3<T>& C = k.C;
+  const T J = k.J;
+  const Mat3<T> Cinv = C.inverse();
+  const Mat3<T> I = Mat3<T>::Identity();
+  const Mat3<T> M = fiber_tensor<T>(alpha);
 
-  const double I1 = C.trace();
-  const double trC2 = (C.array() * C.array()).sum();
-  const double I2 = 0.5 * (I1 * I1 - trC2);
-  const double I4 = (C * M).trace();  // e_F . C . e_F
+  const T I1 = C.trace();
+  const T trC2 = (C.array() * C.array()).sum();
+  const T I2 = 0.5 * (I1 * I1 - trC2);
+  const T I4 = (C * M).trace();  // e_F . C . e_F
 
-  const double Jm23 = std::pow(J, -2.0 / 3.0);
-  const double Jm43 = Jm23 * Jm23;
-  const double I1b = Jm23 * I1;
-  const double I2b = Jm43 * I2;
-  const double I4b = Jm23 * I4;
+  const T Jm23 = std::pow(J, -2.0 / 3.0);
+  const T Jm43 = Jm23 * Jm23;
+  const T I1b = Jm23 * I1;
+  const T I2b = Jm43 * I2;
+  const T I4b = Jm23 * I4;
   (void)I2b;  // reduced invariant I2b enters only through its derivative below
 
   // Derivatives of the strain energy w.r.t. the isochoric invariants. The
   // exponent is clamped to keep values finite for non-physical trial states
   // (e.g. during sparsity-pattern setup); physical arguments are small.
-  const double a1 = p.C4 * (I1b - 3.0) * (I1b - 3.0);
-  const double a4 = p.C6 * (I4b - 1.0) * (I4b - 1.0);
-  const double w1 =
-      p.C1 + 2.0 * p.C3 * p.C4 * (I1b - 3.0) * std::exp(std::min(a1, 300.0));
-  const double w2 = p.C2;
-  const double w4 =
-      2.0 * p.C5 * p.C6 * (I4b - 1.0) * std::exp(std::min(a4, 300.0));
+  const T a1 = p.C4 * (I1b - 3.0) * (I1b - 3.0);
+  const T a4 = p.C6 * (I4b - 1.0) * (I4b - 1.0);
+  const T w1 =
+      p.C1 + 2.0 * p.C3 * p.C4 * (I1b - 3.0) * std::exp(clamp_max(a1, 300.0));
+  const T w2 = T(p.C2);
+  const T w4 =
+      2.0 * p.C5 * p.C6 * (I4b - 1.0) * std::exp(clamp_max(a4, 300.0));
 
   // d(isochoric invariant)/dC
-  const Matrix3d dI1b = Jm23 * (I - (I1 / 3.0) * Cinv);
-  const Matrix3d dI2b = Jm43 * (I1 * I - C - (2.0 / 3.0) * I2 * Cinv);
-  const Matrix3d dI4b = Jm23 * (M - (I4 / 3.0) * Cinv);
+  const Mat3<T> dI1b = Jm23 * (I - (I1 / 3.0) * Cinv);
+  const Mat3<T> dI2b = Jm43 * (I1 * I - C - (2.0 / 3.0) * I2 * Cinv);
+  const Mat3<T> dI4b = Jm23 * (M - (I4 / 3.0) * Cinv);
 
-  Matrix3d Sd = 2.0 * (w1 * dI1b + w2 * dI2b + w4 * dI4b);   // deviatoric
-  Matrix3d Sb = p.kappa * (J - 1.0) * J * Cinv;              // bulk (penalty)
+  Mat3<T> Sd = 2.0 * (w1 * dI1b + w2 * dI2b + w4 * dI4b);   // deviatoric
+  Mat3<T> Sb = p.kappa * (J - 1.0) * J * Cinv;              // bulk (penalty)
 
-  Matrix3d Edot = Matrix3d::Zero();                          // viscous
+  Mat3<T> Edot = Mat3<T>::Zero();                           // viscous
   for (int m = 0; m < 6; m++) Edot += k.dE[m] * xidot[m];
-  Matrix3d Sv = p.gamma * Edot;
+  Mat3<T> Sv = p.gamma * Edot;
 
   // active fiber stress magnitude
-  double sigma_act;
+  T sigma_act;
   if (act.bcs) {
     // sigma_1D = (tau_c + mu * e_c_dot) / (1 + e_fib), 1 + e_fib = sqrt(I4).
     // Written via the fiber tension tau_c + mu*e_c_dot (= T_fib) so the stiff
     // series stiffness k_s stays out of the mechanical residual.
     sigma_act = (act.tauc + act.mu * act.ecdot) / std::sqrt(I4);
   } else {
-    sigma_act = act.tau;
+    sigma_act = T(act.tau);
   }
-  Matrix3d Sa = sigma_act * M;
+  Mat3<T> Sa = sigma_act * M;
 
   return Sd + Sb + Sv + Sa;
 }
 
 /// Generalized internal forces g_k = Sigma : dE/dxi_k at an integration point.
-void compute_g(const double xi[6], const double xidot[6],
-               const ActiveInput& act, double R, double alpha,
-               const MatParams& p, double g[6]) {
-  Kinematics k = compute_kinematics(xi, R);
-  Matrix3d S = compute_stress(k, xidot, act, alpha, p);
-  for (int i = 0; i < 6; i++) g[i] = contract(S, k.dE[i]);
+template <typename T>
+void compute_g(const T xi[6], const T xidot[6], const ActiveInput& act,
+               double R, double alpha, const MatParams& p, T g[6]) {
+  Kinematics<T> k = compute_kinematics<T>(xi, R);
+  Mat3<T> S = compute_stress<T>(k, xidot, act, alpha, p);
+  for (int i = 0; i < 6; i++) g[i] = contract<T>(S, k.dE[i]);
 }
 
 /// BCS Frank-Starling force-length function n_0(e_c).
-inline double frank_starling(double e_c, double center, double width) {
-  const double z = (e_c - center) / width;
+template <typename T>
+inline T frank_starling(T e_c, double center, double width) {
+  const T z = (e_c - center) / width;
   return std::exp(-0.5 * z * z);
 }
 
@@ -206,15 +238,16 @@ struct BcsParams {
 /// Residuals of the three BCS internal-variable ODEs (Genet Eqs. 32-33 /
 /// Chapelle Eq. 9) at a quadrature point. a = [e_c, tau_c, k_c], ad = its rate;
 /// the contractile-element strain rate is e_c_dot = ad[0].
-void bcs_residual(const double a[3], const double ad[3], double e_fib,
+template <typename T>
+void bcs_residual(const T a[3], const T ad[3], T e_fib,
                   double nu_abs, double nu_plus, const BcsParams& bp,
-                  double res[3]) {
-  const double ecdot = ad[0];
+                  T res[3]) {
+  const T ecdot = ad[0];
   // Smoothed |e_c dot| (eps ~ 1e-2 /s regularizes the force-velocity kink so
-  // Newton/its finite-difference tangent behave; negligible vs |nu| physically).
-  const double abs_ecd = std::sqrt(ecdot * ecdot + 1e-4);
-  const double n0 = frank_starling(a[0], bp.n0_center, bp.n0_width);
-  const double decay = nu_abs + bp.alpha * abs_ecd;
+  // Newton and its complex-step tangent behave; negligible vs |nu| physically).
+  const T abs_ecd = std::sqrt(ecdot * ecdot + 1e-4);
+  const T n0 = frank_starling<T>(a[0], bp.n0_center, bp.n0_width);
+  const T decay = nu_abs + bp.alpha * abs_ecd;
   // series-spring force balance: mu * e_c_dot = k_s (e_fib - e_c) - tau_c
   res[0] = ecdot - (bp.k_s * (e_fib - a[0]) - a[1]) / bp.mu;
   // tau_c dot = -decay*tau_c + e_c_dot*k_c + n0*sigma0*nu_+
@@ -407,26 +440,34 @@ void ChamberCylinder::update_solution(
       ai.tau = tau;
     }
 
-    // Base forces, active/viscous derivatives, and FD material+geometric tangent.
-    Kinematics kin = compute_kinematics(xi, pt.R);
-    Matrix3d M = fiber_tensor(pt.alpha);
-    Matrix3d S = compute_stress(kin, xidot, ai, pt.alpha, p);
+    // Base (double) forces plus the analytic active/viscous rate derivatives.
+    Kinematics<double> kin = compute_kinematics<double>(xi, pt.R);
+    Matrix3d M = fiber_tensor<double>(pt.alpha);
+    Matrix3d S = compute_stress<double>(kin, xidot, ai, pt.alpha, p);
     const double I4q = (kin.C * M).trace();  // fiber invariant e_F . C . e_F
     double g[6], dgdtau[6], Kd[6][6], K[6][6];
     for (int i = 0; i < 6; i++) {
-      g[i] = contract(S, kin.dE[i]);
-      dgdtau[i] = contract(M, kin.dE[i]);
-      for (int j = 0; j < 6; j++) Kd[i][j] = p.gamma * contract(kin.dE[i], kin.dE[j]);
+      g[i] = contract<double>(S, kin.dE[i]);
+      dgdtau[i] = contract<double>(M, kin.dE[i]);
+      for (int j = 0; j < 6; j++)
+        Kd[i][j] = p.gamma * contract<double>(kin.dE[i], kin.dE[j]);
     }
-    for (int m = 0; m < 6; m++) {
-      const double hh = 1e-7 * (1.0 + std::abs(xi[m]));
-      double xip[6], xim[6], gp[6], gm[6];
-      for (int i = 0; i < 6; i++) xip[i] = xim[i] = xi[i];
-      xip[m] += hh;
-      xim[m] -= hh;
-      compute_g(xip, xidot, ai, pt.R, pt.alpha, p, gp);
-      compute_g(xim, xidot, ai, pt.R, pt.alpha, p, gm);
-      for (int k = 0; k < 6; k++) K[k][m] = (gp[k] - gm[k]) / (2.0 * hh);
+    // Complex-step material + geometric tangent K[k][m] = d g[k] / d xi[m].
+    // A tiny imaginary perturbation gives the derivative from Im(g)/h with no
+    // subtractive cancellation (rates held fixed; their tangent is Kd above).
+    {
+      const double h = 1e-30;
+      cplx xic[6], xidotc[6], gc[6];
+      for (int i = 0; i < 6; i++) {
+        xic[i] = xi[i];
+        xidotc[i] = xidot[i];
+      }
+      for (int m = 0; m < 6; m++) {
+        xic[m] += cplx(0.0, h);
+        compute_g<cplx>(xic, xidotc, ai, pt.R, pt.alpha, p, gc);
+        for (int k = 0; k < 6; k++) K[k][m] = std::imag(gc[k]) / h;
+        xic[m] = xi[m];
+      }
     }
 
     // Active-DOF coupling of the mechanical forces: simple model couples to the
@@ -489,26 +530,30 @@ void ChamberCylinder::update_solution(
       double a[3] = {Y(i_ec(q)), Y(i_tauc(q)), Y(i_kc(q))};
       double ad[3] = {Yd(i_ec(q)), Yd(i_tauc(q)), Yd(i_kc(q))};
       double Ra[3];
-      bcs_residual(a, ad, e_fib, act, act_plus, bp, Ra);
+      bcs_residual<double>(a, ad, e_fib, act, act_plus, bp, Ra);
       for (int i = 0; i < 3; i++) Cloc[erow[i]] += Ra[i];
-      // FD tangents w.r.t. the local active state (dC_dy) and rates (dC_dydot).
-      for (int jj = 0; jj < 3; jj++) {
-        const double ha = 1e-7 * (1.0 + std::abs(a[jj]));
-        double ap[3], am[3], Rp[3], Rm[3];
-        for (int t = 0; t < 3; t++) ap[t] = am[t] = a[t];
-        ap[jj] += ha; am[jj] -= ha;
-        bcs_residual(ap, ad, e_fib, act, act_plus, bp, Rp);
-        bcs_residual(am, ad, e_fib, act, act_plus, bp, Rm);
-        for (int ii = 0; ii < 3; ii++)
-          Kat(erow[ii], avar[jj]) += (Rp[ii] - Rm[ii]) / (2.0 * ha);
-        const double hd = 1e-7 * (1.0 + std::abs(ad[jj]));
-        double adp[3], adm[3];
-        for (int t = 0; t < 3; t++) adp[t] = adm[t] = ad[t];
-        adp[jj] += hd; adm[jj] -= hd;
-        bcs_residual(a, adp, e_fib, act, act_plus, bp, Rp);
-        bcs_residual(a, adm, e_fib, act, act_plus, bp, Rm);
-        for (int ii = 0; ii < 3; ii++)
-          Kdat(erow[ii], avar[jj]) += (Rp[ii] - Rm[ii]) / (2.0 * hd);
+      // Complex-step tangents w.r.t. the local active state (dC_dy) and its
+      // rates (dC_dydot). The regularized |e_c dot| makes the force-velocity
+      // decay smooth, so Im(R)/h is the exact tangent even for large bp.alpha.
+      {
+        const double h = 1e-30;
+        cplx ac[3], adc[3], Rc[3];
+        for (int t = 0; t < 3; t++) {
+          ac[t] = a[t];
+          adc[t] = ad[t];
+        }
+        for (int jj = 0; jj < 3; jj++) {
+          ac[jj] += cplx(0.0, h);
+          bcs_residual<cplx>(ac, adc, cplx(e_fib), act, act_plus, bp, Rc);
+          for (int ii = 0; ii < 3; ii++)
+            Kat(erow[ii], avar[jj]) += std::imag(Rc[ii]) / h;
+          ac[jj] = a[jj];
+          adc[jj] += cplx(0.0, h);
+          bcs_residual<cplx>(ac, adc, cplx(e_fib), act, act_plus, bp, Rc);
+          for (int ii = 0; ii < 3; ii++)
+            Kdat(erow[ii], avar[jj]) += std::imag(Rc[ii]) / h;
+          adc[jj] = ad[jj];
+        }
       }
       // Only the e_c ODE couples to the wall kinematics, through the fiber
       // strain: dR_ec/de_fib = -k_s/mu, de_fib/dxi_m = dgdtau[m]/sqrt(I4). The
