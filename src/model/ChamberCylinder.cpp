@@ -53,6 +53,8 @@ struct ActiveInput {
   double tauc = 0.0;   ///< BCS active bond stress tau_c
   double ecdot = 0.0;  ///< BCS contractile-element strain rate
   double mu = 0.0;     ///< BCS active dissipation
+  double i4pow = 0.5;  ///< sigma_1D = T_fib / I4^i4pow; 0.5 = Genet Eq. 30
+                       ///< (T_fib/(1+e_fib)), 1.0 = Eq. 59 limit (T_fib/I4)
 };
 
 /// Full contraction A:B of two symmetric 3x3 tensors (no conjugation, so it is
@@ -207,7 +209,7 @@ Mat3<T> compute_stress(const Kinematics<T>& k, const T xidot[6],
     // sigma_1D = (tau_c + mu * e_c_dot) / (1 + e_fib), 1 + e_fib = sqrt(I4).
     // Written via the fiber tension tau_c + mu*e_c_dot (= T_fib) so the stiff
     // series stiffness k_s stays out of the mechanical residual.
-    sigma_act = (act.tauc + act.mu * act.ecdot) / std::sqrt(I4);
+    sigma_act = (act.tauc + act.mu * act.ecdot) / std::pow(I4, act.i4pow);
   } else {
     sigma_act = T(act.tau);
   }
@@ -493,6 +495,7 @@ void ChamberCylinder::update_solution(
   bp.sigma0 = sigma_max;
   bp.n0_center = parameters[global_param_ids[ParamId::n0_center]];
   bp.n0_width = parameters[global_param_ids[ParamId::n0_width]];
+  const double i4pow = parameters[global_param_ids[ParamId::active_i4pow]];
 
   // Gather block DOFs and their rates.
   auto Y = [&](int lv) { return y[global_var_ids[lv]]; };
@@ -533,6 +536,7 @@ void ChamberCylinder::update_solution(
     // stress from the fiber stretch internally.
     ActiveInput ai;
     ai.bcs = use_bcs;
+    ai.i4pow = i4pow;
     if (use_bcs) {
       ai.tauc = Y(i_tauc(q));
       ai.ecdot = Yd(i_ec(q));
@@ -575,7 +579,8 @@ void ChamberCylinder::update_solution(
     // global tau (d sigma_a/d tau = 1); BCS couples to this point's tau_c via
     // d sigma_1D/d tau_c = 1/(1 + e_fib) = 1/sqrt(I4).
     const int active_col = use_bcs ? i_tauc(q) : i_tau();
-    const double active_coef = use_bcs ? (1.0 / std::sqrt(I4q)) : 1.0;
+    const double i4denom = std::pow(I4q, i4pow);  // sigma_1D = T_fib / I4^i4pow
+    const double active_coef = use_bcs ? (1.0 / i4denom) : 1.0;
 
     // Row (equation) and column (variable) contributions of each local force.
     // xi index: 0=rho(N), 1=rho'(dN), 2=phi'(dN), 3=beta, 4=eps, 5=eta'(dN).
@@ -611,7 +616,7 @@ void ChamberCylinder::update_solution(
         Kat(re, active_col) += rwt * active_coef * dgdtau[k];
         // BCS: sigma_1D also depends on e_c_dot via the mu*e_c_dot term.
         if (use_bcs)
-          Kdat(re, i_ec(q)) += rwt * (bp.mu / std::sqrt(I4q)) * dgdtau[k];
+          Kdat(re, i_ec(q)) += rwt * (bp.mu / i4denom) * dgdtau[k];
         for (int m = 0; m < 6; m++) {
           for (int ci = 0; ci < cn[m]; ci++) {
             const int cv = cvr[m][ci];

@@ -135,18 +135,36 @@ passive curve does reach 137 mL at 0.9 kPa (§3 RESOLVED), so this is a
 *dynamic* filling limit (finite diastole + mitral-valve throttling near ΔP≈0),
 tied to the temporal scheme rather than the passive material.
 
-### OPEN #5 — sensitivity peak-pressure gaps (Figs 8, 9)
-From the sweep overlays (`scripts/ChamberCylinder_figures.py`): twist tracks [G]
-almost exactly (twist ∝ aspect ratio, Fig 6; twist vs fiber angle, Fig 9), and
-peak pressure reproduces the **±60° fiber optimum** (Fig 9) — but two magnitude
-gaps remain: (a) peak pressure sits ~1 kPa below [G] across the fiber sweep
-(~11.7 vs 12.7 kPa at ±60°) — **partly a mesh artifact**, since the sweeps use
-`ne=8` for speed whereas the `ne=12` Fig-5 baseline reaches 12.8 kPa exactly; and
-(b) peak pressure is **flat with wall volume** (~11.6 kPa) where [G] rises
-12.2→13.3 kPa (Fig 8) — the genuine trend miss. With `C_valve=0` the systolic
-pressure is set largely by the arterial afterload rather than by wall mechanics,
-so added wall thickness does not raise peak pressure. (Testing the
-energy-preserving scheme did **not** recover this — see OPEN #6.)
+### OPEN #5 — Fig 8 flat wall-volume trend: DIAGNOSED (downstream of filling)
+Twist tracks [G] almost exactly (Figs 6, 9) and the **±60° fiber pressure
+optimum** is reproduced (Fig 9). The flat wall-volume→peak-P trend (~11.7 kPa vs
+[G]'s rising 12.2→13.3, Fig 8) is **not** a formulation/mechanics difference: the
+ventricle's **intrinsic** capacity *does* rise with wall volume — against a rigid
+14 kPa afterload the peak ventricular pressure climbs 14.7→15.3→15.6 kPa as wall
+volume goes 117→143 mL, exactly the [G] direction. In the full circulation it is
+masked because thicker walls **under-fill more** (EDV 110→94 mL with the constant
+`P_at`), so stroke volume and the Windkessel afterload drop. So Fig 8 is
+downstream of the dynamic-filling limit (OPEN #4), not a new difference. (The
+`σ_1D` form, §3-below, does not change it either; nor did the energy-preserving
+scheme, OPEN #6.) The residual ~1 kPa in the fiber sweep is partly mesh (`ne=8`
+sweeps vs the `ne=12` baseline that reaches 12.8 kPa).
+
+### OPEN #7 (non-temporal) — active-stress form `σ_1D` is ambiguous in [G]
+[G] Eq. 30 gives `σ_1D = T_fib/(1+e_fib) = T_fib/√I4` (implemented, `active_i4pow=0.5`
+default), but the discrete Eq. 59 (from ref [33], which [G]'s code runs) has
+continuous limit `σ_1D = T_fib/(1+2 eF·E·eF) = T_fib/I4` (`active_i4pow=1.0`) —
+the form for which `T_fib` is the true (Cauchy) fiber stress. This is a **genuine
+~7% active-stress difference internal to the paper**, and the two forms trade off
+against Fig 5:
+
+| `active_i4pow` | peak P | twist | EF | ESV |
+|---|---|---|---|---|
+| 0.5 (Eq. 30) | **12.8** | **20°** | 49% | 63 |
+| 1.0 (Eq. 59) | 11.9 | 25° | **46%** | 66 |
+| Genet Fig 5 | 12.8 | ~20° | 46% | 74 |
+
+Kept at 0.5 (matches the headline peak pressure and twist); 1.0 matches EF/ESV.
+Neither dominates — it is a real, characterized formulation ambiguity, not a bug.
 
 ### OPEN #6 — temporal scheme: why the plain midpoint is not enough
 [G]'s temporal scheme has four ingredients: (i) midpoint for the equilibrium,

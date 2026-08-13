@@ -169,6 +169,11 @@
  *   kg/m^3 = the paper's 1 kg/L); only used when `use_inertia = 1`
  * * `use_inertia` - 0 = quasi-static (default), 1 = full dynamics with the
  *   consistent mass matrix and velocity companion DOFs
+ * * `active_i4pow` - exponent in the active 2nd-PK stress
+ *   \f$\sigma_{1D}=T_\text{fib}/I_4^{\,p}\f$ (optional, default 0.5). \f$p=0.5\f$
+ *   is \cite genet23 Eq. 30 (\f$T_\text{fib}/(1+e_\text{fib})\f$); \f$p=1\f$ is
+ *   the Eq. 59 discrete-scheme limit (\f$T_\text{fib}/I_4\f$). The paper is
+ *   internally inconsistent between these two; they differ by ~7%.
  *
  * ### Internal variables
  *
@@ -220,7 +225,8 @@ class ChamberCylinder : public Block {
     n0_width = 26,      // BCS Frank-Starling curve width (strain)
     c_valve = 27,       // cavity/valve compliance (genet23 Eq. 36)
     density = 28,       // reference mass density rho_0 (inertia, genet23 Eq. 18)
-    use_inertia = 29    // 0 = quasi-static (default), 1 = full dynamics (inertia)
+    use_inertia = 29,   // 0 = quasi-static (default), 1 = full dynamics (inertia)
+    active_i4pow = 30   // sigma_1D = T_fib/I4^p; 0.5 = Eq.30, 1.0 = Eq.59 limit
   };
 
   /**
@@ -260,7 +266,8 @@ class ChamberCylinder : public Block {
                {"n0_width", InputParameter(true, false, true, 1000.0)},
                {"c_valve", InputParameter(true, false, true, 0.0)},
                {"density", InputParameter(true, false, true, 1000.0)},
-               {"use_inertia", InputParameter(true, false, true, 0.0)}}) {}
+               {"use_inertia", InputParameter(true, false, true, 0.0)},
+               {"active_i4pow", InputParameter(true, false, true, 0.5)}}) {}
 
   /**
    * @brief Set up the degrees of freedom (DOF) of the block
