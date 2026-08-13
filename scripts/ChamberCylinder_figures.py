@@ -26,7 +26,9 @@ kPa = 1e-3
 
 
 def run(geom=None, ne=12, ncycle=8):
-    cfg = G.build(P_at=900.0, bcs_alpha=12.0, ne=ne, ncycle=ncycle)
+    # PhysioBlocks atrial-kick P_at waveform + venous P_vs (see discrepancies doc).
+    cfg = G.build(bcs_alpha=12.0, ne=ne, ncycle=ncycle,
+                  atrial_kick=True, P_vs=G.PVS_PHYSIOBLOCKS)
     vv = cfg["vessels"][1]["zero_d_element_values"]
     vv["c_valve"] = 0.0  # exact C_valve over-buffers the peak (see discrepancies doc)
     if geom:

@@ -30,10 +30,20 @@ MAT = dict(C1=7.0, C2=0.0, C3=700.0, C4=2.0, C5=50.0, C6=4.0, gamma=70.0,
 KAPPA = 1e7
 SIGMA0 = 65e3  # Genet Table 1 "Maximum active stress" sigma_0
 
+# Atrial and venous pressures are prescribed inputs Genet does not tabulate; the
+# MEDISIM PhysioBlocks reference (references/full_configurations/
+# spherical_heart_sim.jsonc) gives the concrete values. P_at is a waveform
+# (baseline 450 Pa, pre-systolic atrial kick to 900 Pa peaking just before
+# systole onset t_sys~0.13 s), and the systemic venous pressure P_vs = 1600 Pa.
+PVS_PHYSIOBLOCKS = 1600.0
+PAT_KICK_T = [0.0, 0.03, 0.06, 0.13, 0.17, 0.80]
+PAT_KICK_P = [450.0, 450.0, 900.0, 900.0, 450.0, 450.0]
+
 
 def build(P_at=900.0, P_vs=0.0, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
           tsys=0.13, tdias=0.45, steepness=0.02, integrator="stiff",
-          ncycle=8, aortic_Rmax=None, active_model=1, n0_flat=True):
+          ncycle=8, aortic_Rmax=None, active_model=1, n0_flat=True,
+          atrial_kick=False):
     aortic_Rmax = aortic_Rmax if aortic_Rmax is not None else K_iso_inv
     vv = dict(GEOM); vv.update(MAT); vv["kappa"] = KAPPA
     vv.update(dict(sigma_max=sigma_max, alpha_max=30.0, alpha_min=-30.0,
@@ -49,7 +59,8 @@ def build(P_at=900.0, P_vs=0.0, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
     cfg = {
         "boundary_conditions": [
             {"bc_name": "ATRIUM", "bc_type": "PRESSURE",
-             "bc_values": {"P": [P_at, P_at], "t": [0.0, 0.8]}},
+             "bc_values": ({"P": list(PAT_KICK_P), "t": list(PAT_KICK_T)}
+                           if atrial_kick else {"P": [P_at, P_at], "t": [0.0, 0.8]})},
             {"bc_name": "VENOUS", "bc_type": "PRESSURE",
              "bc_values": {"P": [P_vs, P_vs], "t": [0.0, 0.8]}},
         ],

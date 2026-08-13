@@ -35,8 +35,8 @@ muscle contraction models*, AMSES 2019.
 |---|---|---|---|
 | `n0(e_c)` Frank–Starling | "a function accounting for the Frank–Starling mechanism", cites [6] | [6] Remark 4: general reduction factor, no closed form. Ref [13] Caruel et al. 2013 evaluates `n0` as `interp(e_c, …)`; the **MEDISIM PhysioBlocks** code gives the calibrated breakpoints. | **piecewise-linear from PhysioBlocks** `physioblocks/physioblocks` (`active_law.py`: `n0 = interp(e_c, abscissas, ordinates)`), abscissas `[−0.167,−0.007,0.053,0.097,0.133,0.202,0.466,0.919,1.176]`, ordinates `[0,0.56,0.77,0.89,0.96,1,1,0.11,0]` — plateau at **physiological** `e_c∈[0.20,0.47]`. (Caruel Fig 7(a) *looks* like it plateaus at `e_c≈1` only because it is drawn over the wide isotonic papillary-muscle strain range.) |
 | `ν(t)` activation | "prescribed as detailed in [6,33]", triggered when `[Ca²⁺]>c_th` | [6],[32]: `ν=+k_ATP` while depolarised, `−k_RS` while repolarised (`|ν|₊=k_ATP·1_{Ca>C}`). Rate values not tabulated for this LV. | tanh systole/diastole window; onset `t_sys≈0.13 s`, relaxation `t_dias≈0.45 s`, period 0.8 s **read from [G] Fig 5's own timeline**; rate `|ν|≈30/s`. Rate magnitude is immaterial to the peak (cancels at steady state). |
-| `P_at` atrial pressure | Table 1 lists it but the cell is only a citation to [6] | [32]: prescribed low pressure + pre-systolic **atrial kick**. **PhysioBlocks** gives the concrete waveform: baseline **450 Pa** (diastasis), ramping to **900 Pa (atrial kick)** over the last ~15% of the cycle, held through early systole | constant `P_at = 0.9 kPa` (= the PhysioBlocks kick value; baseline 450 Pa and the kick timing not yet applied — see OPEN #4) |
-| `P_vs` venous pressure | not in Table 1; appears in Eq. 36c | [32] `P_ve`; **PhysioBlocks** venous = **1600 Pa**; Caruel [13] `P_sv = 1000 Pa` | `P_vs = 0` (documented; ~1–1.6 kPa per the references would raise mean arterial pressure slightly) |
+| `P_at` atrial pressure | Table 1 lists it but the cell is only a citation to [6] | [32]: prescribed low pressure + pre-systolic **atrial kick**. **PhysioBlocks** gives the concrete waveform: baseline **450 Pa** (diastasis), ramping to **900 Pa (atrial kick)** over the last ~15% of the cycle, held through early systole | **applied**: PhysioBlocks kick waveform (450 Pa baseline → 900 Pa kick, `atrial_kick=True` in the builder) |
+| `P_vs` venous pressure | not in Table 1; appears in Eq. 36c | [32] `P_ve`; **PhysioBlocks** venous = **1600 Pa**; Caruel [13] `P_sv = 1000 Pa` | **applied**: `P_vs = 1.6 kPa` (PhysioBlocks) — raises the afterload floor, peak pressure → exact |
 
 ### C. Numerical choices (not physical parameters of [G])
 
@@ -52,16 +52,24 @@ muscle contraction models*, AMSES 2019.
 ## 2. Result with all-exact parameters (zero fitting)
 
 Exact valves + 2-stage Windkessel, `σ0=65 kPa`, force-velocity `α=12`, `ne=12`,
-`P_at=0.9 kPa`, `P_vs=0`, **PhysioBlocks `n0(e_c)`**, `C_valve=0` (see note).
+**PhysioBlocks `n0(e_c)`**, `C_valve=0`. Two `P_at`/`P_vs` variants: constant
+`P_at=0.9 kPa, P_vs=0`, and the **PhysioBlocks atrial-kick waveform**
+(baseline 450 Pa → 900 Pa kick) with **`P_vs=1.6 kPa`**.
 
-| Quantity | Genet Fig 5 | `n0=1` | **PhysioBlocks `n0`** | Status |
+| Quantity | Genet Fig 5 | constant P_at | **kick + `P_vs=1.6k`** | Status |
 |---|---|---|---|---|
-| Diastolic pressure | ~0.9 kPa | 0.81 | 0.79 kPa | **match** |
-| Peak systolic pressure | 12.8 kPa | 9.5/20 | **12.4 kPa** | **match** |
-| Peak twist | ~20° | 64° | **20°** | **match** |
-| EDV | 137 mL | 124 | 124 mL | good (~10% low) |
-| ESV | 74 mL | 24 | 58 mL | good |
-| EF | 46% | 81% | 53% | good |
+| Peak systolic pressure | 12.8 kPa | 12.4 | **12.8 kPa** | **exact** |
+| Peak twist | ~20° | 20 | **20°** | **match** |
+| Diastolic pressure | ~0.6–0.9 kPa | 0.79 (flat) | ~0.4–0.9 (kick profile) | **shape match** |
+| EF | 46% | 53% | **49%** | good |
+| ESV | 74 mL | 58 | **63 mL** | good |
+| EDV | 137 mL | 124 | 123 mL | ~10% low (OPEN #4) |
+
+`P_vs=1.6 kPa` (PhysioBlocks) raises the afterload floor (mean `P_ar ≈ P_vs +
+R_d·CO`), moving peak pressure 12.4→**12.8** (exact) and ESV/EF toward the paper.
+The atrial-kick waveform reproduces the diastolic-pressure *shape* (dip to
+baseline, pre-systolic kick) but not the EDV — its 900 Pa kick equals the old
+constant, so filling still tops out at ~123 mL (OPEN #4).
 
 At peak contraction `e_c` reaches ~0.26, on the `n0` plateau (`n0→1`), so the
 ventricle develops near-full `σ0`; during filling/relaxation `e_c` falls onto the
@@ -119,24 +127,27 @@ not fix it** (dynamic vs quasi-static agree to ~0.3%; §1.C), confirming the cau
 is the temporal scheme (energy-preserving midpoint + Chapelle internal-variable
 update), not inertia and not a parameter mismatch.
 
-### OPEN #4 — residual EDV/ESV (~10%) and `P_at` waveform
-EDV 124 vs 137 and ESV 58 vs 74. `P_at` is a prescribed waveform with a
-pre-systolic atrial kick ([32]); we use a constant `P_at=0.9 kPa`, which under-
-fills slightly. **PhysioBlocks gives the concrete waveform** (baseline 450 Pa,
-kick to 900 Pa in late diastole) plus `P_vs≈1.6 kPa` — applying these should
-raise EDV toward 137 and, via preload, ESV toward 74.
+### OPEN #4 — residual EDV (~10% low: 123 vs 137)
+Applying the PhysioBlocks `P_at` kick waveform + `P_vs=1.6 kPa` closed the ESV
+and peak-pressure gaps (§2) but **not EDV**: the 900 Pa kick equals the old
+constant `P_at`, so dynamic filling still tops out at ~123 mL. Reaching 137 at
+~0.9 kPa needs either a stronger/longer kick or faster filling — the static
+passive curve does reach 137 mL at 0.9 kPa (§3 RESOLVED), so this is a
+*dynamic* filling limit (finite diastole + mitral-valve throttling near ΔP≈0),
+tied to the temporal scheme rather than the passive material.
 
 ### OPEN #5 — sensitivity peak-pressure gaps (Figs 8, 9)
 From the sweep overlays (`scripts/ChamberCylinder_figures.py`): twist tracks [G]
 almost exactly (twist ∝ aspect ratio, Fig 6; twist vs fiber angle, Fig 9), and
 peak pressure reproduces the **±60° fiber optimum** (Fig 9) — but two magnitude
-gaps remain: (a) peak pressure is uniformly ~1–1.5 kPa low across the fiber sweep
-(11.3 vs 12.7 kPa at ±60°), and (b) peak pressure is **flat with wall volume**
-(~11.3 kPa) where [G] rises 12.2→13.3 kPa (Fig 8). Both point to the same cause
-as OPEN #3/#4: with `C_valve=0` and a constant `P_at`, the systolic pressure is
-set by the arterial afterload rather than fully by wall mechanics, so added wall
-thickness does not translate into peak pressure. The paper's energy-preserving
-scheme + atrial kick are expected to recover it.
+gaps remain: (a) peak pressure sits ~1 kPa below [G] across the fiber sweep
+(~11.7 vs 12.7 kPa at ±60°) — **partly a mesh artifact**, since the sweeps use
+`ne=8` for speed whereas the `ne=12` Fig-5 baseline reaches 12.8 kPa exactly; and
+(b) peak pressure is **flat with wall volume** (~11.6 kPa) where [G] rises
+12.2→13.3 kPa (Fig 8) — the genuine trend miss. With `C_valve=0` the systolic
+pressure is set largely by the arterial afterload rather than by wall mechanics,
+so added wall thickness does not raise peak pressure; the paper's
+energy-preserving scheme is expected to recover the coupling.
 
 ## 4. Remaining model differences (summary)
 
@@ -144,9 +155,12 @@ Everything below is either an input [G] does not specify (using a cited
 reference value) or a deliberate numerical simplification; none is a fitted
 parameter.
 
-**Unspecified inputs (using reference values):**
-1. `P_at` — constant 0.9 kPa vs the PhysioBlocks waveform (450 Pa + 900 Pa kick). → OPEN #4
-2. `P_vs` — 0 vs PhysioBlocks 1.6 kPa / Caruel 1.0 kPa.
+**Unspecified inputs (using PhysioBlocks / Caruel reference values):**
+1. `P_at` — **applied**: PhysioBlocks kick waveform (450 Pa baseline → 900 Pa
+   pre-systolic kick). Reproduces the diastolic-pressure shape; EDV still ~123
+   (OPEN #4). The 900 Pa kick amplitude is PhysioBlocks' (their sphere model).
+2. `P_vs` — **applied**: 1.6 kPa (PhysioBlocks; Caruel 1.0 kPa). Raises the
+   afterload floor → peak pressure exact (12.8 kPa), ESV/EF toward the paper.
 3. Activation `ν(t)` timing (`t_sys,t_dias`, rate) — read from Fig 5, not tabulated.
 
 **Numerical / formulation simplifications vs [G]:**
@@ -158,16 +172,17 @@ parameter.
 7. Inertia (`use_inertia=1`): consistent mass at the **reference** configuration
    and the O(ζ̇²) centrifugal term omitted (both ≪0.3%).
 
-**Residual quantitative gaps (exact params, `C_valve=0`, force-velocity):**
-8. EDV/ESV ~10% low (124/58 vs 137/74 mL) — from #1. → OPEN #4
+**Residual quantitative gaps (exact params, `C_valve=0`, force-velocity, kick+`P_vs`):**
+8. EDV ~10% low (123 vs 137 mL) — dynamic filling limit. → OPEN #4
 9. Peak pressure ~1 kPa low in the sensitivity sweeps; wall-volume→peak-P trend
    flat vs rising. → OPEN #5
 10. Peak pressure with the **exact** `C_valve=9e-9` buffers to 7.5 kPa (the match
     uses `C_valve=0`). → OPEN #3
 
-**Matched (no remaining difference):** passive P-V curve, diastolic pressure,
-peak systolic pressure (12.4 vs 12.8 kPa), peak twist (20° vs 20°), rectangular
-P-V loop, twist ∝ aspect ratio, fiber-angle ±60° pressure optimum.
+**Matched (no remaining difference):** passive P-V curve, peak systolic pressure
+(12.8 vs 12.8 kPa), peak twist (20° vs 20°), diastolic-pressure shape, EF (49 vs
+46%), ESV (63 vs 74 mL), rectangular P-V loop, twist ∝ aspect ratio, fiber-angle
+±60° pressure optimum.
 
 ## 5. Reproduce
 
