@@ -1,0 +1,133 @@
+{
+  "description": {
+    "description of test case": "thick-walled cylindrical ventricle (ChamberCylinder, genet23) with the Bestel-Clement-Sorine active law (active_model=1, rigid series-spring limit)"
+  },
+  "boundary_conditions": [
+    {
+      "bc_name": "IN",
+      "bc_type": "PRESSURE",
+      "bc_values": {
+        "P": [
+          2150,
+          2150
+        ],
+        "t": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "bc_name": "OUT",
+      "bc_type": "PRESSURE",
+      "bc_values": {
+        "P": [
+          13332.2,
+          13332.2
+        ],
+        "t": [
+          0,
+          1
+        ]
+      }
+    }
+  ],
+  "simulation_parameters": {
+    "number_of_cardiac_cycles": 5,
+    "number_of_time_pts_per_cardiac_cycle": 500,
+    "steady_initial": false,
+    "output_variable_based": true,
+    "absolute_tolerance": 1e-09,
+    "maximum_nonlinear_iterations": 50,
+    "output_all_cycles": false
+  },
+  "initial_condition": {
+    "pressure_all": 2150.0,
+    "volume:ventricle": 6.476e-05
+  },
+  "vessels": [
+    {
+      "boundary_conditions": {
+        "inlet": "IN"
+      },
+      "vessel_id": 0,
+      "vessel_length": 2.0,
+      "vessel_name": "upstream_vessel",
+      "zero_d_element_type": "BloodVessel",
+      "zero_d_element_values": {
+        "R_poiseuille": 1000000.0,
+        "C": 1e-09
+      }
+    },
+    {
+      "boundary_conditions": {},
+      "vessel_id": 1,
+      "vessel_length": 1.0,
+      "vessel_name": "ventricle",
+      "zero_d_element_type": "ChamberCylinder",
+      "zero_d_element_values": {
+        "Ri": 0.019,
+        "Re": 0.033,
+        "length": 0.0571,
+        "alpha_endo": 60.0,
+        "alpha_epi": -60.0,
+        "C1": 7.0,
+        "C2": 0.0,
+        "C3": 700.0,
+        "C4": 2.0,
+        "C5": 50.0,
+        "C6": 4.0,
+        "kappa": 10000000.0,
+        "gamma": 70.0,
+        "sigma_max": 55000.0,
+        "alpha_max": 30.0,
+        "alpha_min": -30.0,
+        "tsys": 0.17,
+        "tdias": 0.484,
+        "steepness": 0.005,
+        "num_elements": 6,
+        "active_model": 1,
+        "k_0": 260000.0,
+        "bcs_alpha": 0.0
+      }
+    },
+    {
+      "boundary_conditions": {
+        "outlet": "OUT"
+      },
+      "vessel_id": 2,
+      "vessel_length": 1.0,
+      "vessel_name": "downstream_vessel",
+      "zero_d_element_type": "BloodVessel",
+      "zero_d_element_values": {
+        "R_poiseuille": 10000000.0,
+        "C": 1e-09
+      }
+    }
+  ],
+  "valves": [
+    {
+      "type": "ValveTanh",
+      "name": "inlet_valve",
+      "params": {
+        "Rmax": 700000000.0,
+        "Rmin": 0,
+        "Steepness": 0.000575,
+        "upstream_block": "upstream_vessel",
+        "downstream_block": "ventricle"
+      }
+    },
+    {
+      "type": "ValveTanh",
+      "name": "outlet_valve",
+      "params": {
+        "Rmax": 6665000000.0,
+        "Rmin": 0,
+        "Steepness": 0.000575,
+        "upstream_block": "ventricle",
+        "downstream_block": "downstream_vessel"
+      }
+    }
+  ],
+  "junctions": []
+}

@@ -1,0 +1,92 @@
+# Governing equations of the ChamberCylinder block (documentation).
+#
+# Reduced thick-walled cylindrical left-ventricle model of Genet et al. (2023),
+# "Reduced left ventricular dynamics modeling based on a cylindrical
+# assumption", Int. J. Numer. Meth. Biomed. Engng., e3711.
+#
+# Unlike ChamberSphere.yaml (a symbolic residual list for a lumped 0D block),
+# this model is a 1D finite-element problem across the wall thickness. It is
+# therefore assembled numerically in ChamberCylinder.cpp rather than generated
+# symbolically. This file documents the continuous governing equations that the
+# C++ code discretizes; it is NOT a code-generation input.
+
+# --- Kinematic unknowns (Eq. 1) ---
+# Radial fields (discretized with linear finite elements over R in [Ri, Re]):
+#   rho(R)  : radial displacement            r     = R + rho
+#   phi(R)  : in-plane (circumferential) shear
+#   eta(R)  : out-of-plane (longitudinal) shear
+# Global scalars:
+#   beta    : twist per unit length          theta = Theta + beta*Z + phi
+#   eps     : longitudinal strain            z     = (1+eps)*Z + eta
+# Plus per-block scalars: tau (active fiber stress), V (cavity volume),
+# and the shared cavity pressure Pv = Pin = Pout.
+
+# --- Deformation (Eqs. 13-16), a=1+rho', b=1+rho/R, e=1+eps ---
+deformation_gradient: |
+  F = [[ a,        0,   0   ],
+       [ R*b*phi', b,   R*b*beta ],
+       [ eta',     0,   e   ]]        # mixed (e_R, e_Theta, e_Z) basis
+volume_ratio: "J = a * b * e"
+green_lagrange_strain: "E = 0.5 * (F^T F - I)"
+
+# --- Fiber orientation (Eq. 22), helix angle linear through the wall ---
+fiber_direction: |
+  alpha(R) = alpha_endo*(Re-R)/(Re-Ri) + alpha_epi*(R-Ri)/(Re-Ri)
+  e_F = (0, cos(alpha), sin(alpha))         # circumferential-longitudinal plane
+
+# --- Second Piola-Kirchhoff stress split (Eqs. 23-29) ---
+constitutive_law: |
+  Sigma = Sigma_d + Sigma_b + Sigma_v + Sigma_a
+  # deviatoric, transversely isotropic (Eq. 25), isochoric invariants of Cbar=J^{-2/3}C
+  We  = C1*(I1b-3) + C2*(I2b-3) + C3*exp(C4*(I1b-3)^2) + C5*exp(C6*(I4b-1)^2)
+  Sigma_d = dWe/dE
+  # near-incompressible penalty (replaces the mixed Lagrange-multiplier pressure)
+  Sigma_b = kappa*(J-1)*J*Cinv
+  # viscous (Eq. 28)
+  Sigma_v = gamma * Edot
+  # active fiber stress (Eq. 29), Sigma_a = sigma_a * (e_F outer e_F), with the
+  # magnitude sigma_a from one of two selectable models (active_model):
+  #   active_model = 0 (simple, ChamberSphere-style): sigma_a = tau, a single
+  #     activated fiber stress (see the "active" equation below).
+  #   active_model = 1 (Genet BCS, Eqs. 30-33 / Chapelle 2012 Eqs. 9-10):
+  #     sigma_a = sigma_1D = (tau_c + mu e_c_dot)/(1 + e_fib), 1+e_fib=sqrt(I4).
+  #     Per quadrature point, 3 internal vars e_c, tau_c, k_c evolve via
+  #       mu e_c_dot = k_s (e_fib - e_c) - tau_c           (series-spring balance)
+  #       tau_c_dot = -(|nu| + alpha|e_c_dot|) tau_c + e_c_dot k_c + n0(e_c) sigma0 |nu|_+
+  #       k_c_dot   = -(|nu| + alpha|e_c_dot|) k_c   + n0(e_c) k0 |nu|_+
+  #     nu = the same activation a(t) as model 0; n0 = Frank-Starling reduction
+  #     factor (Chapelle Remark 4 leaves it general; a Gaussian here, default ~1).
+  #     Writing sigma_1D via tau_c + mu e_c_dot keeps the stiff k_s (=1e8) out of
+  #     the mechanical residual so it integrates with generalized-alpha. alpha
+  #     defaults to 0 (the |e_c_dot| term over-drives the reduced kinematics;
+  #     the paper's alpha=12 needs their bespoke stiff integrator).
+
+# --- Governing equations ---
+equations:
+  # 1. Internal virtual work = external pressure loading, reduced to 1D over the
+  #    thickness and assembled with finite elements (Eqs. 20, 63, A10; the
+  #    reference cylindrical volume element R dR dTheta dZ is used):
+  #      2*pi*L * integral_{Ri}^{Re} Sigma : dE(zeta_hat) * R dR
+  #        = Pv*2*pi*L*(Ri+rho(Ri))*(1+eps)*rho_hat(Ri)
+  #          + Pv*pi*L*(Ri+rho(Ri))^2 * eps_hat
+  #    tested against rho (per node), phi' (per node), eta' (per node), beta, eps.
+  equilibrium_rho_phi_eta_beta_eps: "2*pi*L * int Sigma:dE R dR - P_external = 0"
+  # 2. Cavity volume (Eq. 4)
+  volume: "V - pi*(Ri+rho(Ri))^2*(1+eps)*L = 0"
+  # 3. Conservation of mass (net inflow drives cavity volume change)
+  mass: "Qin - Qout - dV/dt = 0"
+  # 4. Cavity pressure equality
+  pressure: "Pin - Pout = 0"
+  # 5. Active fiber stress ODE (ChamberSphere-style tanh activation)
+  active: "dtau/dt + a*tau - sigma_max*a_plus = 0"
+  # 6. Rigid-body pins (Sec. 2.4): block Z-translation and Z-rotation
+  pins: "phi(Ri) = 0 ; eta(Ri) = 0"
+
+# Simplifications relative to Genet et al. (2023), consistent with reusing the
+# svZeroDSolver generalized-alpha DAE time integrator instead of the paper's
+# bespoke energy-consistent midpoint / mixed-FE scheme:
+#   - incompressibility via penalty bulk term (kappa) instead of a Lagrange
+#     multiplier pressure field;
+#   - quasi-static: inertia (Sigma_a acceleration term) neglected;
+#   - active contraction uses the simple ChamberSphere activation instead of the
+#     Bestel-Clement-Sorine (tau_c, k_c) model.

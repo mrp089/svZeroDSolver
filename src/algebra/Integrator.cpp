@@ -3,8 +3,12 @@
 
 #include "Integrator.h"
 
-Integrator::Integrator(Model* model, double time_step_size, double rho,
-                       double atol, int max_iter) {
+// ---------------------------------------------------------------------------
+// TimeIntegrator (shared machinery)
+// ---------------------------------------------------------------------------
+
+void TimeIntegrator::init(Model* model, double time_step_size, double rho,
+                          double atol, int max_iter) {
   this->model = model;
   alpha_m = 0.5 * (3.0 - rho) / (1.0 + rho);
   alpha_f = 1.0 / (1.0 + rho);
@@ -23,22 +27,12 @@ Integrator::Integrator(Model* model, double time_step_size, double rho,
   y_af = Eigen::Matrix<double, Eigen::Dynamic, 1>(size);
   ydot_am = Eigen::Matrix<double, Eigen::Dynamic, 1>(size);
 
-  // Make some memory reservations
   system.reserve(model);
 }
 
-// Must declare default constructord and dedtructor
-// because of Eigen.
-Integrator::Integrator() {}
-Integrator::~Integrator() {}
+void TimeIntegrator::clean() { system.clean(); }
 
-void Integrator::clean() {
-  // Cannot be in destructor because dynamically allocated pointers will be lost
-  // when objects are assigned from temporary objects.
-  system.clean();
-}
-
-void Integrator::update_params(double time_step_size) {
+void TimeIntegrator::update_params(double time_step_size) {
   this->time_step_size = time_step_size;
   y_coeff = gamma * time_step_size;
   y_coeff_jacobian = alpha_f * y_coeff;
@@ -46,7 +40,31 @@ void Integrator::update_params(double time_step_size) {
   model->update_time(system, 0.0);
 }
 
-State Integrator::step(const State& old_state, double time) {
+double TimeIntegrator::avg_nonlin_iter() {
+  return (double)n_nonlin_iter / (double)n_iter;
+}
+
+double TimeIntegrator::assemble_residual(const State& old_state,
+                                         const State& new_state) {
+  ydot_am.setZero();
+  y_af.setZero();
+  ydot_am += old_state.ydot + (new_state.ydot - old_state.ydot) * alpha_m;
+  y_af += old_state.y + (new_state.y - old_state.y) * alpha_f;
+  model->update_solution(system, y_af, ydot_am);
+  system.update_residual(y_af, ydot_am);
+  return system.residual.cwiseAbs().maxCoeff();
+}
+
+// ---------------------------------------------------------------------------
+// GeneralizedAlpha (behavior identical to the original Integrator)
+// ---------------------------------------------------------------------------
+
+GeneralizedAlpha::GeneralizedAlpha(Model* model, double time_step_size,
+                                   double rho, double atol, int max_iter) {
+  init(model, time_step_size, rho, atol, max_iter);
+}
+
+State GeneralizedAlpha::step(const State& old_state, double time) {
   // Predictor: Constant y, consistent ydot
   State new_state = State::Zero(size);
   new_state.ydot += old_state.ydot * ydot_init_coeff;
@@ -63,23 +81,13 @@ State Integrator::step(const State& old_state, double time) {
 
   // Non-linear Newton-Raphson iterations
   for (size_t i = 0; i < max_iter; i++) {
-    // Initiator: Evaluate the iterates at the intermediate time levels
-    ydot_am.setZero();
-    y_af.setZero();
-    ydot_am += old_state.ydot + (new_state.ydot - old_state.ydot) * alpha_m;
-    y_af += old_state.y + (new_state.y - old_state.y) * alpha_f;
-
-    // Update solution-dependent element contribitions
-    model->update_solution(system, y_af, ydot_am);
-
-    // Evaluate residual
-    system.update_residual(y_af, ydot_am);
+    // Evaluate residual at the intermediate time levels
+    double res_norm = assemble_residual(old_state, new_state);
 
     // Check termination criterium
-    if (system.residual.cwiseAbs().maxCoeff() < atol) {
+    if (res_norm < atol) {
       break;
     }
-
     // Abort if maximum number of non-linear iterations is reached
     else if (i == max_iter - 1) {
       throw std::runtime_error(
@@ -107,6 +115,112 @@ State Integrator::step(const State& old_state, double time) {
   return new_state;
 }
 
-double Integrator::avg_nonlin_iter() {
-  return (double)n_nonlin_iter / (double)n_iter;
+// ---------------------------------------------------------------------------
+// ConsistentStiffIntegrator (damped Newton + adaptive sub-stepping)
+// ---------------------------------------------------------------------------
+
+ConsistentStiffIntegrator::ConsistentStiffIntegrator(Model* model,
+                                                     double time_step_size,
+                                                     double rho, double atol,
+                                                     int max_iter) {
+  // Use a maximally dissipative spectral radius for stiff (L-stable) damping,
+  // independent of the requested rho.
+  (void)rho;
+  init(model, time_step_size, 0.0, atol, max_iter);
+}
+
+bool ConsistentStiffIntegrator::damped_step(const State& old_state,
+                                            State& new_state, double dt,
+                                            double time) {
+  // Coefficients for this (possibly sub-) step size.
+  y_coeff = gamma * dt;
+  y_coeff_jacobian = alpha_f * y_coeff;
+
+  // Predictor: constant y, consistent ydot.
+  new_state = State::Zero(size);
+  new_state.ydot += old_state.ydot * ydot_init_coeff;
+  new_state.y += old_state.y;
+
+  model->update_time(system, time + alpha_f * dt);
+
+  for (int i = 0; i < max_iter; i++) {
+    double res_norm = assemble_residual(old_state, new_state);
+    if (res_norm < atol) {
+      return true;
+    }
+
+    system.update_jacobian(alpha_m, y_coeff_jacobian);
+    system.solve();
+    model->post_solve(new_state.y);
+    n_nonlin_iter++;
+
+    // Backtracking line search on the residual infinity-norm (damped Newton).
+    double lambda = 1.0;
+    bool accepted = false;
+    for (int bt = 0; bt < max_backtrack; bt++) {
+      State trial = new_state;
+      trial.ydot += system.dydot * lambda;
+      trial.y += system.dydot * (y_coeff * lambda);
+      double trial_norm = assemble_residual(old_state, trial);
+      if (trial_norm < res_norm) {
+        new_state = trial;
+        accepted = true;
+        break;
+      }
+      lambda *= 0.5;
+    }
+    // If no damping reduced the residual, take the undamped step and continue.
+    if (!accepted) {
+      new_state.ydot += system.dydot;
+      new_state.y += system.dydot * y_coeff;
+    }
+  }
+  return false;
+}
+
+State ConsistentStiffIntegrator::step(const State& old_state, double time) {
+  n_iter++;
+  int nsub = 1;
+  for (int level = 0; level <= max_subdiv; level++, nsub *= 2) {
+    const double dt = time_step_size / nsub;
+    State st = old_state;
+    bool ok = true;
+    for (int k = 0; k < nsub; k++) {
+      State next;
+      if (!damped_step(st, next, dt, time + k * dt)) {
+        ok = false;
+        break;
+      }
+      st = next;
+    }
+    // Restore full-step coefficients.
+    y_coeff = gamma * time_step_size;
+    y_coeff_jacobian = alpha_f * y_coeff;
+    if (ok) {
+      return st;
+    }
+  }
+  throw std::runtime_error(
+      "Consistent-stiff integrator failed to converge (max sub-steps) at time " +
+      std::to_string(time));
+}
+
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
+std::unique_ptr<TimeIntegrator> make_integrator(IntegratorType type,
+                                                Model* model,
+                                                double time_step_size,
+                                                double rho, double atol,
+                                                int max_iter) {
+  switch (type) {
+    case IntegratorType::consistent_stiff:
+      return std::make_unique<ConsistentStiffIntegrator>(
+          model, time_step_size, rho, atol, max_iter);
+    case IntegratorType::generalized_alpha:
+    default:
+      return std::make_unique<GeneralizedAlpha>(model, time_step_size, rho,
+                                                atol, max_iter);
+  }
 }

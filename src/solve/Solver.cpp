@@ -65,9 +65,9 @@ void Solver::setup_initial() {
     double time_step_size_steady = this->model->cardiac_cycle_period / 10.0;
     this->model->to_steady();
 
-    Integrator integrator_steady(this->model.get(), time_step_size_steady,
-                                 simparams.sim_rho_infty, simparams.sim_abs_tol,
-                                 simparams.sim_nliter);
+    GeneralizedAlpha integrator_steady(
+        this->model.get(), time_step_size_steady, simparams.sim_rho_infty,
+        simparams.sim_abs_tol, simparams.sim_nliter);
 
     for (int i = 0; i < 31; i++) {
       state = integrator_steady.step(state, time_step_size_steady * double(i));
@@ -85,9 +85,13 @@ void Solver::setup_initial() {
 void Solver::setup_integrator() {
   // Set-up integrator
   DEBUG_MSG("Setup time integration");
-  integrator = Integrator(this->model.get(), simparams.sim_time_step_size,
-                          simparams.sim_rho_infty, simparams.sim_abs_tol,
-                          simparams.sim_nliter);
+  IntegratorType itype = (simparams.sim_integrator == "stiff")
+                             ? IntegratorType::consistent_stiff
+                             : IntegratorType::generalized_alpha;
+  integrator = make_integrator(itype, this->model.get(),
+                               simparams.sim_time_step_size,
+                               simparams.sim_rho_infty, simparams.sim_abs_tol,
+                               simparams.sim_nliter);
 
   // Initialize loop
   states = std::vector<State>();
@@ -141,7 +145,7 @@ void Solver::run_integration() {
       }
     }
 
-    state = integrator.step(state, time);
+    state = integrator->step(state, time);
 
     if (simparams.use_cycle_to_cycle_error &&
         last_two_cycles_time_pt_counter > 0) {
@@ -180,7 +184,7 @@ void Solver::run_integration() {
 
         last_two_cycles_time_pt_counter = simparams.sim_pts_per_cycle;
         for (size_t i = 1; i < simparams.sim_pts_per_cycle; i++) {
-          state = integrator.step(state, time);
+          state = integrator->step(state, time);
 
           states_last_two_cycles[last_two_cycles_time_pt_counter] = state;
           last_two_cycles_time_pt_counter += 1;
@@ -230,7 +234,7 @@ void Solver::run_integration() {
   }
 
   DEBUG_MSG("Avg. number of nonlinear iterations per time step: "
-            << integrator.avg_nonlin_iter());
+            << integrator->avg_nonlin_iter());
 
   // Make times start from 0
   if (!simparams.output_all_cycles) {
