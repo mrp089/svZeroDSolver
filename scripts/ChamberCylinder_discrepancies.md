@@ -149,22 +149,17 @@ downstream of the dynamic-filling limit (OPEN #4), not a new difference. (The
 scheme, OPEN #6.) The residual ~1 kPa in the fiber sweep is partly mesh (`ne=8`
 sweeps vs the `ne=12` baseline that reaches 12.8 kPa).
 
-### OPEN #7 (non-temporal) — active-stress form `σ_1D` is ambiguous in [G]
-[G] Eq. 30 gives `σ_1D = T_fib/(1+e_fib) = T_fib/√I4` (implemented, `active_i4pow=0.5`
-default), but the discrete Eq. 59 (from ref [33], which [G]'s code runs) has
-continuous limit `σ_1D = T_fib/(1+2 eF·E·eF) = T_fib/I4` (`active_i4pow=1.0`) —
-the form for which `T_fib` is the true (Cauchy) fiber stress. This is a **genuine
-~7% active-stress difference internal to the paper**, and the two forms trade off
-against Fig 5:
-
-| `active_i4pow` | peak P | twist | EF | ESV |
-|---|---|---|---|---|
-| 0.5 (Eq. 30) | **12.8** | **20°** | 49% | 63 |
-| 1.0 (Eq. 59) | 11.9 | 25° | **46%** | 66 |
-| Genet Fig 5 | 12.8 | ~20° | 46% | 74 |
-
-Kept at 0.5 (matches the headline peak pressure and twist); 1.0 matches EF/ESV.
-Neither dominates — it is a real, characterized formulation ambiguity, not a bug.
+### RESOLVED #3 (non-temporal) — active-stress form `σ_1D` is correct
+Investigated a suspected ambiguity ([G] Eq. 30 `σ_1D=T_fib/(1+e_fib)` vs the
+discrete Eq. 59 which I first read as `T_fib/I4`). **The authoritative source
+settles it:** Kimmig 2019 (ref [33], which Eq. 59 "reproduces exactly") Eq. 31
+states `Σ_a = F⁻¹·T_a = [T_fib/(1+e_fib)] τ⊗τ` (since `‖F·τ‖=1+e_fib`), i.e.
+`σ_1D = T_fib/(1+e_fib) = T_fib/√I4` — the **`active_i4pow=0.5` form already
+implemented**. PhysioBlocks agrees (its sphere uses `T_fib` directly with
+reference-config geometry, no `1/(1+e_fib)` division). My earlier `T_fib/I4`
+reading was a misinterpretation of the *algorithmic* discrete Eq. 59, whose true
+continuous limit is `T_fib/(1+e_fib)`. So the active stress is **not a
+difference**; `active_i4pow` stays a diagnostic knob (default 0.5 = correct).
 
 ### OPEN #6 — temporal scheme: why the plain midpoint is not enough
 [G]'s temporal scheme has four ingredients: (i) midpoint for the equilibrium,

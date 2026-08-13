@@ -170,10 +170,11 @@
  * * `use_inertia` - 0 = quasi-static (default), 1 = full dynamics with the
  *   consistent mass matrix and velocity companion DOFs
  * * `active_i4pow` - exponent in the active 2nd-PK stress
- *   \f$\sigma_{1D}=T_\text{fib}/I_4^{\,p}\f$ (optional, default 0.5). \f$p=0.5\f$
- *   is \cite genet23 Eq. 30 (\f$T_\text{fib}/(1+e_\text{fib})\f$); \f$p=1\f$ is
- *   the Eq. 59 discrete-scheme limit (\f$T_\text{fib}/I_4\f$). The paper is
- *   internally inconsistent between these two; they differ by ~7%.
+ *   \f$\sigma_{1D}=T_\text{fib}/I_4^{\,p}\f$ (optional, default 0.5 = correct).
+ *   \f$p=0.5\f$ is \cite genet23 Eq. 30 / Kimmig 2019 Eq. 31
+ *   (\f$\Sigma_a=[T_\text{fib}/(1+e_\text{fib})]\,e_F\otimes e_F\f$, since
+ *   \f$\|F\,e_F\|=1+e_\text{fib}\f$), the authoritative form. \f$p=1\f$ is a
+ *   diagnostic alternative only.
  *
  * ### Internal variables
  *
