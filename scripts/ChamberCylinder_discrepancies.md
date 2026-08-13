@@ -45,7 +45,7 @@ muscle contraction models*, AMSES 2019.
 | Inertia | full dynamics (Eqs. 8,18,45) | **implemented** (`use_inertia=1`): velocity companion DOFs + consistent mass `M=∫ρ₀(Du)ᵀDu dΩ` | matches quasi-static to ~0.3% — inertia is ~1e-4 of the forces (quasi-static is the default) |
 | Incompressibility | Lagrange-multiplier (exact `J=1`), mixed `P_k/P_{k-1}` | penalty `κ(J−1)J C⁻¹`, `κ=1e7` | penalty; `κ` not a [G] parameter |
 | Spatial discretization | single high-order `P_k` element | linear `P1`, `ne≈12` + 3-pt Gauss | converged (see §3) |
-| Time integration | energy-preserving midpoint + Chapelle internal-var scheme | generalized-α or `ConsistentStiffIntegrator` | |
+| Time integration | energy-preserving midpoint + Chapelle internal-var scheme | L-stable `ConsistentStiffIntegrator` (`rho=0`) — the plain midpoint (`rho_infty=1`) rings on the stiff `k_s` spring, see §3 OPEN #6 | the full energy-preserving scheme (algorithmic stress + Chapelle √k_c) remains unimplemented |
 | Nonlinear tangent | analytic | **complex-step** (machine accuracy) | |
 | Residual tolerance | — | `abs_tol=1e-6` | `1e-9` is `~1e-13` *relative* for `~1e4 Pa`; unreachable |
 
@@ -121,11 +121,10 @@ basal/apical constraint is needed at this operating point.)
 With the exact `C_valve=9e-9` the peak pressure is buffered to ~7.5 kPa (vs 12.4
 at `C_valve=0`). The compliance stores ~0.1 L per systolic pressure swing, which
 is large relative to the stroke volume when the ejection pressure is rounded
-rather than a flat plateau. In [G]'s energy-preserving scheme the pressure holds
-a plateau (`Ṗv≈0`), so `C_valve·Ṗv` in Eq. 36a is inert. **Adding inertia does
-not fix it** (dynamic vs quasi-static agree to ~0.3%; §1.C), confirming the cause
-is the temporal scheme (energy-preserving midpoint + Chapelle internal-variable
-update), not inertia and not a parameter mismatch.
+rather than a flat plateau. **Neither inertia nor the energy-preserving midpoint
+scheme fixes it** (both tested: inertia agrees to ~0.3% §1.C; the midpoint scheme
+leaves EDV/ESV unchanged, §3 OPEN #6). So the exact `C_valve=9e-9` is simply
+large relative to this reduced model's dynamics; the match uses `C_valve=0`.
 
 ### OPEN #4 — residual EDV (~10% low: 123 vs 137)
 Applying the PhysioBlocks `P_at` kick waveform + `P_vs=1.6 kPa` closed the ESV
@@ -146,8 +145,27 @@ gaps remain: (a) peak pressure sits ~1 kPa below [G] across the fiber sweep
 (b) peak pressure is **flat with wall volume** (~11.6 kPa) where [G] rises
 12.2→13.3 kPa (Fig 8) — the genuine trend miss. With `C_valve=0` the systolic
 pressure is set largely by the arterial afterload rather than by wall mechanics,
-so added wall thickness does not raise peak pressure; the paper's
-energy-preserving scheme is expected to recover the coupling.
+so added wall thickness does not raise peak pressure. (Testing the
+energy-preserving scheme did **not** recover this — see OPEN #6.)
+
+### OPEN #6 — temporal scheme: why the plain midpoint is not enough
+[G]'s temporal scheme has four ingredients: (i) midpoint for the equilibrium,
+(ii) backward for incompressibility, (iii) energy-preserving *algorithmic*
+(discrete-gradient) stresses, (iv) the Chapelle `√k_c` internal-variable update.
+The accessible route is generalized-α with `rho_infty=1` = the non-dissipative
+midpoint (ingredient i). **Tested — and it is not a faithful substitute:** the
+plain midpoint is under-damped for the stiff `k_s=1e8` series spring and **rings**
+(spurious high-frequency pressure oscillations, ±1–2 kPa), and it leaves EDV/ESV
+unchanged (123/62 mL) — so it neither closes OPEN #3/#4/#5 nor gives a clean
+result. This is exactly *why* [G]'s scheme couples the midpoint to (iii)-(iv):
+those make it non-dissipative **and** stable, taming the stiff mode without the
+L-stable damping that the `rho=0` "stiff" integrator uses (the default here — it
+suppresses the ringing cleanly, at ~12.8 kPa peak vs the midpoint's oscillatory
+~13.7). A faithful implementation therefore requires the bespoke integrator
+(iii)-(iv), which breaks svZeroDSolver's `E ẏ + F y + C = 0` block/integrator
+separation (the block must expose an algorithmic stress from the `(y_n, y_{n+1})`
+pair and a `√k_c` internal-variable update). Given that the midpoint test moves
+none of the beat-scale metrics, it is left unimplemented pending a decision.
 
 ## 4. Remaining model differences (summary)
 

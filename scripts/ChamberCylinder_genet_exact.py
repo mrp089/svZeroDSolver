@@ -42,8 +42,15 @@ PAT_KICK_P = [450.0, 450.0, 900.0, 900.0, 450.0, 450.0]
 
 def build(P_at=900.0, P_vs=0.0, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
           tsys=0.13, tdias=0.45, steepness=0.02, integrator="stiff",
-          ncycle=8, aortic_Rmax=None, active_model=1, n0_flat=True,
-          atrial_kick=False):
+          rho_infty=0.5, ncycle=8, aortic_Rmax=None, active_model=1,
+          n0_flat=True, atrial_kick=False):
+    # Integrator note: Genet's temporal scheme is the non-dissipative midpoint
+    # (rho_infty=1) made *stable* by energy-preserving algorithmic stresses + the
+    # Chapelle sqrt(k_c) internal-variable update. The plain midpoint alone
+    # (rho_infty=1, without those) is UNDER-damped for the stiff k_s=1e8 series
+    # spring and rings (spurious HF pressure oscillations). So the default here is
+    # the L-stable "stiff" integrator (rho=0), which damps that mode cleanly; a
+    # faithful energy-preserving scheme needs the bespoke integrator (not built).
     aortic_Rmax = aortic_Rmax if aortic_Rmax is not None else K_iso_inv
     vv = dict(GEOM); vv.update(MAT); vv["kappa"] = KAPPA
     vv.update(dict(sigma_max=sigma_max, alpha_max=30.0, alpha_min=-30.0,
@@ -70,7 +77,7 @@ def build(P_at=900.0, P_vs=0.0, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
             "cardiac_period": 0.8, "steady_initial": False,
             "output_variable_based": True, "absolute_tolerance": 1e-9,
             "maximum_nonlinear_iterations": 50, "output_all_cycles": False,
-            "integrator": integrator,
+            "integrator": integrator, "rho_infty": rho_infty,
         },
         "initial_condition": {"pressure_all": P_at, "volume:ventricle": 6.5e-5},
         "vessels": [
