@@ -4,15 +4,19 @@
 
 Compares the block's purely passive pressure-volume curve against an
 independent closed-form-style incompressible thick-walled cylinder inflation
-that uses the *same* Genet (2023) strain-energy law (Eq. 25). The block, the
-analytical solution, and Genet Fig. 5 all agree (EDV ~137 mL at ~0.9 kPa),
-confirming the passive material and its finite-element assembly are correct.
+that uses the *same* Genet (2023) isotropic strain-energy law (Eq. 25).
+
+KEY RESULT (volumetric locking): the displacement penalty (`mixed=0`) is
+*stiffer* than the incompressible analytical at coarse meshes and converges to
+it only at ne~32 - classic volumetric locking (linear elements + fully
+integrated near-incompressible bulk term). The **mixed u/p** formulation
+(`mixed=1`, Genet's Lagrange-multiplier pressure) matches the analytical
+mesh-independently from ne=8. Run this script to see both columns.
 
 IMPORTANT: the cavity pressure is applied by loading the ventricle inlet
 *directly* (via a junction), not through a smooth `ValveTanh`. A tanh valve
 sits half-open at zero pressure drop (R ~ (Rmin+Rmax)/2), which throttles a
-constant-pressure inflation test and makes the wall look artificially stiff -
-an artifact of the test harness, not the material.
+constant-pressure inflation test - an artifact of the test harness.
 
 Run:  PYTHONPATH=build/python python scripts/ChamberCylinder_validate_passive.py
 """
@@ -64,16 +68,18 @@ def analytical_iso(a, n=600):
     return P, np.pi * a**2 * (L0 * lz) * 1e6
 
 
-def model_V(P_pa, ne=16, C5v=C5):
+def model_V(P_pa, ne=16, C5v=C5, mixed=0):
     """Purely passive block volume at prescribed cavity pressure P_pa.
 
     The pressure is applied directly to the ventricle inlet through a junction
-    (no valve), so the cavity sees the full pressure and equilibrates."""
+    (no valve), so the cavity sees the full pressure and equilibrates.
+    `mixed=1` selects the mixed u/p (locking-free) incompressibility."""
     vv = {"Ri": Ri, "Re": Re, "length": L0, "alpha_endo": 60.0, "alpha_epi": -60.0,
           "C1": C1, "C2": C2, "C3": C3, "C4": C4, "C5": C5v, "C6": C6,
           "kappa": 1e7, "gamma": 70.0, "sigma_max": 0.0, "alpha_max": 0.0,
           "alpha_min": 0.0, "tsys": 0.13, "tdias": 0.45, "steepness": 0.02,
-          "num_elements": ne, "active_model": 0, "c_valve": 0.0}
+          "num_elements": ne, "active_model": 0, "c_valve": 0.0,
+          "mixed": float(mixed)}
     cfg = {
         "boundary_conditions": [
             {"bc_name": "ATRIUM", "bc_type": "PRESSURE",
@@ -108,11 +114,15 @@ def model_V(P_pa, ne=16, C5v=C5):
 
 if __name__ == "__main__":
     print("Passive P-V: analytical incompressible cylinder (Genet W^e, isotropic")
-    print("part) vs the ChamberCylinder block. Genet Fig 5: EDV ~137 mL at ~0.9 kPa.\n")
-    print(f"{'inner a[mm]':>11} {'P[kPa]':>8} {'V_analytical[mL]':>16} {'V_block(full)[mL]':>18}")
-    for a_mm in [21, 24, 27]:
+    print("part) vs the ChamberCylinder block, isotropic (C5=0) so it is directly")
+    print("comparable to the analytical. Penalty locks; mixed u/p matches.\n")
+    print(f"{'a[mm]':>6} {'P[kPa]':>8} {'V_analyt':>9} | penalty ne=8/16/32 | mixed ne=8/16/32")
+    for a_mm in [24, 27]:
         P, Va = analytical_iso(a_mm / 1000.0)
-        Vm = model_V(P, C5v=C5)
-        print(f"{a_mm:11.1f} {P/1000:8.3f} {Va:16.1f} {Vm:18.1f}")
-    print("\nThe block reaches ~137 mL near 0.9 kPa, matching Fig 5 and the")
-    print("analytical solution: the passive material + FE assembly are correct.")
+        pen = [model_V(P, ne=n, C5v=0.0, mixed=0) for n in (8, 16, 32)]
+        mix = [model_V(P, ne=n, C5v=0.0, mixed=1) for n in (8, 16, 32)]
+        sp = " ".join(f"{v:5.1f}" for v in pen)
+        sm = " ".join(f"{v:5.1f}" for v in mix)
+        print(f"{a_mm:6.1f} {P/1000:8.3f} {Va:9.1f} | {sp} | {sm}")
+    print("\nPenalty needs ne~32 to reach the analytical (volumetric locking);")
+    print("mixed u/p matches it from ne=8 (mesh-independent, locking-free).")

@@ -56,20 +56,27 @@ Exact valves + 2-stage Windkessel, `σ0=65 kPa`, force-velocity `α=12`, `ne=12`
 `P_at=0.9 kPa, P_vs=0`, and the **PhysioBlocks atrial-kick waveform**
 (baseline 450 Pa → 900 Pa kick) with **`P_vs=1.6 kPa`**.
 
-| Quantity | Genet Fig 5 | constant P_at | **kick + `P_vs=1.6k`** | Status |
-|---|---|---|---|---|
-| Peak systolic pressure | 12.8 kPa | 12.4 | **12.8 kPa** | **exact** |
-| Peak twist | ~20° | 20 | **20°** | **match** |
-| Diastolic pressure | ~0.6–0.9 kPa | 0.79 (flat) | ~0.4–0.9 (kick profile) | **shape match** |
-| EF | 46% | 53% | **49%** | good |
-| ESV | 74 mL | 58 | **63 mL** | good |
-| EDV | 137 mL | 124 | 123 mL | ~10% low (OPEN #4) |
+Two incompressibility formulations are shown: the displacement penalty (`mixed=0`,
+which locks — OPEN #4) and the **mixed u/p** (`mixed=1`, the faithful Genet
+formulation — RESOLVED #4). Both use the kick waveform + `P_vs=1.6 kPa`.
 
-`P_vs=1.6 kPa` (PhysioBlocks) raises the afterload floor (mean `P_ar ≈ P_vs +
-R_d·CO`), moving peak pressure 12.4→**12.8** (exact) and ESV/EF toward the paper.
-The atrial-kick waveform reproduces the diastolic-pressure *shape* (dip to
-baseline, pre-systolic kick) but not the EDV — its 900 Pa kick equals the old
-constant, so filling still tops out at ~123 mL (OPEN #4).
+| Quantity | Genet Fig 5 | penalty (`mixed=0`) | **mixed u/p (`mixed=1`)** | Status |
+|---|---|---|---|---|
+| Peak systolic pressure | 12.8 kPa | 12.8 | **13.0 kPa** | **match** |
+| Peak twist | ~20° | 20 | **21°** | **match** |
+| Diastolic pressure | ~0.6–0.9 kPa | ~0.4–0.9 | ~0.4–0.9 (kick profile) | **shape match** |
+| EF | 46% | 49% | **46%** | **exact** |
+| ESV | 74 mL | 63 | **72 mL** | **match** |
+| EDV | 137 mL | 124 | **135 mL** | **match (was ~10% low)** |
+
+The **mixed u/p** closes the EDV/ESV gap: EDV 124→**135**, ESV 63→**72**, EF
+49→**46%** (exact), with peak pressure and twist unchanged. It is **mesh-independent**
+(ne=8 and ne=12 give identical EDV=135), confirming the residual penalty gap was
+volumetric locking, not a material or filling error. `P_vs=1.6 kPa` (PhysioBlocks)
+raises the afterload floor (mean `P_ar ≈ P_vs + R_d·CO`), giving the exact peak;
+the atrial-kick waveform (now placed at end-diastole, matching Genet's phase)
+reproduces the diastolic-pressure shape. The residual is a slight early-filling
+phase lag, tied to the temporal scheme (OPEN #6), not the mechanics.
 
 At peak contraction `e_c` reaches ~0.26, on the `n0` plateau (`n0→1`), so the
 ventricle develops near-full `σ0`; during filling/relaxation `e_c` falls onto the
@@ -81,19 +88,49 @@ so its `C_valve·Ṗv` term is inert — a discretization difference, not a para
 
 ## 3. Discrepancy log (systematic)
 
-### RESOLVED — passive material is correct (not a discrepancy)
-An earlier measurement suggested the passive wall was ~4× too stiff (67 mL at
-0.9 kPa vs 137). **This was a test artifact, not the model.** A `ValveTanh`
-inflation test sits half-open at zero pressure drop (`R≈(R_min+R_max)/2≈1e9`),
-throttling a constant-pressure fill so the wall never equilibrates. With the
-cavity pressure applied **directly** (no valve), the block reaches ~128–137 mL
-at 0.9 kPa, matching both Genet Fig 5 and an independent analytical
-incompressible thick-wall cylinder inflation with the same `W^e`
-(`scripts/ChamberCylinder_validate_passive.py`). Ruled out along the way:
-parameters (exact), the `W^e` formula (matches Eq. 25 term-by-term), the fiber
-term (`C5=0` unchanged), active coupling (`active_model` 0 vs 1 identical),
-mesh (`ne` 6→24), and penalty `κ` (1e5→1e8). In the full simulation, diastole
-has a real pressure gradient so EDV=124 mL ≈ paper's 137.
+### RESOLVED — the passive wall locked (volumetric locking); fixed with mixed u/p
+**Root cause + fix (this pass).** An earlier note here claimed the passive
+material was "correct" and that mesh (`ne`) and penalty (`κ`) were "ruled out."
+**That was wrong.** A clean, valve-free static inflation (`ChamberCylinder_validate_passive.py`,
+cavity pressure applied directly through a junction) shows the block is
+systematically *stiffer* than the closed-form incompressible cylinder, and the
+gap is pure **volumetric locking** from the penalty incompressibility + linear
+thickness elements with full 3-point Gauss integration of the bulk term
+`Sb = κ(J−1)·J·C⁻¹`:
+
+*Mesh convergence (isotropic `W^e`, `P=0.666 kPa`, analytical = 133.1 mL):*
+
+| `ne` | 8 | 16 | 32 |
+|---|---|---|---|
+| V [mL] | 91.0 | 127.0 | **132.7** |
+
+converges to the analytical only at `ne≈32` — i.e. `ne=12–16` is 6–42 mL too stiff.
+
+*Penalty sweep (isotropic, fixed `ne=12`, analytical = 133.1 mL) — the locking signature:*
+
+| `κ` | 1e5 | 1e6 | 1e7 | 1e8 |
+|---|---|---|---|---|
+| V [mL] | 136.3 | **133.4** | 119.6 | 68.2 |
+
+the stiffer the incompressibility penalty, the worse the artificial stiffness —
+diagnostic of locking, *not* a material property. Genet avoids this with a
+**mixed u–p** (locking-free) incompressibility; the block uses a displacement
+penalty, which locks at the coarse `ne=12` baseline.
+
+Verified along the way: parameters (exact Table 1), the `W^e` formula (matches
+Eq. 25 term-by-term), the fiber strain `Ī4` (matches Eq. 31 term-by-term), the
+converged full material reaches **137.4 mL at 1.05 kPa = Genet's EDV** (`ne=32`).
+So the material and kinematics are right; the *discretization of incompressibility*
+was the discrepancy.
+
+**Fix — mixed u/p (`mixed=1`).** Implemented Genet's mixed formulation: an
+element-wise-constant (P0) hydrostatic-pressure DOF `p_e` replaces the penalty,
+with `Σ^b = p_e J C⁻¹` and a weak per-element constraint `∫_e(J−1)=0` (P1-P0,
+LBB-stable in 1D; analytic `∂J/∂ζ` and `∂Σ^b/∂p` tangents). Static inflation is
+now **mesh-independent** (isotropic V = 134.3 mL at ne=8,12,16,24 vs analytical
+133.1; penalty needed ne≈32). On the full beat it gives EDV=135/ESV=72/EF=46%
+(§2). The penalty remains available (`mixed=0`, default) for backward
+compatibility. See RESOLVED #4.
 
 ### RESOLVED #1 — systolic over-ejection was the Frank–Starling `n0(e_c)`
 The over-ejection was **Frank–Starling**. Ruled out first: valve law (hard vs
@@ -126,28 +163,37 @@ scheme fixes it** (both tested: inertia agrees to ~0.3% §1.C; the midpoint sche
 leaves EDV/ESV unchanged, §3 OPEN #6). So the exact `C_valve=9e-9` is simply
 large relative to this reduced model's dynamics; the match uses `C_valve=0`.
 
-### OPEN #4 — residual EDV (~10% low: 123 vs 137)
-Applying the PhysioBlocks `P_at` kick waveform + `P_vs=1.6 kPa` closed the ESV
-and peak-pressure gaps (§2) but **not EDV**: the 900 Pa kick equals the old
-constant `P_at`, so dynamic filling still tops out at ~123 mL. Reaching 137 at
-~0.9 kPa needs either a stronger/longer kick or faster filling — the static
-passive curve does reach 137 mL at 0.9 kPa (§3 RESOLVED), so this is a
-*dynamic* filling limit (finite diastole + mitral-valve throttling near ΔP≈0),
-tied to the temporal scheme rather than the passive material.
+### RESOLVED #4 — EDV/ESV low (124/63 vs 137/74) was **volumetric locking**; fixed with mixed u/p
+The EDV *and* ESV shortfall was the passive-wall **volumetric locking** (ROOT-CAUSE
+section above) — not dynamic filling, not the mitral valve, not the temporal
+scheme (all ruled out: kick-timing shift = 0 mL; mitral junction vs
+`PiecewiseValve` = 123 vs 126; inertia = 0.3%). First confirmed by a `κ`-softening
+diagnostic (EDV 124→134 as `κ` 1e7→1e6 relieves the over-constraint), then fixed
+properly with the **mixed u/p formulation** (`mixed=1`, the ROOT-CAUSE fix). On
+the full beat + circulation (`ne=12`, atrial kick at end-diastole):
 
-### OPEN #5 — Fig 8 flat wall-volume trend: DIAGNOSED (downstream of filling)
+| Config | EDV | ESV | EF | Ppk [kPa] | twist |
+|---|---|---|---|---|---|
+| **Genet Fig 5** | **137** | **74** | **46 %** | **12.8** | **20°** |
+| penalty `mixed=0` (locked) | 124 | 63 | 49 % | 12.8 | 20° |
+| **mixed u/p `mixed=1`** | **135** | **72** | **46 %** | **13.0** | **21°** |
+
+Mixed u/p is **mesh-independent** (EDV=135 at both ne=8 and ne=12). EF is now
+exact, EDV/ESV within ~2 mL, peak within 0.2 kPa, twist within 1°. The residual
+early-filling phase lag is the temporal scheme (OPEN #6), not the mechanics.
+Implemented in `ChamberCylinder.{h,cpp}`; regression test `chamber_cylinder_mixed.json`.
+
+### RESOLVED #5 — Fig 8 wall-volume trend: was downstream of the locking, now matches
 Twist tracks [G] almost exactly (Figs 6, 9) and the **±60° fiber pressure
-optimum** is reproduced (Fig 9). The flat wall-volume→peak-P trend (~11.7 kPa vs
-[G]'s rising 12.2→13.3, Fig 8) is **not** a formulation/mechanics difference: the
-ventricle's **intrinsic** capacity *does* rise with wall volume — against a rigid
-14 kPa afterload the peak ventricular pressure climbs 14.7→15.3→15.6 kPa as wall
-volume goes 117→143 mL, exactly the [G] direction. In the full circulation it is
-masked because thicker walls **under-fill more** (EDV 110→94 mL with the constant
-`P_at`), so stroke volume and the Windkessel afterload drop. So Fig 8 is
-downstream of the dynamic-filling limit (OPEN #4), not a new difference. (The
-`σ_1D` form, §3-below, does not change it either; nor did the energy-preserving
-scheme, OPEN #6.) The residual ~1 kPa in the fiber sweep is partly mesh (`ne=8`
-sweeps vs the `ne=12` baseline that reaches 12.8 kPa).
+optimum** is reproduced (Fig 9). The earlier **flat** wall-volume→peak-P trend
+(~11.7 kPa vs [G]'s rising 12.2→13.3, Fig 8) was correctly diagnosed as
+downstream of the filling limit (locking, RESOLVED #4), *not* a mechanics
+difference: the ventricle's intrinsic capacity does rise with wall volume, but
+under the penalty thicker walls under-filled more, masking it. With the **mixed
+u/p** fix the trend now **rises and matches [G]** — model peak P = 12.3 → 12.9 →
+13.4 kPa vs [G] 12.2 → 12.8 → 13.3 across wall volume 117 → 130 → 143 mL. Figs 6
+(twist vs aspect ratio) and 9 (peak P & twist vs fiber angle) likewise track [G]
+within ~0.2 kPa / ~1°. Confirms the wall-volume trend was a locking artifact.
 
 ### RESOLVED #3 (non-temporal) — active-stress form `σ_1D` is correct
 Investigated a suspected ambiguity ([G] Eq. 30 `σ_1D=T_fib/(1+e_fib)` vs the

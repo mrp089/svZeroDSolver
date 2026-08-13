@@ -42,6 +42,8 @@ inline T clamp_max(T x, double m) {
 /// Material parameters passed to the continuum kernel.
 struct MatParams {
   double C1, C2, C3, C4, C5, C6, kappa, gamma;
+  bool mixed = false;    ///< true: bulk term uses the mixed pressure p_mix
+  double p_mix = 0.0;    ///< mixed u/p element hydrostatic pressure (if mixed)
 };
 
 /// Active-stress input at an integration point. Simple model: active fiber
@@ -197,7 +199,11 @@ Mat3<T> compute_stress(const Kinematics<T>& k, const T xidot[6],
   const Mat3<T> dI4b = Jm23 * (M - (I4 / 3.0) * Cinv);
 
   Mat3<T> Sd = 2.0 * (w1 * dI1b + w2 * dI2b + w4 * dI4b);   // deviatoric
-  Mat3<T> Sb = p.kappa * (J - 1.0) * J * Cinv;              // bulk (penalty)
+  // Bulk (incompressibility) 2nd-PK stress Sigma^b = Pi J C^{-1}. Penalty:
+  // Pi = kappa(J-1); mixed u/p: Pi = p_mix, the element hydrostatic pressure
+  // (held fixed under the xi complex-step; its column is added analytically).
+  const T bulk = p.mixed ? T(p.p_mix) : p.kappa * (J - 1.0);
+  Mat3<T> Sb = bulk * J * Cinv;                            // bulk
 
   Mat3<T> Edot = Mat3<T>::Zero();                           // viscous
   for (int m = 0; m < 6; m++) Edot += k.dE[m] * xidot[m];
@@ -299,6 +305,8 @@ void ChamberCylinder::setup_dofs(DOFHandler& dofhandler) {
       model->get_parameter_value(global_param_ids[ParamId::active_model]) > 0.5;
   is_dynamic =
       model->get_parameter_value(global_param_ids[ParamId::use_inertia]) > 0.5;
+  use_mixed =
+      model->get_parameter_value(global_param_ids[ParamId::mixed]) > 0.5;
 
   // Uniform nodes from endocardium (index 0, R_i) to epicardium (R_e).
   node_R.resize(n_node);
@@ -357,11 +365,19 @@ void ChamberCylinder::setup_dofs(DOFHandler& dofhandler) {
     int_names.push_back("veps");
   }
 
+  // Mixed u/p: one element-wise-constant (P0) hydrostatic pressure per element,
+  // appended last so the penalty/dynamics layouts above are unchanged.
+  if (use_mixed) {
+    for (int e = 0; e < n_ele; e++)
+      int_names.push_back("pmix_" + std::to_string(e));
+  }
+
   // 3*n_node field eqns + beta + eps + active eqns + volume + mass + pressure
   const int n_vel = is_dynamic ? 3 * n_node + 2 : 0;
-  n_eqn = 3 * n_node + 2 + n_active_var() + 3 + n_vel;
+  const int n_pmix = use_mixed ? n_ele : 0;
+  n_eqn = 3 * n_node + 2 + n_active_var() + 3 + n_vel + n_pmix;
   Block::setup_dofs_(dofhandler, n_eqn, int_names);
-  n_var = 4 + 3 * n_node + 2 + n_active_var() + 1 + n_vel;
+  n_var = 4 + 3 * n_node + 2 + n_active_var() + 1 + n_vel + n_pmix;
 
   // Dense block for dC_dy and dC_dydot; a few linear entries for F/E.
   num_triplets.D = n_eqn * n_var;
@@ -483,6 +499,7 @@ void ChamberCylinder::update_solution(
   p.C6 = parameters[global_param_ids[ParamId::C6]];
   p.kappa = parameters[global_param_ids[ParamId::kappa]];
   p.gamma = parameters[global_param_ids[ParamId::gamma]];
+  p.mixed = use_mixed;  // bulk term uses the per-element pressure DOF below
   const double sigma_max = parameters[global_param_ids[ParamId::sigma_max]];
   const double Rip = parameters[global_param_ids[ParamId::Ri]];
   const double Lp = parameters[global_param_ids[ParamId::length]];
@@ -545,15 +562,22 @@ void ChamberCylinder::update_solution(
       ai.tau = tau;
     }
 
+    // Mixed u/p: this element's hydrostatic pressure enters the bulk stress.
+    if (use_mixed) p.p_mix = Y(i_pmix(pt.elem));
+
     // Base (double) forces plus the analytic active/viscous rate derivatives.
     Kinematics<double> kin = compute_kinematics<double>(xi, pt.R);
     Matrix3d M = fiber_tensor<double>(pt.alpha);
     Matrix3d S = compute_stress<double>(kin, xidot, ai, pt.alpha, p);
     const double I4q = (kin.C * M).trace();  // fiber invariant e_F . C . e_F
-    double g[6], dgdtau[6], Kd[6][6], K[6][6];
+    double g[6], dgdtau[6], dgdp[6], Kd[6][6], K[6][6];
+    // Mixed u/p: d(g[k])/d(p_mix) = (J C^{-1}) : dE[k], since Sigma^b = p_mix J C^{-1}.
+    const Matrix3d JCinv =
+        use_mixed ? (kin.J * kin.C.inverse()).eval() : Matrix3d::Zero();
     for (int i = 0; i < 6; i++) {
       g[i] = contract<double>(S, kin.dE[i]);
       dgdtau[i] = contract<double>(M, kin.dE[i]);
+      dgdp[i] = use_mixed ? contract<double>(JCinv, kin.dE[i]) : 0.0;
       for (int j = 0; j < 6; j++)
         Kd[i][j] = p.gamma * contract<double>(kin.dE[i], kin.dE[j]);
     }
@@ -614,6 +638,8 @@ void ChamberCylinder::update_solution(
         const double rwt = pref * rw[k][ri];
         Cloc[re] += rwt * g[k];
         Kat(re, active_col) += rwt * active_coef * dgdtau[k];
+        // Mixed u/p: coupling of the equilibrium to this element's pressure DOF.
+        if (use_mixed) Kat(re, i_pmix(pt.elem)) += rwt * dgdp[k];
         // BCS: sigma_1D also depends on e_c_dot via the mu*e_c_dot term.
         if (use_bcs)
           Kdat(re, i_ec(q)) += rwt * (bp.mu / i4denom) * dgdtau[k];
@@ -624,6 +650,25 @@ void ChamberCylinder::update_solution(
             Kdat(re, cv) += rwt * Kd[k][m] * cw[m][ci];
           }
         }
+      }
+    }
+
+    // --- Mixed u/p: weak incompressibility constraint for this element (P0) ---
+    // Residual C[e_pmix] = sum_{q in e} pref (J-1) = 0. J depends only on
+    // rho, rho', eps; map the analytic dJ/dxi through the same columns as the
+    // force assembly. The pressure-pressure block is zero (saddle-point form).
+    if (use_mixed) {
+      const int erow = e_pmix(pt.elem);
+      Cloc[erow] += pref * (kin.J - 1.0);
+      const double Rq = pt.R;
+      double dJ[6] = {0, 0, 0, 0, 0, 0};
+      dJ[0] = (1.0 + xi[1]) * (1.0 / Rq) * (1.0 + xi[4]);  // dJ/drho
+      dJ[1] = (1.0 + xi[0] / Rq) * (1.0 + xi[4]);          // dJ/drho'
+      dJ[4] = (1.0 + xi[1]) * (1.0 + xi[0] / Rq);          // dJ/deps
+      for (int m = 0; m < 6; m++) {
+        if (dJ[m] == 0.0) continue;
+        for (int ci = 0; ci < cn[m]; ci++)
+          Kat(erow, cvr[m][ci]) += pref * dJ[m] * cw[m][ci];
       }
     }
 

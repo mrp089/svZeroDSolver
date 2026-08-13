@@ -25,25 +25,30 @@ Cd = 2.0158e-8
 GEOM = dict(Ri=0.019, Re=0.033, length=0.0571, alpha_endo=60.0, alpha_epi=-60.0)
 MAT = dict(C1=7.0, C2=0.0, C3=700.0, C4=2.0, C5=50.0, C6=4.0, gamma=70.0,
            k_s=1e8, k_0=260e3, mu=70.0)
-# kappa is NOT a Genet parameter (Genet uses a Lagrange-multiplier pressure; we
-# use a penalty). Large enough that J~1. Documented as a numerical choice.
+# Genet enforces incompressibility with a mixed u/p Lagrange-multiplier pressure
+# (mixed=1, the faithful default here). kappa is only the fallback displacement
+# penalty (mixed=0); a low-order penalty locks volumetrically at coarse meshes,
+# so it is NOT used for the reproduction. kappa is retained for the fallback.
 KAPPA = 1e7
 SIGMA0 = 65e3  # Genet Table 1 "Maximum active stress" sigma_0
 
 # Atrial and venous pressures are prescribed inputs Genet does not tabulate; the
 # MEDISIM PhysioBlocks reference (references/full_configurations/
 # spherical_heart_sim.jsonc) gives the concrete values. P_at is a waveform
-# (baseline 450 Pa, pre-systolic atrial kick to 900 Pa peaking just before
-# systole onset t_sys~0.13 s), and the systemic venous pressure P_vs = 1600 Pa.
+# (baseline 450 Pa, pre-systolic atrial kick to 900 Pa). The kick sits at the
+# END of the cycle (t~0.66-0.72 s, i.e. late diastole just before the cycle
+# wraps into the next systole at t_sys=0.13 s), matching Genet Fig. 5 where
+# atrial contraction completes filling to EDV right at the cycle boundary.
+# The systemic venous pressure P_vs = 1600 Pa.
 PVS_PHYSIOBLOCKS = 1600.0
-PAT_KICK_T = [0.0, 0.03, 0.06, 0.13, 0.17, 0.80]
-PAT_KICK_P = [450.0, 450.0, 900.0, 900.0, 450.0, 450.0]
+PAT_KICK_T = [0.0, 0.50, 0.66, 0.72, 0.80]
+PAT_KICK_P = [450.0, 450.0, 900.0, 900.0, 450.0]
 
 
 def build(P_at=900.0, P_vs=0.0, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
           tsys=0.13, tdias=0.45, steepness=0.02, integrator="stiff",
           rho_infty=0.5, ncycle=8, aortic_Rmax=None, active_model=1,
-          n0_flat=True, atrial_kick=False):
+          n0_flat=True, atrial_kick=False, mixed=True):
     # Integrator note: Genet's temporal scheme is the non-dissipative midpoint
     # (rho_infty=1) made *stable* by energy-preserving algorithmic stresses + the
     # Chapelle sqrt(k_c) internal-variable update. The plain midpoint alone
@@ -56,7 +61,7 @@ def build(P_at=900.0, P_vs=0.0, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
     vv.update(dict(sigma_max=sigma_max, alpha_max=30.0, alpha_min=-30.0,
                    tsys=tsys, tdias=tdias, steepness=steepness,
                    num_elements=ne, active_model=active_model, bcs_alpha=bcs_alpha,
-                   c_valve=Cvalve))
+                   c_valve=Cvalve, mixed=1.0 if mixed else 0.0))
     # n0(e_c): Frank-Starling reduction factor. Genet/Chapelle leave it a general
     # 0<=n0<=1 factor with no formula -> the non-fitted default is n0=1 (full
     # recruitment), realized by making the Gaussian effectively flat.

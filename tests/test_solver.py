@@ -56,6 +56,7 @@ EXPECTED_FAILURES = {
                                       'chamber_cylinder_genet_circulation.json',
                                       'chamber_cylinder_forcevelocity.json',
                                       'chamber_cylinder_dynamic.json',
+                                      'chamber_cylinder_mixed.json',
                                       'piecewise_Chamber_and_Valve.json',
                                       'closed_loop_two_hill.json',
                                       'pulsatileFlow_CRL.json',

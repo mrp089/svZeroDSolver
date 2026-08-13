@@ -54,8 +54,15 @@
  * - transversely isotropic deviatoric energy
  *   \f$W^e = C_1(\bar I_1-3) + C_2(\bar I_2-3) + C_3 e^{C_4(\bar I_1-3)^2} +
  *   C_5 e^{C_6(\bar I_4-1)^2}\f$, \f$\Sigma^d=\partial W^e/\partial E\f$;
- * - a near-incompressible penalty bulk term \f$\Sigma^b = \kappa(J-1)J\,C^{-1}\f$
- *   (replacing the mixed Lagrange-multiplier pressure of the reference);
+ * - an incompressibility bulk term \f$\Sigma^b = \Pi\,J\,C^{-1}\f$. With
+ *   `mixed = 0` (default) \f$\Pi=\kappa(J-1)\f$ is a near-incompressible
+ *   displacement penalty; with `mixed = 1` \f$\Pi=p\f$ is an independent
+ *   hydrostatic-pressure field (\cite genet23 mixed u/p formulation),
+ *   discretized element-wise constant (P0, LBB-stable with the linear
+ *   \f$\rho,\varphi,\eta\f$) and constrained by the weak incompressibility
+ *   \f$\int_{\Omega_e}(J-1)\,\mathrm d\Omega=0\f$ per element. The penalty locks
+ *   volumetrically at coarse meshes (linear elements, fully-integrated bulk
+ *   term); the mixed form is locking-free;
  * - a viscous term \f$\Sigma^v=\gamma\,\dot E\f$;
  * - an active fiber stress \f$\Sigma^a = \tau\,\mathbf{e}_F\otimes\mathbf{e}_F\f$
  *   along the local myofiber direction \f$\mathbf{e}_F(R) = (0,\cos\alpha(R),
@@ -175,6 +182,13 @@
  *   (\f$\Sigma_a=[T_\text{fib}/(1+e_\text{fib})]\,e_F\otimes e_F\f$, since
  *   \f$\|F\,e_F\|=1+e_\text{fib}\f$), the authoritative form. \f$p=1\f$ is a
  *   diagnostic alternative only.
+ * * `mixed` - incompressibility treatment (optional, default 0). `0` = the
+ *   near-incompressible displacement penalty \f$\kappa\f$; `1` = the mixed u/p
+ *   formulation of \cite genet23 with an independent element-wise-constant (P0)
+ *   hydrostatic-pressure field enforcing \f$\int_{\Omega_e}(J-1)=0\f$. The
+ *   penalty locks at coarse meshes; `mixed = 1` is locking-free and reproduces
+ *   the paper's passive filling at the baseline mesh. `kappa` is ignored when
+ *   `mixed = 1`.
  *
  * ### Internal variables
  *
@@ -187,6 +201,7 @@
  * * `ec_<q>`, `tauc_<q>`, `kc_<q>` - BCS contractile-element strain, active
  *   bond stress and active stiffness at quadrature point `q` (active_model = 1)
  * * `volume` - Cavity volume \f$V\f$
+ * * `pmix_<e>` - Element hydrostatic pressure \f$p_e\f$ (P0), `mixed = 1` only
  *
  * (node index `A` runs from 0 at the endocardium \f$R_i\f$ to `num_elements`
  * at the epicardium \f$R_e\f$.)
@@ -227,7 +242,8 @@ class ChamberCylinder : public Block {
     c_valve = 27,       // cavity/valve compliance (genet23 Eq. 36)
     density = 28,       // reference mass density rho_0 (inertia, genet23 Eq. 18)
     use_inertia = 29,   // 0 = quasi-static (default), 1 = full dynamics (inertia)
-    active_i4pow = 30   // sigma_1D = T_fib/I4^p; 0.5 = Eq.30, 1.0 = Eq.59 limit
+    active_i4pow = 30,  // sigma_1D = T_fib/I4^p; 0.5 = Eq.30, 1.0 = Eq.59 limit
+    mixed = 31          // 0 = penalty incompressibility, 1 = mixed u/p (Genet)
   };
 
   /**
@@ -268,7 +284,8 @@ class ChamberCylinder : public Block {
                {"c_valve", InputParameter(true, false, true, 0.0)},
                {"density", InputParameter(true, false, true, 1000.0)},
                {"use_inertia", InputParameter(true, false, true, 0.0)},
-               {"active_i4pow", InputParameter(true, false, true, 0.5)}}) {}
+               {"active_i4pow", InputParameter(true, false, true, 0.5)},
+               {"mixed", InputParameter(true, false, true, 0.0)}}) {}
 
   /**
    * @brief Set up the degrees of freedom (DOF) of the block
@@ -374,6 +391,10 @@ class ChamberCylinder : public Block {
   int i_veta(int a) const { return i_vel0() + 2 * n_node + a; }
   int i_vbeta() const { return i_vel0() + 3 * n_node; }
   int i_veps() const { return i_vel0() + 3 * n_node + 1; }
+  // Mixed u/p element pressure DOFs (P0), appended after the velocity block so
+  // the penalty layout is unchanged when mixed/dynamics are off.
+  int i_pmix0() const { return i_vol() + 1 + (is_dynamic ? 3 * n_node + 2 : 0); }
+  int i_pmix(int e) const { return i_pmix0() + e; }
 
   int e_rho(int a) const { return a; }
   int e_phi(int a) const { return n_node + a; }
@@ -395,8 +416,12 @@ class ChamberCylinder : public Block {
   int e_veta(int a) const { return e_vel0() + 2 * n_node + a; }
   int e_vbeta() const { return e_vel0() + 3 * n_node; }
   int e_veps() const { return e_vel0() + 3 * n_node + 1; }
+  // Mixed u/p element incompressibility-constraint equations, appended last.
+  int e_pmix0() const { return e_pressure() + 1 + (is_dynamic ? 3 * n_node + 2 : 0); }
+  int e_pmix(int e) const { return e_pmix0() + e; }
 
   bool is_dynamic = false;  ///< full dynamics (inertia) vs quasi-static
+  bool use_mixed = false;   ///< mixed u/p incompressibility vs penalty
 
   double act = 0.0;       ///< Activation rate a(t) (= |nu| for the BCS input)
   double act_plus = 0.0;  ///< max(a(t), 0) (= |nu|_+ for the BCS input)
