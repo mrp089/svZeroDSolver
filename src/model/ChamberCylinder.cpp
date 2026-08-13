@@ -223,11 +223,26 @@ void compute_g(const T xi[6], const T xidot[6], const ActiveInput& act,
   for (int i = 0; i < 6; i++) g[i] = contract<T>(S, k.dE[i]);
 }
 
-/// BCS Frank-Starling force-length function n_0(e_c).
+/// BCS Frank-Starling force-length function n_0(e_c): the piecewise-linear
+/// curve digitized from Caruel et al. (2014), Fig. 2(a) (\cite genet23 Ref. 13).
+/// It represents the actin-myosin overlap (length-tension) relationship: n_0
+/// rises from 0, plateaus at 1 around the optimal contractile strain, and falls
+/// back to 0. (The center/width of the earlier Gaussian placeholder are unused.)
 template <typename T>
-inline T frank_starling(T e_c, double center, double width) {
-  const T z = (e_c - center) / width;
-  return std::exp(-0.5 * z * z);
+inline T frank_starling(T e_c, double /*center*/, double /*width*/) {
+  // Breakpoints (e_c, n_0) digitized from Caruel 2014 Fig. 2(a).
+  constexpr int NP = 5;
+  static const double X[NP] = {-0.4, 0.3, 1.0, 1.3, 2.5};
+  static const double Y[NP] = {0.0, 0.4, 1.0, 1.0, 0.0};
+  const double x = re(e_c);
+  if (x <= X[0]) return T(Y[0]);
+  if (x >= X[NP - 1]) return T(Y[NP - 1]);
+  int k = 0;
+  while (k < NP - 1 && x >= X[k + 1]) ++k;
+  const double slope = (Y[k + 1] - Y[k]) / (X[k + 1] - X[k]);
+  // e_c may carry a complex-step perturbation; keep it in the linear term so
+  // Im(n_0)/h recovers the exact segment slope.
+  return Y[k] + slope * (e_c - X[k]);
 }
 
 /// BCS active-law parameters.

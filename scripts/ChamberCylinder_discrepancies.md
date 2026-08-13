@@ -33,7 +33,7 @@ muscle contraction models*, AMSES 2019.
 
 | Parameter | What Genet says | Reference content | Choice made (flagged, not fitted) |
 |---|---|---|---|
-| `n0(e_c)` Frank–Starling | "a function accounting for the Frank–Starling mechanism", cites [6] | [6] Remark 4: `n0` is a reduction factor `0≤n0≤1` set by the **history of `e_c` (previous max stretch / preload)** — a per-beat scale on peak stress, **no closed form given** | `n0 = 1` (full recruitment). Peak fiber tension `= n0·σ0` at steady state, so this fixes the peak from exact values. Appropriate for a well-filled beat. |
+| `n0(e_c)` Frank–Starling | "a function accounting for the Frank–Starling mechanism", cites [6] | [6] Remark 4: `n0` is a reduction factor `0≤n0≤1`, no closed form. **Ref [13] Caruel et al. 2014 Fig 2(a)** plots the actual `n0(e_c)`: piecewise-linear, 0 at `e_c≈−0.4`, rising to a plateau of 1 over `e_c∈[1,1.3]`, back to 0 at `e_c≈2.5` | **piecewise-linear digitized from Caruel Fig 2(a)** (breakpoints `(−0.4,0),(0.3,0.4),(1,1),(1.3,1),(2.5,0)`), in `frank_starling()`. See §3 OPEN #1: this resolves the over-ejection but exposes an `e_c`-scale question. |
 | `ν(t)` activation | "prescribed as detailed in [6,33]", triggered when `[Ca²⁺]>c_th` | [6],[32]: `ν=+k_ATP` while depolarised, `−k_RS` while repolarised (`|ν|₊=k_ATP·1_{Ca>C}`). Rate values not tabulated for this LV. | tanh systole/diastole window; onset `t_sys≈0.13 s`, relaxation `t_dias≈0.45 s`, period 0.8 s **read from [G] Fig 5's own timeline**; rate `|ν|≈30/s`. Rate magnitude is immaterial to the peak (cancels at steady state). |
 | `P_at` atrial pressure | Table 1 lists it but the cell is only a citation to [6] | [32]: prescribed low pressure + pre-systolic **atrial kick**; no number for this LV | `P_at ≈ 0.9 kPa`, read from [G] Fig 5 end-diastolic pressure (the paper's stated static end-diastolic loading). Atrial kick omitted. |
 | `P_vs` venous pressure | not in Table 1; appears in Eq. 36c | [32] uses a venous `P_ve` in its Windkessel; no value for [G] | `P_vs = 0` (documented). |
@@ -50,17 +50,18 @@ muscle contraction models*, AMSES 2019.
 
 ## 2. Result with all-exact parameters (zero fitting)
 
-Exact valves + 2-stage Windkessel, `σ0=65 kPa`, `n0=1`, force-velocity `α=12`,
-`ne=12`, `P_at=0.9 kPa`, `P_vs=0`:
+Exact valves + 2-stage Windkessel, `σ0=65 kPa`, force-velocity `α=12`, `ne=12`,
+`P_at=0.9 kPa`, `P_vs=0`. Two `n0` variants shown: `n0=1` (initial placeholder)
+and the **Caruel Fig 2(a) `n0(e_c)`** (current).
 
-| Quantity | Genet Fig 5 | ChamberCylinder (exact params) | Status |
-|---|---|---|---|
-| Diastolic pressure | ~0.9 kPa | 0.81 kPa | **match** |
-| EDV | 137 mL | 124 mL | good (~10% low) |
-| ESV | 74 mL | 24 mL | **discrepancy** (over-ejection) |
-| EF | 46% | 81% | **discrepancy** |
-| Peak systolic pressure | 12.8 kPa | 9.5 kPa (with exact `C_valve`); ~20 kPa (`C_valve=0`) | `C_valve`-sensitive |
-| Peak twist | ~20° | ~64° | ~3× |
+| Quantity | Genet Fig 5 | `n0=1` | **Caruel `n0`** | Status |
+|---|---|---|---|---|
+| Diastolic pressure | ~0.9 kPa | 0.81 | 0.85 kPa | **match** |
+| EDV | 137 mL | 124 | 123 mL | good (~10% low) |
+| ESV | 74 mL | 24 | **62 mL** | Caruel `n0` fixes it |
+| EF | 46% | 81% | **50%** | Caruel `n0` fixes it |
+| Peak twist | ~20° | 64° | **31°** | Caruel `n0` fixes it |
+| Peak systolic pressure | 12.8 kPa | 9.5 | **5.0 kPa** | now too *low* — see OPEN #1 |
 
 ## 3. Discrepancy log (systematic)
 
@@ -78,23 +79,24 @@ term (`C5=0` unchanged), active coupling (`active_model` 0 vs 1 identical),
 mesh (`ne` 6→24), and penalty `κ` (1e5→1e8). In the full simulation, diastole
 has a real pressure gradient so EDV=124 mL ≈ paper's 137.
 
-### OPEN #1 — systolic over-ejection (ESV 24 vs 74 mL, EF 81% vs 46%)
-The dominant remaining gap. Established **not** caused by: valve law (hard
-`PiecewiseValve` vs smooth `ValveTanh` give the same ESV), `C_valve`
-(ESV≈24–37 for `C_valve` 0→9e-9), or the force-velocity term (ESV≈24–37 for
-`α` 0→12). The ventricle contracts *below* its 65 mL reference volume, whereas
-the paper stops at 74 mL (*above* reference). Candidate causes, to be tested
-next:
-- **Frank–Starling operating point** `n0`: fixed at 1 (max). A submaximal `n0`
-  would lower both ejection and peak pressure together — consistent with the
-  paper's lower peak (12.8 vs our ~20 kPa at `C_valve=0`). Its value is not
-  specified by [G]/[6].
-- **Active-stress → cavity-pressure conversion**: our peak-pressure / fiber-stress
-  ratio is ~1.6× the paper's; needs an active-ESPVR check against an analytical
-  active cylinder (analogue of the passive validation).
-- **`C_valve` interaction**: the paper's ejection is a flat pressure *plateau*
-  (`Ṗv≈0`, so `C_valve·Ṗv` in Eq. 36a is inert); ours is rounded (compliant
-  afterload sags), so `C_valve·Ṗv` over-drains the cavity.
+### OPEN #1 — largely RESOLVED by Frank–Starling; residual is an `e_c`-scale question
+The over-ejection was **Frank–Starling**. Ruled out first: valve law (hard vs
+smooth identical), `C_valve` (ESV≈24–37 for 0→9e-9), force-velocity
+(ESV≈24–37 for `α` 0→12). Implementing the actual `n0(e_c)` from Caruel 2014
+Fig 2(a) (§1.B) moves ESV **24→62 mL** (paper 74), EF **81→50%** (paper 46),
+twist **64→31°** (paper 20) — the ventricle now stops near reference volume as
+the paper does.
+
+**New, sharper open item:** peak pressure drops to **5.0 kPa** (paper 12.8),
+now `C_valve`-independent. Cause: the model's contractile strain `e_c` operates
+at **−0.11…0.22 (mean 0.095)** — the *rising limb* of Caruel's curve, where
+`n0≈0.2–0.35`, so effective tension is only ~30% of `σ0`. The paper's 12.8 kPa
+peak implies operation near the **plateau** (`n0≈1`, `e_c≈1`). So either the
+model's `e_c` is defined on a different scale than Caruel's abscissa, or the
+curve's abscissa is a normalized sarcomere length rather than `e_c=√I4−1`.
+**This is now the single most valuable question for M. Genet** (see requests
+list): what is the abscissa of the `n0` curve, and at what `e_c` should a
+well-filled beat sit?
 
 ### OPEN #2 — peak twist ~3× (64° vs 20°)
 Global twist `β` is an unconstrained DOF (no basal/apical rotation constraint —
