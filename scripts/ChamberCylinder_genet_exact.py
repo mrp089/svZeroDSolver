@@ -76,12 +76,16 @@ def atrial_pressure(period=0.8):
 PAT_KICK_T, PAT_KICK_P = atrial_pressure(0.8)
 
 
-# Activation timing read from Fig. 5 (Genet does not tabulate it): systole onset
-# t_sys=0.11 s (pressure begins rising) and relaxation onset t_dias=0.40 s
-# (pressure leaves the plateau) -> ~290 ms systole, matching the figure. (Earlier
-# ad-hoc 0.13/0.45 held the ventricle contracted ~45 ms too long.)
-def build(P_at=900.0, P_vs=0.0, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
-          tsys=0.11, tdias=0.40, steepness=0.02, integrator="stiff",
+# Activation: the PhysioBlocks BCS nu(t) trapezoid (activation_mode=1, set in the
+# vv dict below). `tsys` here anchors its systole onset (the nu=0 upstroke) and is
+# read from Fig 5: tsys=0.06 s puts the pressure upstroke at ~110 ms (the
+# contractile lag adds ~50 ms). `tdias` is unused in mode 1 (the trapezoid carries
+# its own relaxation ramp). NOTE (documented discrepancy): the PhysioBlocks
+# spherical-sim activation relaxes with nu=-20 s^-1, slower than whatever Genet
+# used for the cylindrical Fig 5 -> filling is delayed and the diastolic volume
+# fit is worse than an ad-hoc tanh; kept for fidelity to the cited reference.
+def build(P_at=900.0, P_vs=PVS_PHYSIOBLOCKS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
+          tsys=0.06, tdias=0.40, steepness=0.02, integrator="stiff",
           rho_infty=0.5, ncycle=8, aortic_Rmax=None, active_model=1,
           n0_flat=True, atrial_kick=True, mixed=True):
     # Integrator note: Genet's temporal scheme is the non-dissipative midpoint
@@ -93,10 +97,17 @@ def build(P_at=900.0, P_vs=0.0, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
     # faithful energy-preserving scheme needs the bespoke integrator (not built).
     aortic_Rmax = aortic_Rmax if aortic_Rmax is not None else K_iso_inv
     vv = dict(GEOM); vv.update(MAT); vv["kappa"] = KAPPA
-    vv.update(dict(sigma_max=sigma_max, alpha_max=30.0, alpha_min=-30.0,
-                   tsys=tsys, tdias=tdias, steepness=steepness,
+    # BCS activation nu(t): PhysioBlocks trapezoid (activation_mode=1) between
+    # alpha_min=-20 (diastole) and alpha_max=+35 (systole) -- the MEDISIM
+    # `active_law.activation.{min,max}`. Its own timing supersedes tsys/tdias
+    # (kept only for the mode-0 tanh fallback). C_valve is NOT put on the
+    # ventricle (that over-buffers Pv); it is the aortic-root compliance in the
+    # circulation below (Genet Eq 36 / PhysioBlocks capacitance_valve), so
+    # c_valve=0 here.
+    vv.update(dict(sigma_max=sigma_max, alpha_max=35.0, alpha_min=-20.0,
+                   activation_mode=1.0, tsys=tsys, tdias=tdias, steepness=steepness,
                    num_elements=ne, active_model=active_model, bcs_alpha=bcs_alpha,
-                   c_valve=Cvalve, mixed=1.0 if mixed else 0.0))
+                   c_valve=0.0, mixed=1.0 if mixed else 0.0))
     # n0(e_c): Frank-Starling reduction factor. Genet/Chapelle leave it a general
     # 0<=n0<=1 factor with no formula -> the non-fitted default is n0=1 (full
     # recruitment), realized by making the Gaussian effectively flat.
@@ -128,10 +139,12 @@ def build(P_at=900.0, P_vs=0.0, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
             {"boundary_conditions": {}, "vessel_id": 1, "vessel_length": 1.0,
              "vessel_name": "ventricle", "zero_d_element_type": "ChamberCylinder",
              "zero_d_element_values": vv},
-            # arterial stage: Car, Rp  (eq 36b)
+            # arterial stage: aortic-root node carries C_valve + C_ar in parallel
+            # (PhysioBlocks capacitance_valve + circulation_aorta_proximal, both
+            # at aorta_proximal), then R_p to the distal stage (eq 36a-b).
             {"boundary_conditions": {}, "vessel_id": 2, "vessel_length": 1.0,
              "vessel_name": "arterial", "zero_d_element_type": "BloodVesselRC",
-             "zero_d_element_values": {"Rpd": Rp, "Cp": Car}},
+             "zero_d_element_values": {"Rpd": Rp, "Cp": Car + Cvalve}},
             # distal stage: Cd, Rd -> venous (eq 36c)
             {"boundary_conditions": {"outlet": "VENOUS"}, "vessel_id": 3,
              "vessel_length": 1.0, "vessel_name": "distal",

@@ -783,22 +783,64 @@ void ChamberCylinder::get_activation(std::vector<double>& parameters) {
   const double tsys = parameters[global_param_ids[ParamId::tsys]];
   const double tdias = parameters[global_param_ids[ParamId::tdias]];
   const double steepness = parameters[global_param_ids[ParamId::steepness]];
+  const double mode = parameters[global_param_ids[ParamId::activation_mode]];
 
   const auto T_cardiac = model->cardiac_cycle_period;
   const auto t_in_cycle = fmod(model->time, T_cardiac);
 
-  auto warp_signed = [T_cardiac](double dt) {
-    return fmod(dt + 1.5 * T_cardiac, T_cardiac) - 0.5 * T_cardiac;
-  };
-
-  const double phase_tsys = warp_signed(t_in_cycle - tsys);
-  const double phase_tdias = warp_signed(t_in_cycle - tdias);
-
-  const double S_plus = 0.5 * (1.0 + tanh(phase_tsys / steepness));
-  const double S_minus = 0.5 * (1.0 - tanh(phase_tdias / steepness));
-  const double f = S_plus * S_minus;
-
-  const double act_t = alpha_max * f + alpha_min * (1.0 - f);
+  double act_t;
+  if (mode >= 0.5) {
+    // PhysioBlocks `active_law...activation` = a rescale_two_phases_function:
+    // a trapezoidal nu(t) between alpha_min (diastole) and alpha_max (systole)
+    // that ramps through 0. Reference fractions (reference period 0.9), the
+    // phase of each interval (0 = diastole, 1 = systole), and the
+    // diastole_scaling_factor a_scale = 0.8; the phase-0 (diastole) and phase-1
+    // (systole) intervals are stretched independently so the waveform fills the
+    // actual cardiac period T_cardiac (same rescaling as the P_at waveform).
+    static const double refT[8] = {0.0,   0.027, 0.037, 0.145,
+                                   0.309, 0.417, 0.427, 0.9};
+    static const int refP[7] = {0, 0, 1, 1, 1, 0, 0};
+    const double vals[8] = {alpha_min, alpha_min, 0.0,       alpha_max,
+                            alpha_max, 0.0,       alpha_min, alpha_min};
+    const double a_scale = 0.8;
+    const double rp = refT[7] - refT[0];
+    const double beta = T_cardiac / rp;
+    double d0 = 0.0;
+    for (int i = 0; i < 7; i++)
+      if (refP[i] == 0) d0 += refT[i + 1] - refT[i];
+    const double d1 = rp - d0;
+    const double s0 = 1.0 + a_scale * (beta - 1.0) * rp / d0;
+    const double s1 = 1.0 + (1.0 - a_scale) * (beta - 1.0) * rp / d1;
+    double ab[8];
+    ab[0] = 0.0;
+    for (int i = 1; i < 8; i++)
+      ab[i] =
+          ab[i - 1] + (refT[i] - refT[i - 1]) * (refP[i - 1] == 0 ? s0 : s1);
+    // Retime to Fig 5: anchor the systole onset (the nu=0 upstroke at ab[2]) at
+    // tsys by translating the waveform in time; shape and phase durations are
+    // preserved. (tsys = ab[2] gives the untranslated PhysioBlocks timing.)
+    const double shift = tsys - ab[2];
+    const double te = fmod(t_in_cycle - shift + 2.0 * T_cardiac, T_cardiac);
+    act_t = vals[7];
+    for (int i = 1; i < 8; i++) {
+      if (te <= ab[i]) {
+        const double fr = (te - ab[i - 1]) / (ab[i] - ab[i - 1]);
+        act_t = vals[i - 1] + fr * (vals[i] - vals[i - 1]);
+        break;
+      }
+    }
+  } else {
+    // tanh systole/diastole switch: act = alpha_max on [tsys, tdias], else min.
+    auto warp_signed = [T_cardiac](double dt) {
+      return fmod(dt + 1.5 * T_cardiac, T_cardiac) - 0.5 * T_cardiac;
+    };
+    const double phase_tsys = warp_signed(t_in_cycle - tsys);
+    const double phase_tdias = warp_signed(t_in_cycle - tdias);
+    const double S_plus = 0.5 * (1.0 + tanh(phase_tsys / steepness));
+    const double S_minus = 0.5 * (1.0 - tanh(phase_tdias / steepness));
+    const double f = S_plus * S_minus;
+    act_t = alpha_max * f + alpha_min * (1.0 - f);
+  }
   act = std::abs(act_t);
   act_plus = std::max(act_t, 0.0);
 }

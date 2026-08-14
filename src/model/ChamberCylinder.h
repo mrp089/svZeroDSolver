@@ -243,7 +243,10 @@ class ChamberCylinder : public Block {
     density = 28,       // reference mass density rho_0 (inertia, genet23 Eq. 18)
     use_inertia = 29,   // 0 = quasi-static (default), 1 = full dynamics (inertia)
     active_i4pow = 30,  // sigma_1D = T_fib/I4^p; 0.5 = Eq.30, 1.0 = Eq.59 limit
-    mixed = 31          // 0 = penalty incompressibility, 1 = mixed u/p (Genet)
+    mixed = 31,         // 0 = penalty incompressibility, 1 = mixed u/p (Genet)
+    activation_mode = 32  // 0 = tanh systole/diastole switch; 1 = PhysioBlocks
+                          // rescale_two_phases trapezoid nu(t) (min=alpha_min,
+                          // max=alpha_max)
   };
 
   /**
@@ -285,7 +288,8 @@ class ChamberCylinder : public Block {
                {"density", InputParameter(true, false, true, 1000.0)},
                {"use_inertia", InputParameter(true, false, true, 0.0)},
                {"active_i4pow", InputParameter(true, false, true, 0.5)},
-               {"mixed", InputParameter(true, false, true, 0.0)}}) {}
+               {"mixed", InputParameter(true, false, true, 0.0)},
+               {"activation_mode", InputParameter(true, false, true, 0.0)}}) {}
 
   /**
    * @brief Set up the degrees of freedom (DOF) of the block

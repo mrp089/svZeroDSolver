@@ -25,12 +25,14 @@ import ChamberCylinder_genet_exact as G  # noqa: E402
 kPa = 1e-3
 
 
-def run(geom=None, ne=12, ncycle=8):
-    # Mixed-u/p wall (default) + constant P_at=0.9 kPa (no kick needed) + venous
-    # P_vs=1.6 kPa afterload floor; activation timing read from Fig. 5.
+def run(geom=None, ne=3, ncycle=12):
+    # All builder defaults: mixed-u/p wall, PhysioBlocks atrial-kick P_at,
+    # P_vs=1.6 kPa afterload floor, PhysioBlocks BCS activation (retimed to Fig 5),
+    # and the exact C_valve as the aortic-root compliance. ne=3 = coarsest
+    # converged mesh (ChamberCylinder_convergence.py); ncycle=12 reaches the
+    # Windkessel limit cycle.
     cfg = G.build(bcs_alpha=12.0, ne=ne, ncycle=ncycle, P_vs=G.PVS_PHYSIOBLOCKS)
     vv = cfg["vessels"][1]["zero_d_element_values"]
-    vv["c_valve"] = 0.0  # exact C_valve over-buffers the peak (see discrepancies doc)
     if geom:
         vv.update(geom)
     cfg["simulation_parameters"]["absolute_tolerance"] = 1e-6

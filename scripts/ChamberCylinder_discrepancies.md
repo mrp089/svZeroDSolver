@@ -5,6 +5,24 @@ value is either taken exactly from the paper's Table 1, from a cited reference,
 or explicitly flagged as *not specified by the sources*. Any remaining mismatch
 is then a traceable modeling difference, not a tuning artifact.
 
+> **See `ChamberCylinder_model_audit.md`** for the current ingredient-by-ingredient
+> provenance map, and `ChamberCylinder_convergence.py` for the mesh/time-step
+> convergence (targets converged to ~0.5% of Genet; coarsest usable ne=3, dt=2 ms).
+>
+> **LATEST — two reference-faithful changes (this pass):**
+> 1. **C_valve RESOLVED.** The exact 9e-9 is now the **aortic-root compliance**
+>    (Genet Eq 36 / PhysioBlocks `capacitance_valve`, parallel with C_ar), not a
+>    term on the ventricular mass balance. The old "over-buffering" was that
+>    mis-placement; correctly placed, C_valve=9e-9 gives peak 12.9 kPa with a flat
+>    plateau. (Supersedes OPEN #3.)
+> 2. **BCS activation ν(t) = exact PhysioBlocks trapezoid** (ν ∈ [−20, +35],
+>    `activation_mode=1`), onset retimed to Fig 5 (`tsys=0.06`). Chosen for
+>    fidelity to the cited reference over an ad-hoc ±30 tanh. **Documented
+>    discrepancy:** its −20 s⁻¹ diastolic rate relaxes slower than Genet's Fig-5
+>    beat → delayed filling → the diastolic *volume* fit is worse (RMS_V ≈20 vs ≈7)
+>    and ESV over-ejects (68 vs 74). The PhysioBlocks *spherical-sim* activation is
+>    not Genet's (untabulated) Fig-5 activation.
+
 References: **[G]** Genet, Diaz, Chapelle, Moireau, *Reduced LV dynamics modeling
 based on a cylindrical assumption*, Int. J. Numer. Meth. Biomed. Engng. 2023
 e3711. **[6]** Chapelle, Le Tallec, Moireau, Sorine, *Energy-preserving muscle
