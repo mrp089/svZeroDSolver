@@ -52,29 +52,33 @@ muscle contraction models*, AMSES 2019.
 ## 2. Result with all-exact parameters (zero fitting)
 
 Exact valves + 2-stage Windkessel, `σ0=65 kPa`, force-velocity `α=12`, `ne=12`,
-**PhysioBlocks `n0(e_c)`**, `C_valve=0`, **mixed u/p wall** (`mixed=1`). P_at is a
-**constant 0.9 kPa** (the end-diastolic pressure from Fig 5) — no atrial kick is
-needed, since the locking-free mixed wall fills to EDV~135 on its own. Afterload
-floor `P_vs=1.6 kPa` (PhysioBlocks). Activation timing **read from Fig 5**:
-`t_sys=0.11 s` (pressure rise), `t_dias=0.40 s` (plateau end) → ~290 ms systole.
-Metrics vs the user's 1 ms digitization (`scripts/genet23_fig5_digitized.csv`):
+**PhysioBlocks `n0(e_c)`**, `C_valve=0`, **mixed u/p wall** (`mixed=1`). P_at is the
+exact **PhysioBlocks `atrial.blood_pressure`** waveform — a `rescale_two_phases_function`
+(min 450, max 900 Pa) with the atrial kick (450→900) in **late diastole**, held at
+900 through end-diastole into early systole (`scripts/ChamberCylinder_genet_exact.py`
+`atrial_pressure()`). Afterload floor `P_vs=1.6 kPa` (PhysioBlocks). Activation
+timing **read from Fig 5**: `t_sys=0.11 s` (pressure rise), `t_dias=0.40 s`
+(plateau end) → ~290 ms systole. Metrics vs the user's 1 ms digitization
+(`scripts/genet23_fig5_digitized.csv`):
 
 | Quantity | Genet Fig 5 (digitized) | penalty (`mixed=0`) | **mixed u/p (`mixed=1`)** | Status |
 |---|---|---|---|---|
-| Peak systolic pressure | 12.8 kPa | 12.8 | **12.9 kPa** | **match** |
+| Peak systolic pressure | 12.8 kPa | 12.8 | **12.8 kPa** | **exact** |
 | Peak twist | 20.2° | 20 | **21°** | **match** |
-| EF | 44% | 49% | **44%** | **exact** |
-| ESV | 74 mL | 63 | **75 mL** | **match** |
-| EDV | 135.7 mL | 124 | **135 mL** | **match (was ~10% low)** |
-| trace RMS (P / V / torsion) | — | — | **0.9 kPa / 7 mL / 4°** | good |
+| EF | 44% | 49% | **45%** | **match** |
+| ESV | 74 mL | 63 | **74 mL** | **exact** |
+| EDV | 135.7 mL | 124 | **134 mL** | **match (was ~10% low)** |
 
-Dropping the atrial kick (constant `P_at`) removes a spurious sharp late filling
-step and matches the volume better; the Fig-5 activation timing fixes a ~45 ms
-"stays-contracted-too-long" lag in the pressure (relaxation RMS 2.5→0.9 kPa). The
-residual is **diastolic dynamics** (OPEN #6): the model's refilling and untwist
-are faster/more abrupt than Genet's gradual extended diastole (it fills straight
-to EDV, missing the E-wave/diastasis/A-wave substructure, and untwists ~150 ms
-early) — a temporal-scheme / atrial-model limitation, not the wall mechanics.
+The **PhysioBlocks atrial kick** reproduces the two-phase filling of Fig 5: the
+450 Pa mid-diastole floor gives the slow **E-wave**, the late-diastole kick to
+900 Pa gives the **A-wave**, and holding 900 through end-diastole holds EDV. (An
+earlier hand-made kick dropped to 450 at end-diastole — it did not hold EDV and
+produced a spurious sharp step; that was a mistiming, not a missing feature.) The
+Fig-5 activation timing fixes a ~45 ms "stays-contracted-too-long" lag in the
+pressure (relaxation RMS 2.5→0.9 kPa). Residuals: the diastasis level sits ~6 mL
+low (the model equilibrates at static(450 Pa)≈116 vs Genet's ~122) and the twist
+untwists faster than Genet's gradual recoil — diastolic dynamics (OPEN #6), not
+the wall mechanics.
 
 The **mixed u/p** closes the EDV/ESV gap: EDV 124→**135**, ESV 63→**75**, EF
 49→**44%** (exact), with peak pressure and twist unchanged. It is **mesh-independent**

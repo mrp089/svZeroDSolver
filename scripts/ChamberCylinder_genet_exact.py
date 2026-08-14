@@ -32,18 +32,48 @@ MAT = dict(C1=7.0, C2=0.0, C3=700.0, C4=2.0, C5=50.0, C6=4.0, gamma=70.0,
 KAPPA = 1e7
 SIGMA0 = 65e3  # Genet Table 1 "Maximum active stress" sigma_0
 
-# Atrial and venous pressures are prescribed inputs Genet does not tabulate.
-# P_at: with the mixed-u/p wall (locking-free) a CONSTANT P_at = 0.9 kPa (the
-# end-diastolic pressure read from Fig. 5) fills the ventricle to EDV~135 mL on
-# its own -- so no atrial "kick" is needed (`atrial_kick=False` default). The
-# earlier PhysioBlocks kick waveform was a crutch for the penalty wall's
-# under-fill; on the mixed wall it produced a spurious sharp late filling step
-# that does not match Fig. 5's smooth E-wave/diastasis/A-wave. (The kick arrays
-# are kept for reference / experimentation only.) Systemic venous P_vs = 1600 Pa
-# (PhysioBlocks) sets the afterload floor -> exact peak pressure.
+# Atrial and venous pressures are prescribed inputs Genet does not tabulate; the
+# MEDISIM PhysioBlocks reference (physioblocks/physioblocks, references/
+# full_configurations/spherical_heart_sim.jsonc) gives them. P_at is the
+# `atrial.blood_pressure` waveform: a `rescale_two_phases_function` between
+# min=450 Pa and max=900 Pa, with the ATRIAL KICK (450->900) in LATE diastole and
+# P_at HELD at 900 through end-diastole into early systole (then dropping back to
+# 450). The 450 floor during mid-diastole gives the slow E-wave; the late kick
+# gives the A-wave -> the two-phase filling of Fig. 5. (An earlier hand-made kick
+# that instead dropped to 450 at end-diastole did NOT hold EDV and mismatched.)
+# Systemic venous P_vs = 1600 Pa sets the afterload floor -> exact peak pressure.
 PVS_PHYSIOBLOCKS = 1600.0
-PAT_KICK_T = [0.0, 0.50, 0.66, 0.72, 0.80]
-PAT_KICK_P = [450.0, 450.0, 900.0, 900.0, 450.0]
+PAT_MIN, PAT_MAX = 450.0, 900.0
+# PhysioBlocks reference_function (cycle fraction, value) + phase per interval
+# (0 = diastole, 1 = systole) and diastole_scaling_factor alpha.
+PAT_REF = [(0.0, PAT_MAX), (0.02, PAT_MAX), (0.07, PAT_MIN),
+           (0.84, PAT_MIN), (0.9, PAT_MAX)]
+PAT_PHASES = [1, 1, 0, 1]
+PAT_ALPHA = 0.8
+
+
+def atrial_pressure(period=0.8):
+    """PhysioBlocks `atrial.blood_pressure` (rescale_two_phases_function),
+    evaluated for a cardiac `period`. Stretches the phase-0 (diastole) vs
+    phase-1 (systole) intervals of the reference waveform so it fills `period`
+    while preserving the kick shape. Returns (times[s], pressures[Pa])."""
+    ref, phases, alpha = PAT_REF, PAT_PHASES, PAT_ALPHA
+    rp = ref[-1][0] - ref[0][0]
+    beta = period / rp
+    d0 = sum(ref[i][0] - ref[i - 1][0]
+             for i in range(1, len(ref)) if phases[i - 1] == 0)
+    d1 = rp - d0
+    s0 = 1.0 + alpha * (beta - 1.0) * rp / d0
+    s1 = 1.0 + (1.0 - alpha) * (beta - 1.0) * rp / d1
+    t = [ref[0][0]]
+    for i in range(1, len(ref)):
+        w = (ref[i][0] - ref[i - 1][0]) * (s0 if phases[i - 1] == 0 else s1)
+        t.append(t[-1] + w)
+    return t, [v[1] for v in ref]
+
+
+# Back-compat aliases (the atrial-kick waveform for the default 0.8 s period).
+PAT_KICK_T, PAT_KICK_P = atrial_pressure(0.8)
 
 
 # Activation timing read from Fig. 5 (Genet does not tabulate it): systole onset
@@ -53,7 +83,7 @@ PAT_KICK_P = [450.0, 450.0, 900.0, 900.0, 450.0]
 def build(P_at=900.0, P_vs=0.0, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
           tsys=0.11, tdias=0.40, steepness=0.02, integrator="stiff",
           rho_infty=0.5, ncycle=8, aortic_Rmax=None, active_model=1,
-          n0_flat=True, atrial_kick=False, mixed=True):
+          n0_flat=True, atrial_kick=True, mixed=True):
     # Integrator note: Genet's temporal scheme is the non-dissipative midpoint
     # (rho_infty=1) made *stable* by energy-preserving algorithmic stresses + the
     # Chapelle sqrt(k_c) internal-variable update. The plain midpoint alone

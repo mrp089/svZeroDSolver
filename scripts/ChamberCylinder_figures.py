@@ -88,8 +88,8 @@ def fig5():
     ax[3].plot(pT_t, pT, 'k-', lw=2); ax[3].plot(r['t'], r['tw'], 'C3-', lw=1.6)
     ax[3].set(title="torsion", xlabel="t [ms]", ylabel="torsion [deg]")
     fig.suptitle("Genet Fig 5 (black, digitized) vs ChamberCylinder mixed u/p (red): "
-                 "exact params, constant P_at, exact valves + 2-stage Windkessel, "
-                 "force-velocity")
+                 "exact params, PhysioBlocks atrial-kick P_at, exact valves + "
+                 "2-stage Windkessel, force-velocity")
     plt.tight_layout(rect=[0, 0, 1, 0.95]); plt.savefig("fig5.png", dpi=110); plt.close()
     print("saved fig5.png")
 
