@@ -32,21 +32,26 @@ MAT = dict(C1=7.0, C2=0.0, C3=700.0, C4=2.0, C5=50.0, C6=4.0, gamma=70.0,
 KAPPA = 1e7
 SIGMA0 = 65e3  # Genet Table 1 "Maximum active stress" sigma_0
 
-# Atrial and venous pressures are prescribed inputs Genet does not tabulate; the
-# MEDISIM PhysioBlocks reference (references/full_configurations/
-# spherical_heart_sim.jsonc) gives the concrete values. P_at is a waveform
-# (baseline 450 Pa, pre-systolic atrial kick to 900 Pa). The kick sits at the
-# END of the cycle (t~0.66-0.72 s, i.e. late diastole just before the cycle
-# wraps into the next systole at t_sys=0.13 s), matching Genet Fig. 5 where
-# atrial contraction completes filling to EDV right at the cycle boundary.
-# The systemic venous pressure P_vs = 1600 Pa.
+# Atrial and venous pressures are prescribed inputs Genet does not tabulate.
+# P_at: with the mixed-u/p wall (locking-free) a CONSTANT P_at = 0.9 kPa (the
+# end-diastolic pressure read from Fig. 5) fills the ventricle to EDV~135 mL on
+# its own -- so no atrial "kick" is needed (`atrial_kick=False` default). The
+# earlier PhysioBlocks kick waveform was a crutch for the penalty wall's
+# under-fill; on the mixed wall it produced a spurious sharp late filling step
+# that does not match Fig. 5's smooth E-wave/diastasis/A-wave. (The kick arrays
+# are kept for reference / experimentation only.) Systemic venous P_vs = 1600 Pa
+# (PhysioBlocks) sets the afterload floor -> exact peak pressure.
 PVS_PHYSIOBLOCKS = 1600.0
 PAT_KICK_T = [0.0, 0.50, 0.66, 0.72, 0.80]
 PAT_KICK_P = [450.0, 450.0, 900.0, 900.0, 450.0]
 
 
+# Activation timing read from Fig. 5 (Genet does not tabulate it): systole onset
+# t_sys=0.11 s (pressure begins rising) and relaxation onset t_dias=0.40 s
+# (pressure leaves the plateau) -> ~290 ms systole, matching the figure. (Earlier
+# ad-hoc 0.13/0.45 held the ventricle contracted ~45 ms too long.)
 def build(P_at=900.0, P_vs=0.0, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
-          tsys=0.13, tdias=0.45, steepness=0.02, integrator="stiff",
+          tsys=0.11, tdias=0.40, steepness=0.02, integrator="stiff",
           rho_infty=0.5, ncycle=8, aortic_Rmax=None, active_model=1,
           n0_flat=True, atrial_kick=False, mixed=True):
     # Integrator note: Genet's temporal scheme is the non-dissipative midpoint

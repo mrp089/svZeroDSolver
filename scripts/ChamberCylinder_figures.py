@@ -26,9 +26,9 @@ kPa = 1e-3
 
 
 def run(geom=None, ne=12, ncycle=8):
-    # PhysioBlocks atrial-kick P_at waveform + venous P_vs (see discrepancies doc).
-    cfg = G.build(bcs_alpha=12.0, ne=ne, ncycle=ncycle,
-                  atrial_kick=True, P_vs=G.PVS_PHYSIOBLOCKS)
+    # Mixed-u/p wall (default) + constant P_at=0.9 kPa (no kick needed) + venous
+    # P_vs=1.6 kPa afterload floor; activation timing read from Fig. 5.
+    cfg = G.build(bcs_alpha=12.0, ne=ne, ncycle=ncycle, P_vs=G.PVS_PHYSIOBLOCKS)
     vv = cfg["vessels"][1]["zero_d_element_values"]
     vv["c_valve"] = 0.0  # exact C_valve over-buffers the peak (see discrepancies doc)
     if geom:
@@ -55,13 +55,21 @@ def run(geom=None, ne=12, ncycle=8):
                 twpk=(b[m] * L * 180 / np.pi).max())
 
 
-# Digitized Genet Fig. 5.
-pP_t = [0, 100, 130, 155, 175, 195, 220, 260, 320, 380, 410, 430, 450, 470, 490, 540, 600, 700, 800]
-pP = [0.9, 0.9, 1.0, 4, 8, 11, 12.6, 12.8, 12.8, 12.6, 12.0, 9, 5, 1.5, 0.6, 0.7, 0.6, 0.8, 0.9]
-pV_t = [0, 110, 140, 180, 240, 300, 370, 420, 470, 510, 560, 620, 690, 760, 800]
-pV = [137, 137, 135, 128, 108, 90, 78, 74, 74, 82, 100, 118, 131, 136, 137]
-pT_t = [0, 90, 120, 150, 185, 220, 260, 320, 390, 420, 450, 500, 560, 620, 680, 740, 800]
-pT = [-2, -2.5, -3, 1, 10, 17, 20, 20, 20, 19.5, 17, 13, 7, 3, 0, -1.5, -2]
+# Digitized Genet Fig. 5 (1 ms resolution; see scripts/genet23_fig5_digitized.csv).
+def load_fig5():
+    """Load the digitized Genet Fig. 5 traces (skips the '#' provenance header)."""
+    import io
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "genet23_fig5_digitized.csv")
+    with open(path) as f:
+        body = "".join(ln for ln in f if not ln.lstrip().startswith("#"))
+    return np.genfromtxt(io.StringIO(body), delimiter=",", names=True)
+
+
+_FIG5 = load_fig5()
+pP_t, pP = _FIG5["time_ms"], _FIG5["pressure_kPa"]
+pV_t, pV = _FIG5["time_ms"], _FIG5["volume_mL"]
+pT_t, pT = _FIG5["time_ms"], _FIG5["torsion_deg"]
 
 
 def fig5():
@@ -69,19 +77,18 @@ def fig5():
     print(f"Fig 5: EDV={r['V'].max():.0f} ESV={r['V'].min():.0f} EF={r['EF']:.0f}% "
           f"Ppk={r['Ppk']:.1f} twist={r['twpk']:.0f}")
     fig, ax = plt.subplots(1, 4, figsize=(20, 4.4))
-    ax[0].plot(pP_t, pP, 'k-', lw=2, label="Genet Fig 5")
+    ax[0].plot(pP_t, pP, 'k-', lw=2, label="Genet Fig 5 (digitized)")
     ax[0].plot(r['t'], r['P'], 'C3-', lw=1.6, label="model")
     ax[0].set(title="pressure", xlabel="t [ms]", ylabel="P [kPa]"); ax[0].legend()
     ax[1].plot(pV_t, pV, 'k-', lw=2); ax[1].plot(r['t'], r['V'], 'C3-', lw=1.6)
     ax[1].set(title="volume", xlabel="t [ms]", ylabel="V [mL]")
-    xx = np.linspace(0, 800, 300)
-    ax[2].plot(np.interp(xx, pV_t, pV), np.interp(xx, pP_t, pP), 'k-', lw=2)
+    ax[2].plot(pV, pP, 'k-', lw=2)
     ax[2].plot(r['V'], r['P'], 'C3-', lw=1.6)
     ax[2].set(title="P-V loop", xlabel="V [mL]", ylabel="P [kPa]")
     ax[3].plot(pT_t, pT, 'k-', lw=2); ax[3].plot(r['t'], r['tw'], 'C3-', lw=1.6)
-    ax[3].set(title="twist", xlabel="t [ms]", ylabel="twist [deg]")
-    fig.suptitle("Genet Fig 5 (black) vs ChamberCylinder (red): exact params, "
-                 "PhysioBlocks n0/P_at/P_vs, exact valves + 2-stage Windkessel, "
+    ax[3].set(title="torsion", xlabel="t [ms]", ylabel="torsion [deg]")
+    fig.suptitle("Genet Fig 5 (black, digitized) vs ChamberCylinder mixed u/p (red): "
+                 "exact params, constant P_at, exact valves + 2-stage Windkessel, "
                  "force-velocity")
     plt.tight_layout(rect=[0, 0, 1, 0.95]); plt.savefig("fig5.png", dpi=110); plt.close()
     print("saved fig5.png")

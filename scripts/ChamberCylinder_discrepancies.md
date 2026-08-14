@@ -52,25 +52,32 @@ muscle contraction models*, AMSES 2019.
 ## 2. Result with all-exact parameters (zero fitting)
 
 Exact valves + 2-stage Windkessel, `σ0=65 kPa`, force-velocity `α=12`, `ne=12`,
-**PhysioBlocks `n0(e_c)`**, `C_valve=0`. Two `P_at`/`P_vs` variants: constant
-`P_at=0.9 kPa, P_vs=0`, and the **PhysioBlocks atrial-kick waveform**
-(baseline 450 Pa → 900 Pa kick) with **`P_vs=1.6 kPa`**.
+**PhysioBlocks `n0(e_c)`**, `C_valve=0`, **mixed u/p wall** (`mixed=1`). P_at is a
+**constant 0.9 kPa** (the end-diastolic pressure from Fig 5) — no atrial kick is
+needed, since the locking-free mixed wall fills to EDV~135 on its own. Afterload
+floor `P_vs=1.6 kPa` (PhysioBlocks). Activation timing **read from Fig 5**:
+`t_sys=0.11 s` (pressure rise), `t_dias=0.40 s` (plateau end) → ~290 ms systole.
+Metrics vs the user's 1 ms digitization (`scripts/genet23_fig5_digitized.csv`):
 
-Two incompressibility formulations are shown: the displacement penalty (`mixed=0`,
-which locks — OPEN #4) and the **mixed u/p** (`mixed=1`, the faithful Genet
-formulation — RESOLVED #4). Both use the kick waveform + `P_vs=1.6 kPa`.
-
-| Quantity | Genet Fig 5 | penalty (`mixed=0`) | **mixed u/p (`mixed=1`)** | Status |
+| Quantity | Genet Fig 5 (digitized) | penalty (`mixed=0`) | **mixed u/p (`mixed=1`)** | Status |
 |---|---|---|---|---|
-| Peak systolic pressure | 12.8 kPa | 12.8 | **13.0 kPa** | **match** |
-| Peak twist | ~20° | 20 | **21°** | **match** |
-| Diastolic pressure | ~0.6–0.9 kPa | ~0.4–0.9 | ~0.4–0.9 (kick profile) | **shape match** |
-| EF | 46% | 49% | **46%** | **exact** |
-| ESV | 74 mL | 63 | **72 mL** | **match** |
-| EDV | 137 mL | 124 | **135 mL** | **match (was ~10% low)** |
+| Peak systolic pressure | 12.8 kPa | 12.8 | **12.9 kPa** | **match** |
+| Peak twist | 20.2° | 20 | **21°** | **match** |
+| EF | 44% | 49% | **44%** | **exact** |
+| ESV | 74 mL | 63 | **75 mL** | **match** |
+| EDV | 135.7 mL | 124 | **135 mL** | **match (was ~10% low)** |
+| trace RMS (P / V / torsion) | — | — | **0.9 kPa / 7 mL / 4°** | good |
 
-The **mixed u/p** closes the EDV/ESV gap: EDV 124→**135**, ESV 63→**72**, EF
-49→**46%** (exact), with peak pressure and twist unchanged. It is **mesh-independent**
+Dropping the atrial kick (constant `P_at`) removes a spurious sharp late filling
+step and matches the volume better; the Fig-5 activation timing fixes a ~45 ms
+"stays-contracted-too-long" lag in the pressure (relaxation RMS 2.5→0.9 kPa). The
+residual is **diastolic dynamics** (OPEN #6): the model's refilling and untwist
+are faster/more abrupt than Genet's gradual extended diastole (it fills straight
+to EDV, missing the E-wave/diastasis/A-wave substructure, and untwists ~150 ms
+early) — a temporal-scheme / atrial-model limitation, not the wall mechanics.
+
+The **mixed u/p** closes the EDV/ESV gap: EDV 124→**135**, ESV 63→**75**, EF
+49→**44%** (exact), with peak pressure and twist unchanged. It is **mesh-independent**
 (ne=8 and ne=12 give identical EDV=135), confirming the residual penalty gap was
 volumetric locking, not a material or filling error. `P_vs=1.6 kPa` (PhysioBlocks)
 raises the afterload floor (mean `P_ar ≈ P_vs + R_d·CO`), giving the exact peak;
@@ -238,6 +245,16 @@ pressure incompressibility (item §1.C, the #1 "full 1:1" item), together — a
 multi-component reformulation of the block, not a single bespoke integrator. Per
 the midpoint test it would still leave the beat-scale figures unchanged, so it is
 left unimplemented; the L-stable "stiff" integrator remains the practical choice.
+
+**Update — mixed u/p is now implemented (RESOLVED #4), so one of the two
+prerequisites above is met.** A faithful energy-preserving reproduction now needs
+only the temporal ingredients (iii)-(iv). The fine (1 ms) digitization comparison
+sharpens what the temporal scheme would fix: the model's **diastole is too fast /
+abrupt** — it refills straight to EDV (missing Genet's E-wave → diastasis →
+A-wave substructure) and **untwists ~150 ms early** (Genet's torsion recoils
+gradually to ~730 ms). The L-stable integrator's numerical damping and the lack
+of a detailed atrial (A-wave) inflow are the likely causes; the systolic limb
+(rise, ejection, peak, twist-up) and all beat-scale metrics already match.
 
 ## 4. Remaining model differences (summary)
 
