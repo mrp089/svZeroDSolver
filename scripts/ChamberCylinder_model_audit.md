@@ -20,7 +20,9 @@ for inputs Genet does not tabulate); **[F5]** read from the digitized Fig 5;
    untwist) is faster/more abrupt than Genet's. Dominant remaining difference.
 2. **BCS activation ν(t) [PB, now implemented].** The exact PhysioBlocks
    trapezoid (ν ∈ [−20, +35], `activation_mode=1`) is used, its onset retimed to
-   Fig 5 (`tsys=0.06`, pressure upstroke ~110 ms). Documented discrepancy: the
+   the Fig 5 **volume curve** (`tsys=0.12`; the ejection downstroke overlaps Fig 5
+   to ~5 ms, and torsion aligns — the pressure upstroke then sits ~40 ms late, the
+   model having essentially no isovolumic phase). Documented discrepancy: the
    **−20 s⁻¹ diastolic rate relaxes slower** than whatever Genet used for the
    cylindrical Fig 5 → filling is delayed → the diastolic **volume** fit is worse
    (RMS_V ≈ 20 vs ≈ 7 mL for an ad-hoc ±30 tanh), and ESV over-ejects (68 vs 74).
@@ -89,7 +91,7 @@ Everything else below is either exact [T1] / [Eq] or a converged numerical choic
 | crossbridge rate k_0 | 260e3 | **[T1]**; PB 273e3 | ~5% discrepancy (source difference) |
 | force–velocity α | 12 | **[T1] = [PB]** (`destruction_rate`) | match |
 | Frank–Starling n0(e_c) | 9-pt piecewise-linear | **[PB]** | matches PB exactly; Genet leaves n0 general (inferred input) |
-| **activation ν(t)** | **+35 / −20 trapezoid** (`activation_mode=1`), onset retimed to Fig 5 (`tsys=0.06`) | **[PB]** | exact PhysioBlocks waveform; its −20 relaxation is slow → worse volume fit (ranked #2) |
+| **activation ν(t)** | **+35 / −20 trapezoid** (`activation_mode=1`), onset retimed to the volume curve (`tsys=0.12`) | **[PB]** | exact PhysioBlocks waveform; its −20 relaxation is slow → worse diastolic-volume fit (ranked #2) |
 
 ## F. Viscosity (parallel)
 - Σᵛ = γ Ė, γ = 70 Pa·s. **[T1] = [PB]** (`damping_parallel`). **[Eq]** Genet Eq 28.

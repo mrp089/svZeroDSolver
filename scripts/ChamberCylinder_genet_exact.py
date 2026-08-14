@@ -77,15 +77,17 @@ PAT_KICK_T, PAT_KICK_P = atrial_pressure(0.8)
 
 
 # Activation: the PhysioBlocks BCS nu(t) trapezoid (activation_mode=1, set in the
-# vv dict below). `tsys` here anchors its systole onset (the nu=0 upstroke) and is
-# read from Fig 5: tsys=0.06 s puts the pressure upstroke at ~110 ms (the
-# contractile lag adds ~50 ms). `tdias` is unused in mode 1 (the trapezoid carries
-# its own relaxation ramp). NOTE (documented discrepancy): the PhysioBlocks
-# spherical-sim activation relaxes with nu=-20 s^-1, slower than whatever Genet
-# used for the cylindrical Fig 5 -> filling is delayed and the diastolic volume
-# fit is worse than an ad-hoc tanh; kept for fidelity to the cited reference.
+# vv dict below). `tsys` anchors its systole onset (the nu=0 upstroke), retimed to
+# Fig 5 against the VOLUME curve: tsys=0.12 s aligns the ejection downstroke
+# (130->80 mL crossings within ~5 ms of Fig 5) and the torsion rise. (The pressure
+# upstroke then sits ~40 ms late -- the model has essentially no isovolumic phase,
+# a separate valve/afterload-dynamics point.) `tdias` is unused in mode 1 (the
+# trapezoid carries its own relaxation ramp). NOTE (documented discrepancy): the
+# PhysioBlocks spherical-sim activation relaxes with nu=-20 s^-1, slower than
+# whatever Genet used for the cylindrical Fig 5 -> diastolic filling is delayed
+# (the residual full-cycle volume mismatch); kept for fidelity to the reference.
 def build(P_at=900.0, P_vs=PVS_PHYSIOBLOCKS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
-          tsys=0.06, tdias=0.40, steepness=0.02, integrator="stiff",
+          tsys=0.12, tdias=0.40, steepness=0.02, integrator="stiff",
           rho_infty=0.5, ncycle=8, aortic_Rmax=None, active_model=1,
           n0_flat=True, atrial_kick=True, mixed=True):
     # Integrator note: Genet's temporal scheme is the non-dissipative midpoint

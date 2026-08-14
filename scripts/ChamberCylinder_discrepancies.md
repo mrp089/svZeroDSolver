@@ -16,7 +16,8 @@ is then a traceable modeling difference, not a tuning artifact.
 >    mis-placement; correctly placed, C_valve=9e-9 gives peak 12.9 kPa with a flat
 >    plateau. (Supersedes OPEN #3.)
 > 2. **BCS activation ν(t) = exact PhysioBlocks trapezoid** (ν ∈ [−20, +35],
->    `activation_mode=1`), onset retimed to Fig 5 (`tsys=0.06`). Chosen for
+>    `activation_mode=1`), onset retimed to the Fig 5 volume curve (`tsys=0.12` —
+>    ejection downstroke aligned). Chosen for
 >    fidelity to the cited reference over an ad-hoc ±30 tanh. **Documented
 >    discrepancy:** its −20 s⁻¹ diastolic rate relaxes slower than Genet's Fig-5
 >    beat → delayed filling → the diastolic *volume* fit is worse (RMS_V ≈20 vs ≈7)
