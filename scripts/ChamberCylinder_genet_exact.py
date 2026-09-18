@@ -89,7 +89,7 @@ PAT_KICK_T, PAT_KICK_P = atrial_pressure(0.8)
 def build(P_at=900.0, P_vs=PVS_PHYSIOBLOCKS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
           tsys=0.12, tdias=0.40, steepness=0.02, integrator="stiff",
           rho_infty=0.5, ncycle=8, aortic_Rmax=None, active_model=1,
-          n0_flat=True, atrial_kick=True, mixed=True):
+          n0_flat=True, atrial_kick=True, mixed=True, bcs_relax=True):
     # Integrator note: Genet's temporal scheme is the non-dissipative midpoint
     # (rho_infty=1) made *stable* by energy-preserving algorithmic stresses + the
     # Chapelle sqrt(k_c) internal-variable update. The plain midpoint alone
@@ -106,10 +106,16 @@ def build(P_at=900.0, P_vs=PVS_PHYSIOBLOCKS, sigma_max=SIGMA0, bcs_alpha=12.0, n
     # ventricle (that over-buffers Pv); it is the aortic-root compliance in the
     # circulation below (Genet Eq 36 / PhysioBlocks capacitance_valve), so
     # c_valve=0 here.
+    # Length-dependent relaxation (Caruel 2013 w/m0, bcs_relax=1): the relaxation
+    # decay is scaled by m0(e_c) (~1.5 in the operating range), which speeds the
+    # diastolic relaxation/filling toward Fig 5. Implemented in the instantaneous
+    # (alpha_r->0) limit -- equivalent to the full w internal variable here since
+    # m0 is nearly flat over e_c in [0.1,0.3].
     vv.update(dict(sigma_max=sigma_max, alpha_max=35.0, alpha_min=-20.0,
                    activation_mode=1.0, tsys=tsys, tdias=tdias, steepness=steepness,
                    num_elements=ne, active_model=active_model, bcs_alpha=bcs_alpha,
-                   c_valve=0.0, mixed=1.0 if mixed else 0.0))
+                   c_valve=0.0, mixed=1.0 if mixed else 0.0,
+                   bcs_relax=1.0 if bcs_relax else 0.0, alpha_r=0.0))
     # n0(e_c): Frank-Starling reduction factor. Genet/Chapelle leave it a general
     # 0<=n0<=1 factor with no formula -> the non-fitted default is n0=1 (full
     # recruitment), realized by making the Gaussian effectively flat.

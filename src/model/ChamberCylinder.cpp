@@ -261,24 +261,57 @@ inline T frank_starling(T e_c, double /*center*/, double /*width*/) {
   return Y[k] + slope * (e_c - X[k]);
 }
 
+/// BCS load-dependent relaxation function m0(e_c) (Caruel 2013, Fig. 7a): a
+/// decreasing length-dependence that scales the relaxation rate, from ~1.6 at
+/// short (small e_c) to ~1.0 at long sarcomere. CSD-safe piecewise linear (the
+/// perturbation is kept in the linear term). m0 = 1 recovers the fixed model.
+template <typename T>
+inline T m0_relax(T e_c) {
+  constexpr int NP = 2;
+  static const double X[NP] = {0.0, 1.3};
+  static const double Y[NP] = {1.6, 1.0};
+  const double x = re(e_c);
+  if (x <= X[0]) return T(Y[0]);
+  if (x >= X[NP - 1]) return T(Y[NP - 1]);
+  const double slope = (Y[1] - Y[0]) / (X[1] - X[0]);
+  return Y[0] + slope * (e_c - X[0]);
+}
+
 /// BCS active-law parameters.
 struct BcsParams {
-  double k_s, k_0, mu, alpha, sigma0, n0_center, n0_width;
+  double k_s, k_0, mu, alpha, sigma0, n0_center, n0_width, alpha_r;
+  bool ld;  ///< length-dependent relaxation (Caruel 2013)
 };
 
-/// Residuals of the three BCS internal-variable ODEs (Genet Eqs. 32-33 /
-/// Chapelle Eq. 9) at a quadrature point. a = [e_c, tau_c, k_c], ad = its rate;
-/// the contractile-element strain rate is e_c_dot = ad[0].
+/// Residuals of the BCS internal-variable ODEs (Genet Eqs. 32-33 / Chapelle
+/// Eq. 9) at a quadrature point. a = [e_c, tau_c, k_c, (w)], ad = its rate; the
+/// contractile-element strain rate is e_c_dot = ad[0]. With `bp.ld` (Caruel
+/// 2013) a fourth internal variable w (a[3]) drives the load-dependent
+/// relaxation: alpha_r*w_dot = m0(e_c) - w, and the decay uses w on the negative
+/// (relaxation) part of the activation. alpha_r=0 uses the instantaneous limit
+/// w=m0(e_c) and needs no extra DOF (`nact`=3).
 template <typename T>
-void bcs_residual(const T a[3], const T ad[3], T e_fib,
+void bcs_residual(const T a[], const T ad[], T e_fib,
                   double nu_abs, double nu_plus, const BcsParams& bp,
-                  T res[3]) {
+                  int nact, T res[]) {
   const T ecdot = ad[0];
   // Smoothed |e_c dot| (eps ~ 1e-2 /s regularizes the force-velocity kink so
   // Newton and its complex-step tangent behave; negligible vs |nu| physically).
   const T abs_ecd = std::sqrt(ecdot * ecdot + 1e-4);
   const T n0 = frank_starling<T>(a[0], bp.n0_center, bp.n0_width);
-  const T decay = nu_abs + bp.alpha * abs_ecd;
+  T decay;
+  if (bp.ld) {
+    // Length-dependent relaxation: weight the negative (repolarization) part of
+    // the activation, |u|_- = nu_abs - nu_plus, by w. w is either the fourth
+    // internal variable (nact==4, with the alpha_r lag) or its instantaneous
+    // value m0(e_c) (nact==3).
+    const T w = (nact >= 4) ? a[3] : m0_relax<T>(a[0]);
+    decay = nu_plus + w * (nu_abs - nu_plus) + bp.alpha * abs_ecd;
+    if (nact >= 4)  // w ODE: alpha_r*w_dot = m0(e_c) - w
+      res[3] = ad[3] - (m0_relax<T>(a[0]) - a[3]) / bp.alpha_r;
+  } else {
+    decay = nu_abs + bp.alpha * abs_ecd;
+  }
   // series-spring force balance: mu * e_c_dot = k_s (e_fib - e_c) - tau_c
   res[0] = ecdot - (bp.k_s * (e_fib - a[0]) - a[1]) / bp.mu;
   // tau_c dot = -decay*tau_c + e_c_dot*k_c + n0*sigma0*nu_+
@@ -512,6 +545,8 @@ void ChamberCylinder::update_solution(
   bp.sigma0 = sigma_max;
   bp.n0_center = parameters[global_param_ids[ParamId::n0_center]];
   bp.n0_width = parameters[global_param_ids[ParamId::n0_width]];
+  bp.ld = parameters[global_param_ids[ParamId::bcs_relax]] > 0.5;
+  bp.alpha_r = parameters[global_param_ids[ParamId::alpha_r]];
   const double i4pow = parameters[global_param_ids[ParamId::active_i4pow]];
 
   // Gather block DOFs and their rates.
@@ -681,7 +716,7 @@ void ChamberCylinder::update_solution(
       double a[3] = {Y(i_ec(q)), Y(i_tauc(q)), Y(i_kc(q))};
       double ad[3] = {Yd(i_ec(q)), Yd(i_tauc(q)), Yd(i_kc(q))};
       double Ra[3];
-      bcs_residual<double>(a, ad, e_fib, act, act_plus, bp, Ra);
+      bcs_residual<double>(a, ad, e_fib, act, act_plus, bp, 3, Ra);
       for (int i = 0; i < 3; i++) Cloc[erow[i]] += Ra[i];
       // Complex-step tangents w.r.t. the local active state (dC_dy) and its
       // rates (dC_dydot). The regularized |e_c dot| makes the force-velocity
@@ -695,12 +730,12 @@ void ChamberCylinder::update_solution(
         }
         for (int jj = 0; jj < 3; jj++) {
           ac[jj] += cplx(0.0, h);
-          bcs_residual<cplx>(ac, adc, cplx(e_fib), act, act_plus, bp, Rc);
+          bcs_residual<cplx>(ac, adc, cplx(e_fib), act, act_plus, bp, 3, Rc);
           for (int ii = 0; ii < 3; ii++)
             Kat(erow[ii], avar[jj]) += std::imag(Rc[ii]) / h;
           ac[jj] = a[jj];
           adc[jj] += cplx(0.0, h);
-          bcs_residual<cplx>(ac, adc, cplx(e_fib), act, act_plus, bp, Rc);
+          bcs_residual<cplx>(ac, adc, cplx(e_fib), act, act_plus, bp, 3, Rc);
           for (int ii = 0; ii < 3; ii++)
             Kdat(erow[ii], avar[jj]) += std::imag(Rc[ii]) / h;
           adc[jj] = ad[jj];
