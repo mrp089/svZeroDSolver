@@ -150,12 +150,14 @@ Public Member Functions</h2></td></tr>
 <tr class="memdesc:a3d48d0c71bf9f5b416f01a6414b0da78 pub_methods_class_block"><td class="mdescLeft">&#160;</td><td class="mdescRight">Update the solution-dependent contributions of the element in a sparse system.  <br /></td></tr>
 <tr class="memitem:ad4999d98ef4cd47bf8892c4e62142d1e pub_methods_class_block" id="r_ad4999d98ef4cd47bf8892c4e62142d1e"><td class="memItemLeft">virtual void&#160;</td><td class="memItemRight"><a class="el" href="class_block.html#ad4999d98ef4cd47bf8892c4e62142d1e">post_solve</a> (Eigen::Matrix&lt; double, Eigen::Dynamic, 1 &gt; &amp;y)</td></tr>
 <tr class="memdesc:ad4999d98ef4cd47bf8892c4e62142d1e pub_methods_class_block"><td class="mdescLeft">&#160;</td><td class="mdescRight">Modify the solution after solving it.  <br /></td></tr>
-<tr class="memitem:a96663232888eeb564e5f37db98fc655f pub_methods_class_block" id="r_a96663232888eeb564e5f37db98fc655f"><td class="memItemLeft">virtual void&#160;</td><td class="memItemRight"><a class="el" href="class_block.html#a96663232888eeb564e5f37db98fc655f">update_gradient</a> (Eigen::SparseMatrix&lt; double &gt; &amp;jacobian, Eigen::Matrix&lt; double, Eigen::Dynamic, 1 &gt; &amp;residual, Eigen::Matrix&lt; double, Eigen::Dynamic, 1 &gt; &amp;alpha, std::vector&lt; double &gt; &amp;y, std::vector&lt; double &gt; &amp;dy)</td></tr>
-<tr class="memdesc:a96663232888eeb564e5f37db98fc655f pub_methods_class_block"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the gradient of the block contributions with respect to the parameters.  <br /></td></tr>
+<tr class="memitem:af652eecb2709bd2786e5ee1d0e0e5033 pub_methods_class_block" id="r_af652eecb2709bd2786e5ee1d0e0e5033"><td class="memItemLeft">virtual void&#160;</td><td class="memItemRight"><a class="el" href="class_block.html#af652eecb2709bd2786e5ee1d0e0e5033">update_gradient</a> (Eigen::SparseMatrix&lt; double &gt; &amp;jacobian, Eigen::Matrix&lt; double, Eigen::Dynamic, 1 &gt; &amp;alpha, std::vector&lt; double &gt; &amp;y, std::vector&lt; double &gt; &amp;dy)</td></tr>
+<tr class="memdesc:af652eecb2709bd2786e5ee1d0e0e5033 pub_methods_class_block"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the gradient of the block residual with respect to the parameters.  <br /></td></tr>
 <tr class="memitem:a7cbc135528fbe45b0efc3e374ee6954d pub_methods_class_block" id="r_a7cbc135528fbe45b0efc3e374ee6954d"><td class="memItemLeft">virtual <a class="el" href="struct_triplets_contributions.html">TripletsContributions</a>&#160;</td><td class="memItemRight"><a class="el" href="class_block.html#a7cbc135528fbe45b0efc3e374ee6954d">get_num_triplets</a> ()</td></tr>
 <tr class="memdesc:a7cbc135528fbe45b0efc3e374ee6954d pub_methods_class_block"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get number of triplets of element.  <br /></td></tr>
 <tr class="memitem:ad0e2d0882fb2a9e2b4bb8e5148f7ea9e pub_methods_class_block" id="r_ad0e2d0882fb2a9e2b4bb8e5148f7ea9e"><td class="memItemLeft">virtual void&#160;</td><td class="memItemRight"><a class="el" href="class_block.html#ad0e2d0882fb2a9e2b4bb8e5148f7ea9e">set_activation_function</a> (std::unique_ptr&lt; <a class="el" href="class_activation_function.html">ActivationFunction</a> &gt; af)</td></tr>
 <tr class="memdesc:ad0e2d0882fb2a9e2b4bb8e5148f7ea9e pub_methods_class_block"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set activation function (for chamber blocks that use one).  <br /></td></tr>
+<tr class="memitem:a82b147185f9df6044638922278a98085 pub_methods_class_block" id="r_a82b147185f9df6044638922278a98085"><td class="memItemLeft">virtual void&#160;</td><td class="memItemRight"><a class="el" href="class_block.html#a82b147185f9df6044638922278a98085">set_material</a> (std::unique_ptr&lt; <a class="el" href="class_sphere_material.html">SphereMaterial</a> &gt; m)</td></tr>
+<tr class="memdesc:a82b147185f9df6044638922278a98085 pub_methods_class_block"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set wall material (for <a class="el" href="class_chamber_sphere.html" title="Spherical heart chamber model.">ChamberSphere</a> blocks).  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
@@ -195,7 +197,7 @@ Public Attributes</h2></td></tr>
 <div class="textblock"><p><a class="el" href="class_resistive_junction.html" title="ResistiveJunction.">ResistiveJunction</a>. </p>
 <p>Models a junction with arbitrary resistive inlets and outlets. Across all inlets and outlets of the junction, mass is conserved.</p>
 <p class="formulaDsp">
-<picture><source srcset="form_153_dark.png" media="(prefers-color-scheme: dark)"/><img class="formulaDsp" alt="\&zwj;[  \begin{circuitikz}
+<picture><source srcset="form_152_dark.png" media="(prefers-color-scheme: dark)"/><img class="formulaDsp" alt="\&zwj;[  \begin{circuitikz}
   \draw [-latex] (0.25,1.4) node[left] {$Q_{in,1}$} -- (0.85,1.1);
   \draw [-latex] (0.25,-1.4) node[left] {$Q_{in,1}$} -- (0.85,-1.1);
   \draw (1,1.0) node[anchor=south]{$P_{in,1}$} to [R, , l=$R_{in,1}$, *-*]
@@ -208,43 +210,43 @@ Public Attributes</h2></td></tr>
   {$P_{out,2}$}; \draw [-latex] (5.15,1.1) -- (5.75,1.4) node[right]
   {$Q_{out,1}$}; \draw [-latex] (5.15,-1.1) -- (5.75,-1.4) node[right]
   {$Q_{out,2}$}; \end{circuitikz}
-\&zwj;]" src="form_153.png" width="396" height="171"/></picture>
+\&zwj;]" src="form_152.png" width="396" height="171"/></picture>
 </p>
 <h3>Governing equations</h3>
 <p class="formulaDsp">
-<picture><source srcset="form_154_dark.png" media="(prefers-color-scheme: dark)"/><img class="formulaDsp" alt="\&zwj;[  \sum_{i}^{n_{inlets}} Q_{in, i}=\sum_{j}^{n_{outlets}} Q_{out, j}
-\&zwj;]" src="form_154.png" width="218" height="56"/></picture>
+<picture><source srcset="form_153_dark.png" media="(prefers-color-scheme: dark)"/><img class="formulaDsp" alt="\&zwj;[  \sum_{i}^{n_{inlets}} Q_{in, i}=\sum_{j}^{n_{outlets}} Q_{out, j}
+\&zwj;]" src="form_153.png" width="218" height="56"/></picture>
 </p>
 <p class="formulaDsp">
-<picture><source srcset="form_155_dark.png" media="(prefers-color-scheme: dark)"/><img class="formulaDsp" alt="\&zwj;[  P_{in,i}-P_{C}=R_{in,i} \cdot Q_{in,i}\quad \forall i\in n_{inlets}
-\&zwj;]" src="form_155.png" width="311" height="21"/></picture>
+<picture><source srcset="form_154_dark.png" media="(prefers-color-scheme: dark)"/><img class="formulaDsp" alt="\&zwj;[  P_{in,i}-P_{C}=R_{in,i} \cdot Q_{in,i}\quad \forall i\in n_{inlets}
+\&zwj;]" src="form_154.png" width="311" height="21"/></picture>
 </p>
    <p class="formulaDsp">
-<picture><source srcset="form_156_dark.png" media="(prefers-color-scheme: dark)"/><img class="formulaDsp" alt="\&zwj;[  P_{C}-P_{out,j}=R_{out,j} \cdot Q_{out,j}\quad \forall j\in n_{outlets}
-\&zwj;]" src="form_156.png" width="347" height="21"/></picture>
+<picture><source srcset="form_155_dark.png" media="(prefers-color-scheme: dark)"/><img class="formulaDsp" alt="\&zwj;[  P_{C}-P_{out,j}=R_{out,j} \cdot Q_{out,j}\quad \forall j\in n_{outlets}
+\&zwj;]" src="form_155.png" width="347" height="21"/></picture>
 </p>
 <h3>Local contributions</h3>
 <p class="formulaDsp">
-<picture><source srcset="form_157_dark.png" media="(prefers-color-scheme: dark)"/><img class="formulaDsp" alt="\&zwj;[  \mathbf{y}^{e}=\left[\begin{array}{lllllllllll}P_{in, 1}^{e} &amp; Q_{in, 1}^{e}
+<picture><source srcset="form_156_dark.png" media="(prefers-color-scheme: dark)"/><img class="formulaDsp" alt="\&zwj;[  \mathbf{y}^{e}=\left[\begin{array}{lllllllllll}P_{in, 1}^{e} &amp; Q_{in, 1}^{e}
   &amp; \dots &amp; P_{in, i}^{e} &amp; Q_{in, i}^{e} &amp; P_{out, 1}^{e} &amp; Q_{out, 1}^{e} &amp;
-  \dots &amp; P_{out, i}^{e} &amp; Q_{out, i}^{e} &amp; P_{C}\end{array}\right] \&zwj;]" src="form_157.png" width="684" height="24"/></picture>
+  \dots &amp; P_{out, i}^{e} &amp; Q_{out, i}^{e} &amp; P_{C}\end{array}\right] \&zwj;]" src="form_156.png" width="684" height="24"/></picture>
 </p>
 <p>Mass conservation</p>
 <p class="formulaDsp">
-<picture><source srcset="form_158_dark.png" media="(prefers-color-scheme: dark)"/><img class="formulaDsp" alt="\&zwj;[  \mathbf{F}^{e}_1 = \left[\begin{array}{lllllllllll}0 &amp; 1 &amp; 0 &amp; 1 &amp; \dots &amp; 0
-  &amp; -1 &amp; 0 &amp; -1 &amp; \dots &amp; 0\end{array}\right] \&zwj;]" src="form_158.png" width="428" height="24"/></picture>
+<picture><source srcset="form_157_dark.png" media="(prefers-color-scheme: dark)"/><img class="formulaDsp" alt="\&zwj;[  \mathbf{F}^{e}_1 = \left[\begin{array}{lllllllllll}0 &amp; 1 &amp; 0 &amp; 1 &amp; \dots &amp; 0
+  &amp; -1 &amp; 0 &amp; -1 &amp; \dots &amp; 0\end{array}\right] \&zwj;]" src="form_157.png" width="428" height="24"/></picture>
+</p>
+<p class="formulaDsp">
+<picture><source srcset="form_158_dark.png" media="(prefers-color-scheme: dark)"/><img class="formulaDsp" alt="\&zwj;[ \mathbf{F}^{e}_{2,...,n} = \left[\begin{array}{lllll}\dots &amp;
+  \underbrace{1}_{P_{in,i}} &amp; \underbrace{-R_{in,i}}_{Q_{in,i}} &amp; \dots &amp;
+  \underbrace{-1}_{P_{C}}\end{array}\right] \quad \mathrm{with} \quad \forall
+  i\in n_{inlets}  \&zwj;]" src="form_158.png" width="531" height="58"/></picture>
 </p>
 <p class="formulaDsp">
 <picture><source srcset="form_159_dark.png" media="(prefers-color-scheme: dark)"/><img class="formulaDsp" alt="\&zwj;[ \mathbf{F}^{e}_{2,...,n} = \left[\begin{array}{lllll}\dots &amp;
-  \underbrace{1}_{P_{in,i}} &amp; \underbrace{-R_{in,i}}_{Q_{in,i}} &amp; \dots &amp;
-  \underbrace{-1}_{P_{C}}\end{array}\right] \quad \mathrm{with} \quad \forall
-  i\in n_{inlets}  \&zwj;]" src="form_159.png" width="531" height="58"/></picture>
-</p>
-<p class="formulaDsp">
-<picture><source srcset="form_160_dark.png" media="(prefers-color-scheme: dark)"/><img class="formulaDsp" alt="\&zwj;[ \mathbf{F}^{e}_{2,...,n} = \left[\begin{array}{lllll}\dots &amp;
   \underbrace{-1}_{P_{out,j}} &amp; \underbrace{-R_{out,j}}_{Q_{out,j}} &amp; \dots &amp;
   \underbrace{1}_{P_{C}}\end{array}\right] \quad \mathrm{with} \quad \forall
-  j\in n_{oulets}  \&zwj;]" src="form_160.png" width="551" height="58"/></picture>
+  j\in n_{oulets}  \&zwj;]" src="form_159.png" width="551" height="58"/></picture>
 </p>
 <h3>Parameters</h3>
 <p><a class="el" href="class_parameter.html" title="Model Parameter.">Parameter</a> sequence for constructing this block</p>
