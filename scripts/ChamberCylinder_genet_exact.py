@@ -31,6 +31,7 @@ PiecewiseValve is a pure resistor, so Cvalve has no node in this topology; its
 intended role is an OPEN QUESTION for Genet (kept as a constant for provenance).
 """
 import json
+import math
 
 # Genet Table 1
 K_at_inv = 1.1111e5
@@ -53,69 +54,78 @@ MAT = dict(C1=7.0, C2=0.0, C3=700.0, C4=2.0, C5=50.0, C6=4.0, gamma=70.0,
 KAPPA = 1e7
 SIGMA0 = 65e3  # Genet Table 1 "Maximum active stress" sigma_0
 
-# Atrial and venous pressures are prescribed inputs Genet does not tabulate; the
-# MEDISIM PhysioBlocks reference (physioblocks/physioblocks, references/
-# full_configurations/spherical_heart_sim.jsonc) gives their SHAPE and levels:
-# P_at is the `atrial.blood_pressure` waveform, a two-level trace between min=450
-# and max=900 Pa. The 450 Pa floor through mid-diastole sets the E-wave (which is
-# actually driven by ventricular relaxation dropping P_v below the floor); an
-# atrial KICK (450->900 Pa) in late diastole drives the A-wave, and P_at is held at
-# 900 through end-diastole into early systole (the mitral valve shuts once P_v
-# rises, so the fall back to 450 in early systole does not affect flow).
-# Systemic venous P_vs sets the mean-arterial (afterload) floor. Caruel Table 1
-# uses P_vs = 1000 Pa; we use that (it is the source value Genet inherits). An
-# earlier build used PhysioBlocks' 1600 Pa to pin the peak pressure, but with the
-# corrected proximal compliance the peak is set by R_p (Caruel), so 1600 is no
-# longer needed and 1000 both is faithful and lowers ESV toward Fig 5 (78->76 mL).
-P_VS = 1000.0
-PAT_MIN, PAT_MAX = 450.0, 900.0
-# The kick ONSET is the one free timing of P_at (Genet tabulates neither P_at nor
-# its timing). It is calibrated to the Fig 5 volume curve: kick_onset=0.64 s (rise
-# over 0.05 s) lands the mitral A-wave inflow in the Fig 5 700-750 ms window so the
-# ventricle refills to EDV=135 mL exactly at end-diastole. (The PhysioBlocks
-# spherical-sim reference placed the kick at ~0.75 of the cycle, which -- with the
-# mitral/compliance filling lag -- pushed the A-wave past end-diastole into the
-# next cycle; that is a reference-timing artifact, not Genet's Fig 5.)
-PAT_KICK_ONSET = 0.64
-PAT_KICK_RISE = 0.05
+# ---------------------------------------------------------------------------
+# ECG-parametric input functions -- the AUTHORS' actual code (Genet collaborators,
+# cardiac_input_functions.py: `nagumo_piecewise_linear` + `atrial_pressure_
+# piecewise_linear`). All timings DERIVE from ECG intervals and scale with the
+# heart-beat duration T (activation via the Bazett QT = QTc*sqrt(T)); the values
+# at T=0.8 s reproduce the authors' Fig-5 waveforms. This supersedes the earlier
+# hand-timed estimates (tsys/tdias/kick were fitted to the digitized curves; they
+# are now the authors' derived quantities).
+# ---------------------------------------------------------------------------
+MMHG = 134.0  # authors' Pa-per-mmHg conversion (cardiac_input_functions.py)
+
+# Activation nu(t) [ActiveLaw/Activation]: delay + QRS duration + Bazett-corrected
+# QT + final repolarization ramp; alpha_max/min are the +-35 plateaus.
+ACT_DELAY = 0.10
+ACT_QRSD = 0.080
+ACT_QTC = 0.330
+ACT_RAMP = 0.010
+ACT_AMAX, ACT_AMIN = 35.0, -35.0
 
 
-def atrial_pressure(period=0.8, kick_onset=PAT_KICK_ONSET, kick_rise=PAT_KICK_RISE):
-    """Atrial pressure P_at(t) on the real cardiac timeline (period seconds),
-    calibrated to Fig 5. PAT_MIN floor through mid-diastole; kick PAT_MIN->PAT_MAX
-    over [kick_onset, kick_onset+kick_rise] driving the A-wave; held at PAT_MAX
-    through end-diastole into early systole, relaxing back to PAT_MIN after systole
-    onset (mitral shut). Returns (times[s], pressures[Pa]); periodic in `period`."""
-    f = period / 0.8
-    t = [0.0, 0.048 * f, 0.088 * f, kick_onset, kick_onset + kick_rise, period]
+def activation_times(period=0.8):
+    """Derived activation anchors (authors' ActivationParameters): returns
+    (tsys, tdias) = the nu=0 upstroke (depolarization_time = delay+ramp) and the
+    nu=0 downstroke (depolarization_end). The kernel builds the internal knees
+    (t_max, t_plateau, t_finish) from tsys, tdias, ACT_QRSD and ACT_RAMP."""
+    QT = ACT_QTC * math.sqrt(period)      # Bazett corrected QT
+    ST = QT - ACT_QRSD
+    tsys = ACT_RAMP + ACT_DELAY           # depolarization_time (nu=0 up)
+    tdias = ACT_QRSD + tsys + ST          # depolarization_end  (nu=0 down)
+    return tsys, tdias
+
+
+# Atrial pressure P_at(t) [Atria/PressureLaw]: two-level trace, peak 7 mmHg, floor
+# 7-2.5 = 4.5 mmHg; the KICK onset/end are set by the PQ interval and AV-node delay.
+PAT_MAX = 7.0 * MMHG            # 938 Pa
+PAT_MIN = PAT_MAX - 2.5 * MMHG  # 603 Pa
+ATR_PQ = 0.14                   # PQ interval
+ATR_AVNODE = 0.080              # AV-node delay
+P_VS = 1000.0                   # systemic venous pressure (Caruel Table 1)
+
+
+def atrial_pressure(period=0.8):
+    """Authors' `atrial_pressure_piecewise_linear`: PAT_MAX held from end-diastole
+    into early systole, linear drop to PAT_MIN over [0.05, 0.10] s, floor through
+    mid-diastole, then the atrial KICK PAT_MIN->PAT_MAX over
+    [T-PQ+ramp, T-AVnode+ramp]. Returns (times[s], pressures[Pa])."""
+    kick_on = period - ATR_PQ + ACT_RAMP       # 0.670 at T=0.8
+    kick_end = period - ATR_AVNODE + ACT_RAMP  # 0.730 at T=0.8
+    t = [0.0, 0.05, 0.10, kick_on, kick_end, period]
     P = [PAT_MAX, PAT_MAX, PAT_MIN, PAT_MIN, PAT_MAX, PAT_MAX]
     return t, P
 
 
-# The atrial-kick waveform for the default 0.8 s period.
+# Derived anchors + atrial waveform for the default 0.8 s period.
+TSYS_08, TDIAS_08 = activation_times(0.8)
 PAT_KICK_T, PAT_KICK_P = atrial_pressure(0.8)
 
 
-# Activation: the PhysioBlocks BCS nu(t) trapezoid (activation_mode=1, set in the
-# vv dict below), retimed to Fig 5 with TWO anchors (see get_activation): the
-# nu=0 upstroke is placed at `tsys` and the nu=0 downstroke at `tdias`, with the
-# PhysioBlocks ramp/plateau proportions preserved between them. Both are read
-# directly off the Fig 5 PRESSURE curve (the direct readout of active tension):
-#   tsys  = 0.11 s -> contraction onset (P starts rising, Fig 5 ~110 ms)
-#   tdias = 0.40 s -> relaxation onset  (P starts falling, Fig 5 ~400 ms; ESV@409)
-# This fixes the earlier "stays contracted too long": the PhysioBlocks shape has a
-# FIXED 360 ms systole, so a single-shift retiming put the down-crossing at ~480 ms
-# (~80 ms late). nu(t) is the one ingredient Genet does not tabulate, so these two
-# timings are the only calibrated quantities (open question for the author).
-# NOTE: with the corrected proximal compliance (C_p=C_ar) the model now has a real
+# Activation: the authors' ECG-derived piecewise-linear nu(t) (`nagumo`,
+# activation_mode=1). The kernel builds the exact waveform from the anchors tsys
+# (nu=0 upstroke) and tdias (nu=0 downstroke) plus act_qrs (QRS width) and act_ramp
+# (final repolarization ramp); tsys/tdias default to activation_times(0.8) =
+# (0.110, 0.405) s and scale with the heart rate via Bazett. alpha_max/min = +-35.
+# NOTE: with the corrected proximal compliance (C_p=C_ar) the model has a real
 # isovolumic contraction (P_v rises to the aortic diastolic ~9 kPa with both valves
-# shut before the aortic valve opens ~170 ms). Small residuals remain: a slight ESV
-# under-ejection (~2-4 mL) and a diastolic E-wave/untwist that recover a bit fast.
-def build(P_at=900.0, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
-          tsys=0.11, tdias=0.40, alpha_max=35.0, alpha_min=-20.0, alpha_r=0.0,
+# shut before the aortic valve opens ~170 ms).
+def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
+          tsys=TSYS_08, tdias=TDIAS_08, alpha_max=ACT_AMAX, alpha_min=ACT_AMIN,
+          alpha_r=0.0, act_qrs=ACT_QRSD, act_ramp=ACT_RAMP,
           steepness=0.02, integrator="stiff", rho_infty=0.5, ncycle=8,
           aortic_Rmax=None, active_model=1, atrial_kick=True, mixed=True,
-          bcs_relax=True):
+          bcs_relax=False):
     # Integrator note: Genet's temporal scheme is the non-dissipative midpoint
     # (rho_infty=1) made *stable* by energy-preserving algorithmic stresses + the
     # Chapelle sqrt(k_c) internal-variable update. The plain midpoint alone
@@ -123,18 +133,24 @@ def build(P_at=900.0, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
     # spring and rings (spurious HF pressure oscillations). So the default here is
     # the L-stable "stiff" integrator (rho=0), which damps that mode cleanly; a
     # faithful energy-preserving scheme needs the bespoke integrator (not built).
-    aortic_Rmax = aortic_Rmax if aortic_Rmax is not None else K_iso_inv
+    # Aortic valve closed resistance: genet23 Eq 36 (arterial line) has ONLY
+    # K_ar<P_v-P_ar>_+, i.e. NO closed-leak on the aortic side (conductance 0 when
+    # P_v<P_ar). So the aortic Rmax is effectively infinite (a hard one-way valve),
+    # NOT K_iso^-1. (The K_iso isovolumic leak in Eq 36 is on the ATRIAL side and is
+    # carried by the mitral valve's Rmax=K_iso^-1.) Effect on Fig 5 is negligible.
+    aortic_Rmax = aortic_Rmax if aortic_Rmax is not None else 1.0e12
     vv = dict(GEOM); vv.update(MAT); vv["kappa"] = KAPPA
-    # BCS activation nu(t): PhysioBlocks trapezoid (activation_mode=1). Its two
-    # rate plateaus (alpha_max in systole, alpha_min in diastole -- the MEDISIM
-    # `active_law.activation.{min,max}`, default +35/-20) and the two-anchor
-    # retiming (tsys/tdias) are builder parameters. alpha_r is the load-dependent
-    # relaxation time constant (Caruel 2013 w/m0, bcs_relax=1); alpha_r=0 uses the
-    # instantaneous limit w=m0(e_c). c_valve=0 on the ChamberCylinder: Cvalve is a
-    # Genet add-on that has no place in the Caruel valve+Windkessel topology (see
-    # docstring).
+    # BCS activation nu(t): authors' ECG-derived nagumo (activation_mode=1), built
+    # in the kernel from tsys/tdias (nu=0 up/down) + act_qrs/act_ramp; +-35 plateaus.
+    # NOTE bcs_relax defaults OFF: the authors' alpha_min=-35 already IS the diastolic
+    # relaxation rate, so the Caruel length-dependent m0 amplification (bcs_relax=1,
+    # w=m0~1.5) would double-count it and fire the E-wave ~30 ms early (rmsV 3.7 ->
+    # 9.3). => the cylinder model uses a FIXED relaxation (w=1), not Caruel w/m0.
+    # c_valve=0 on the ChamberCylinder: Cvalve is a Genet add-on that has no place
+    # in the Caruel valve+Windkessel topology (see docstring).
     vv.update(dict(sigma_max=sigma_max, alpha_max=alpha_max, alpha_min=alpha_min,
                    activation_mode=1.0, tsys=tsys, tdias=tdias, steepness=steepness,
+                   act_qrs=act_qrs, act_ramp=act_ramp,
                    num_elements=ne, active_model=active_model, bcs_alpha=bcs_alpha,
                    c_valve=0.0, mixed=1.0 if mixed else 0.0,
                    bcs_relax=1.0 if bcs_relax else 0.0, alpha_r=alpha_r))
@@ -153,7 +169,7 @@ def build(P_at=900.0, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
         ],
         "simulation_parameters": {
             "number_of_cardiac_cycles": ncycle,
-            "number_of_time_pts_per_cardiac_cycle": 400,
+            "number_of_time_pts_per_cardiac_cycle": 800,  # dt=1 ms (genet23 sec 3.1)
             "cardiac_period": 0.8, "steady_initial": False,
             "output_variable_based": True, "absolute_tolerance": 1e-9,
             "maximum_nonlinear_iterations": 50, "output_all_cycles": False,
