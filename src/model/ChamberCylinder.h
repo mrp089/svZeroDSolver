@@ -244,13 +244,14 @@ class ChamberCylinder : public Block {
     use_inertia = 29,   // 0 = quasi-static (default), 1 = full dynamics (inertia)
     active_i4pow = 30,  // sigma_1D = T_fib/I4^p; 0.5 = Eq.30, 1.0 = Eq.59 limit
     mixed = 31,         // 0 = penalty incompressibility, 1 = mixed u/p (Genet)
-    activation_mode = 32,  // 0 = tanh systole/diastole switch; 1 = PhysioBlocks
-                           // rescale_two_phases trapezoid nu(t) (min=alpha_min,
-                           // max=alpha_max)
+    activation_mode = 32,  // 0 = tanh systole/diastole switch; 1 = ECG-derived
+                           // piecewise-linear nu(t) (Genet `nagumo`; alpha_min/max)
     bcs_relax = 33,     // 0 = fixed relaxation; 1 = length-dependent relaxation
                         // (Caruel 2013: decay uses w*|u|_- with w->m0(e_c))
-    alpha_r = 34        // time constant for the relaxation internal variable w
+    alpha_r = 34,       // time constant for the relaxation internal variable w
                         // (Caruel 2013 Eq. 3); 0 = instantaneous w=m0(e_c)
+    act_qrs = 35,       // QRS duration: nu rise (and fall-to-0) ramp width (mode 1)
+    act_ramp = 36       // final repolarization ramp width (nu: 0 -> alpha_min)
   };
 
   /**
@@ -295,7 +296,9 @@ class ChamberCylinder : public Block {
                {"mixed", InputParameter(true, false, true, 0.0)},
                {"activation_mode", InputParameter(true, false, true, 0.0)},
                {"bcs_relax", InputParameter(true, false, true, 0.0)},
-               {"alpha_r", InputParameter(true, false, true, 0.12)}}) {}
+               {"alpha_r", InputParameter(true, false, true, 0.12)},
+               {"act_qrs", InputParameter(true, false, true, 0.080)},
+               {"act_ramp", InputParameter(true, false, true, 0.010)}}) {}
 
   /**
    * @brief Set up the degrees of freedom (DOF) of the block

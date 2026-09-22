@@ -819,51 +819,42 @@ void ChamberCylinder::get_activation(std::vector<double>& parameters) {
   const double tdias = parameters[global_param_ids[ParamId::tdias]];
   const double steepness = parameters[global_param_ids[ParamId::steepness]];
   const double mode = parameters[global_param_ids[ParamId::activation_mode]];
+  const double qrs = parameters[global_param_ids[ParamId::act_qrs]];
+  const double ramp = parameters[global_param_ids[ParamId::act_ramp]];
 
   const auto T_cardiac = model->cardiac_cycle_period;
   const auto t_in_cycle = fmod(model->time, T_cardiac);
 
   double act_t;
   if (mode >= 0.5) {
-    // PhysioBlocks `active_law...activation` = a rescale_two_phases_function:
-    // a trapezoidal nu(t) between alpha_min (diastole) and alpha_max (systole)
-    // that ramps through 0. Reference knee fractions (reference period 0.9) and
-    // their nu values; the systole block is the two ramps + plateau between the
-    // nu=0 upstroke (refT[2]) and the nu=0 downstroke (refT[5]).
-    static const double refT[8] = {0.0,   0.027, 0.037, 0.145,
-                                   0.309, 0.417, 0.427, 0.9};
-    const double vals[8] = {alpha_min, alpha_min, 0.0,       alpha_max,
-                            alpha_max, 0.0,       alpha_min, alpha_min};
-    // Two-anchor retiming to Fig 5: map the reference SYSTOLE block
-    // [refT[2], refT[5]] linearly onto [tsys, tdias] and the remaining diastole
-    // onto the rest of the cardiac period. tsys anchors the active-tension onset
-    // (Fig 5 pressure upstroke, ~110 ms); tdias anchors the relaxation onset
-    // (Fig 5 pressure downstroke, ~400 ms). The internal ramp/plateau proportions
-    // are preserved, so the systole DURATION is now calibratable via (tsys,tdias)
-    // -- it was fixed by the PhysioBlocks shape before, which held nu>0 ~80 ms too
-    // long (down-crossing at 480 vs Fig 5 ~400 ms). tdias was previously ignored
-    // in this mode.
-    const double* ab = refT;                            // reference knees
-    const double Rsys = ab[5] - ab[2];                  // ref systole span
-    const double Rdia = (ab[7] - ab[5]) + (ab[2] - ab[0]);  // ref diastole span
-    const double Tsys = tdias - tsys;                   // real systole duration
-    const double Tdia = T_cardiac - Tsys;              // real diastole duration
-    const double phase = fmod(t_in_cycle - tsys + 2.0 * T_cardiac, T_cardiac);
-    double te;
-    if (phase <= Tsys) {
-      te = ab[2] + phase * (Rsys / Tsys);              // inside systole block
+    // Genet ECG-derived activation nu(t): the authors' `nagumo_piecewise_linear`
+    // (cardiac_input_functions.py). Piecewise-linear between alpha_min and
+    // alpha_max with knee times set by ECG intervals. tsys is the nu=0 upstroke
+    // (depolarization_time = delay + ramp) and tdias the nu=0 downstroke
+    // (depolarization_end); the internal knees follow from the QRS width and the
+    // final repolarization ramp:
+    //   t_max     = tsys + QRSd                          (reach alpha_max)
+    //   t_plateau = tsys + QRSd + max(0, tdias-tsys-2 QRSd)  (plateau end)
+    //   t_finish  = tdias + ramp                         (reach alpha_min)
+    // The rising branch is a single line through (tsys, 0) with slope
+    // alpha_max/QRSd (so it leaves the alpha_min floor at tsys-QRSd); values below
+    // alpha_min are clamped. This is the exact author waveform (supersedes the
+    // earlier two-anchor PhysioBlocks trapezoid approximation) and scales with the
+    // heart rate through the ECG-derived tsys/tdias supplied by the caller.
+    const double t = t_in_cycle;
+    const double t_max = tsys + qrs;
+    const double t_plateau = tsys + qrs + std::max(0.0, tdias - tsys - 2.0 * qrs);
+    const double t_finish = tdias + ramp;
+    if (t < t_max) {
+      act_t = alpha_max * (t - tsys) / (t_max - tsys);
+    } else if (t < t_plateau) {
+      act_t = alpha_max;
+    } else if (t < tdias) {
+      act_t = alpha_max * (1.0 - (t - t_plateau) / (tdias - t_plateau));
     } else {
-      const double dt = phase - Tsys;                  // into diastole block
-      te = fmod(ab[5] + dt * (Rdia / Tdia), refT[7]);  // wraps 0.9 -> 0
+      act_t = alpha_min * (t - tdias) / (t_finish - tdias);
     }
-    act_t = vals[7];
-    for (int i = 1; i < 8; i++) {
-      if (te <= ab[i]) {
-        const double fr = (te - ab[i - 1]) / (ab[i] - ab[i - 1]);
-        act_t = vals[i - 1] + fr * (vals[i] - vals[i - 1]);
-        break;
-      }
-    }
+    if (act_t < alpha_min) act_t = alpha_min;  // clamp to the diastolic floor
   } else {
     // tanh systole/diastole switch: act = alpha_max on [tsys, tdias], else min.
     auto warp_signed = [T_cardiac](double dt) {
