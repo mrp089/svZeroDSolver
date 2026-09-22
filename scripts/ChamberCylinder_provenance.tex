@@ -6,6 +6,8 @@
 \usepackage{amsmath}
 \usepackage{siunitx}
 \usepackage{longtable}
+\usepackage{graphicx}
+\graphicspath{{../}{./}}
 \usepackage{hyperref}
 
 % ---- source category tags ------------------------------------------------
@@ -104,7 +106,7 @@ $K_{at}^{-1},K_{ar}^{-1},K_{iso}^{-1}$ & 1.1111e5, 7.6923e4, 2.0e9 & \gen & Tabl
 $R_p,\,C_\text{ar}$ & 1.35e7, 2.115e-10 & \gen & Table~1 (proximal Windkessel) \\
 $R_d,\,C_d$ & 1.0949e8, 2.0158e-8 & \gen & Table~1 (distal Windkessel) \\
 aortic $R_{\max}$ & $10^{12}$ ($\approx\infty$) & \gen & Eq.~36 arterial line has \emph{no} closed-leak; \emph{corrected} from $K_{iso}^{-1}$ (removed spurious regurgitation) \\
-$C_\text{valve}$ & 9e-9 & \none & Table~1; Eq.~36 puts $C_\text{valve}\dot P_v$ on the ventricle. Our sign is correct but the value ($43\times C_\text{ar}$) destabilises the stiff-integrator/diode realisation (ESV$\to$40); set to 0. Numerical regulariser tied to the energy-preserving scheme \\
+$C_\text{valve}$ & 9e-9 & \none & Table~1; Eq.~36 adds $C_\text{valve}\dot P_v$ at the ventricular node. Faithfully applied, \SI{9e-9}{m^3/Pa} ($\approx$\SI{1.2}{mL/mmHg}, $43\times C_\text{ar}$) is a huge compliance: it absorbs $\sim$\SI{90}{mL} over the pressure swing, collapsing the isovolumic phase (ESV 39 vs.\ 74, peak $P$ 8.5 vs.\ 12.8) --- inconsistent with the paper's own Fig.~5. Only $\le$9e-11 is negligible, so we run $C_\text{valve}{\approx}0$ (see Discrepancies) \\
 $P_\text{vs}$ (venous) & \SI{350}{Pa} & \textcolor{cnone}{\textbf{FITTED}} & \textbf{not in genet23 Table~1} (only in Eq.~36). \emph{Fitted} to the Fig.~5 ESV: \SI{350}{Pa} ($\approx$\SI{2.6}{mmHg}) gives ESV \SI{74}{mL}; Caruel's \SI{1000}{Pa} overshoots to \SI{76.4}{mL}. Sets only the ESV/afterload floor ($\sim$\SI{1.8}{mL}/\SI{500}{Pa}); EDV/peak-$P$/twist insensitive. The one remaining fitted quantity \\
 \bottomrule
 \end{longtable}
@@ -122,23 +124,48 @@ initial state, upstream buffer & --- & \svz & inflate to $P_\text{at}$ then run;
 \end{longtable}
 
 % =========================================================================
-\section*{Fit and the residual torsion discrepancy}
-Against the digitised Fig.~5 (full physics, $P_\text{vs}$ fitted to \SI{350}{Pa}):
-pressure RMS \SI{0.10}{kPa}, volume RMS \SI{2.1}{mL}; EDV/ESV 136/74 (data 135.7/74),
-peak $P$ 12.9 (12.8), peak twist $21^\circ$ (20).
+\clearpage
+\section*{Comparison with the digitised Genet~(2023) figures}
+\noindent Each figure overlays the ChamberCylinder result (dashed, coloured by variation) on the
+digitised Genet trace (solid; stored as CSV in \texttt{scripts/}, extracted from the published
+figures --- no copyrighted images in the repo). All runs use the \emph{full} Table-1 damping
+model ($\gamma{=}\mu{=}\SI{70}{Pa\,s}$). Layout, axes and units follow the paper: cavity pressure
+(with the twin kPa/mmHg axis), cavity volume, PV loop, and ventricular torsion. Pressure, volume
+and the PV loop match across every case; the torsion untwist is discussed at the end.
 
-\medskip\noindent
-\textbf{Torsion recovers $\sim$100 ms too fast} (tw@550 ms $5^\circ$ vs.\ data $13^\circ$;
-resting $-3.3^\circ$ vs.\ $-2.3^\circ$; flat over 0--100 ms vs.\ a gentle downslope).
-Systematically excluded as causes:
+\newcommand{\figone}[2]{%
+  \begin{center}\textbf{#2}\\[1pt]\includegraphics[width=0.88\linewidth]{#1.png}\end{center}\vspace{4pt}}
+
+\figone{fig5}{Fig.~5 --- baseline beat}
+\figone{fig6}{Fig.~6 --- aspect ratio $L/2R_i$}
+\clearpage
+\figone{fig7}{Fig.~7 --- internal volume}
+\figone{fig8}{Fig.~8 --- wall volume}
+\clearpage
+\figone{fig9}{Fig.~9 --- fibre orientation}
+
+% =========================================================================
+\section*{Discrepancies}
+The reproduction matches the paper on pressure, volume and the PV loop across every case
+(Figs.~5--9). Two discrepancies remain, both flagged for the authors:
 \begin{itemize}
-  \item \textbf{Parameters}: every physical value matches Table~1 (above). Note $\gamma{=}70$ is genet23's own value, so the earlier ``$\gamma{=}250$'' was a fit that contradicts the paper --- \emph{retracted}.
-  \item \textbf{Numerics}: $\Delta t$ (2$\to$0.5 ms), $n_e$ (3$\to$16) and integrator (stiff vs.\ midpoint) all leave the twist unchanged.
-  \item \textbf{Circulation}: the diode+RC blocks reproduce Eq.~35/36; the aortic no-leak fix and $C_\text{valve}$ both have negligible / no beneficial effect on the twist.
+  \item \textbf{Torsion untwist.} The twist recovers $\sim$100 ms too early (Fig.~5 tw@550
+  $7.8^\circ$ vs.\ $13.4^\circ$), increasingly so at larger twist amplitude (Fig.~6: aspect~1.0
+  matches, aspect~2.0 diverges most). This survives the \emph{full} genet23 damping model ---
+  tissue viscosity $\Sigma^v{=}\gamma\dot E$ (Eq.~28), fibre dissipation $\mu\dot e_c$ (Eq.~32) and
+  actin--myosin turnover (Eq.~33), all verified against the paper --- and it is dt-converged
+  ($7.7$--$7.8^\circ$ over $\Delta t=2$--$0.25$ ms) and integrator-independent, so it is not a
+  missing damping term, not numerics, and not inertia (raising density gives overshoot/ringing the
+  paper never shows). Both viscosities damp the twist \emph{and} the diastolic filling, so no
+  material-parameter choice reproduces both; the residual is most likely structural --- a
+  difference between the paper's written model and the CardiacLab code that produced the figures.
+  \item \textbf{Valve capacitance $C_\text{valve}$.} The valve law reproduces Eq.~35 exactly, but
+  the tabulated $C_\text{valve}{=}\SI{9e-9}{m^3/Pa}$ (Eq.~36) is a very large ventricular-node
+  compliance ($\approx$\SI{1.2}{mL/mmHg}, $43\times C_\text{ar}$) that stores $\sim$\SI{90}{mL} over
+  the pressure swing: applied faithfully it collapses the isovolumic phase (ESV 39 vs.\ 74, peak
+  $P$ 8.5 vs.\ 12.8), which is inconsistent with the paper's own Fig.~5. Only
+  $C_\text{valve}\le$\,9e-11 is negligible, so we run $C_\text{valve}{\approx}0$; the tabulated
+  value appears to be a paper inconsistency.
 \end{itemize}
-So the discrepancy is \emph{mechanical}. Leading candidates: (i) genet23 is fully
-\textbf{dynamical} (inertia $\rho_0\ddot u$, Eq.~18) whereas we run quasi-statically
-(enabling inertia nudges tw@550 $5\to7^\circ$, the right direction); (ii) the coupling
-of the viscous shear $\gamma\dot E$ to the twist DOF $\beta$. This is the one open item
-for the authors.
+
 \end{document}
