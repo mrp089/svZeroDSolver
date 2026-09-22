@@ -827,35 +827,35 @@ void ChamberCylinder::get_activation(std::vector<double>& parameters) {
   if (mode >= 0.5) {
     // PhysioBlocks `active_law...activation` = a rescale_two_phases_function:
     // a trapezoidal nu(t) between alpha_min (diastole) and alpha_max (systole)
-    // that ramps through 0. Reference fractions (reference period 0.9), the
-    // phase of each interval (0 = diastole, 1 = systole), and the
-    // diastole_scaling_factor a_scale = 0.8; the phase-0 (diastole) and phase-1
-    // (systole) intervals are stretched independently so the waveform fills the
-    // actual cardiac period T_cardiac (same rescaling as the P_at waveform).
+    // that ramps through 0. Reference knee fractions (reference period 0.9) and
+    // their nu values; the systole block is the two ramps + plateau between the
+    // nu=0 upstroke (refT[2]) and the nu=0 downstroke (refT[5]).
     static const double refT[8] = {0.0,   0.027, 0.037, 0.145,
                                    0.309, 0.417, 0.427, 0.9};
-    static const int refP[7] = {0, 0, 1, 1, 1, 0, 0};
     const double vals[8] = {alpha_min, alpha_min, 0.0,       alpha_max,
                             alpha_max, 0.0,       alpha_min, alpha_min};
-    const double a_scale = 0.8;
-    const double rp = refT[7] - refT[0];
-    const double beta = T_cardiac / rp;
-    double d0 = 0.0;
-    for (int i = 0; i < 7; i++)
-      if (refP[i] == 0) d0 += refT[i + 1] - refT[i];
-    const double d1 = rp - d0;
-    const double s0 = 1.0 + a_scale * (beta - 1.0) * rp / d0;
-    const double s1 = 1.0 + (1.0 - a_scale) * (beta - 1.0) * rp / d1;
-    double ab[8];
-    ab[0] = 0.0;
-    for (int i = 1; i < 8; i++)
-      ab[i] =
-          ab[i - 1] + (refT[i] - refT[i - 1]) * (refP[i - 1] == 0 ? s0 : s1);
-    // Retime to Fig 5: anchor the systole onset (the nu=0 upstroke at ab[2]) at
-    // tsys by translating the waveform in time; shape and phase durations are
-    // preserved. (tsys = ab[2] gives the untranslated PhysioBlocks timing.)
-    const double shift = tsys - ab[2];
-    const double te = fmod(t_in_cycle - shift + 2.0 * T_cardiac, T_cardiac);
+    // Two-anchor retiming to Fig 5: map the reference SYSTOLE block
+    // [refT[2], refT[5]] linearly onto [tsys, tdias] and the remaining diastole
+    // onto the rest of the cardiac period. tsys anchors the active-tension onset
+    // (Fig 5 pressure upstroke, ~110 ms); tdias anchors the relaxation onset
+    // (Fig 5 pressure downstroke, ~400 ms). The internal ramp/plateau proportions
+    // are preserved, so the systole DURATION is now calibratable via (tsys,tdias)
+    // -- it was fixed by the PhysioBlocks shape before, which held nu>0 ~80 ms too
+    // long (down-crossing at 480 vs Fig 5 ~400 ms). tdias was previously ignored
+    // in this mode.
+    const double* ab = refT;                            // reference knees
+    const double Rsys = ab[5] - ab[2];                  // ref systole span
+    const double Rdia = (ab[7] - ab[5]) + (ab[2] - ab[0]);  // ref diastole span
+    const double Tsys = tdias - tsys;                   // real systole duration
+    const double Tdia = T_cardiac - Tsys;              // real diastole duration
+    const double phase = fmod(t_in_cycle - tsys + 2.0 * T_cardiac, T_cardiac);
+    double te;
+    if (phase <= Tsys) {
+      te = ab[2] + phase * (Rsys / Tsys);              // inside systole block
+    } else {
+      const double dt = phase - Tsys;                  // into diastole block
+      te = fmod(ab[5] + dt * (Rdia / Tdia), refT[7]);  // wraps 0.9 -> 0
+    }
     act_t = vals[7];
     for (int i = 1; i < 8; i++) {
       if (te <= ab[i]) {
