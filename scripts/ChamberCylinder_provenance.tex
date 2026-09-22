@@ -105,7 +105,7 @@ $R_p,\,C_\text{ar}$ & 1.35e7, 2.115e-10 & \gen & Table~1 (proximal Windkessel) \
 $R_d,\,C_d$ & 1.0949e8, 2.0158e-8 & \gen & Table~1 (distal Windkessel) \\
 aortic $R_{\max}$ & $10^{12}$ ($\approx\infty$) & \gen & Eq.~36 arterial line has \emph{no} closed-leak; \emph{corrected} from $K_{iso}^{-1}$ (removed spurious regurgitation) \\
 $C_\text{valve}$ & 9e-9 & \none & Table~1; Eq.~36 puts $C_\text{valve}\dot P_v$ on the ventricle. Our sign is correct but the value ($43\times C_\text{ar}$) destabilises the stiff-integrator/diode realisation (ESV$\to$40); set to 0. Numerical regulariser tied to the energy-preserving scheme \\
-$P_\text{vs}$ (venous) & \SI{1000}{Pa} & \car & \textbf{not in genet23 Table~1}; Eq.~36 prescribes it. Caruel $P_{sv}{=}10^3$ \\
+$P_\text{vs}$ (venous) & \SI{350}{Pa} & \textcolor{cnone}{\textbf{FITTED}} & \textbf{not in genet23 Table~1} (only in Eq.~36). \emph{Fitted} to the Fig.~5 ESV: \SI{350}{Pa} ($\approx$\SI{2.6}{mmHg}) gives ESV \SI{74}{mL}; Caruel's \SI{1000}{Pa} overshoots to \SI{76.4}{mL}. Sets only the ESV/afterload floor ($\sim$\SI{1.8}{mL}/\SI{500}{Pa}); EDV/peak-$P$/twist insensitive. The one remaining fitted quantity \\
 \bottomrule
 \end{longtable}
 
@@ -123,8 +123,9 @@ initial state, upstream buffer & --- & \svz & inflate to $P_\text{at}$ then run;
 
 % =========================================================================
 \section*{Fit and the residual torsion discrepancy}
-Against the digitised Fig.~5: pressure RMS \SI{0.16}{kPa}, volume RMS \SI{2.8}{mL};
-EDV/ESV 136/76 (data 135.7/74), peak $P$ 13.0 (12.8), peak twist $21^\circ$ (20).
+Against the digitised Fig.~5 (full physics, $P_\text{vs}$ fitted to \SI{350}{Pa}):
+pressure RMS \SI{0.10}{kPa}, volume RMS \SI{2.1}{mL}; EDV/ESV 136/74 (data 135.7/74),
+peak $P$ 12.9 (12.8), peak twist $21^\circ$ (20).
 
 \medskip\noindent
 \textbf{Torsion recovers $\sim$100 ms too fast} (tw@550 ms $5^\circ$ vs.\ data $13^\circ$;

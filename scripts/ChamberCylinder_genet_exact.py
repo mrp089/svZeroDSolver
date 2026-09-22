@@ -92,7 +92,13 @@ PAT_MAX = 7.0 * MMHG            # 938 Pa
 PAT_MIN = PAT_MAX - 2.5 * MMHG  # 603 Pa
 ATR_PQ = 0.14                   # PQ interval
 ATR_AVNODE = 0.080              # AV-node delay
-P_VS = 1000.0                   # systemic venous pressure (Caruel Table 1)
+# Systemic venous pressure P_vs: NOT tabulated in genet23 (it only appears in the
+# Eq 36 distal node). FITTED here to the Fig 5 end-systolic volume: P_vs=350 Pa
+# (~2.6 mmHg) gives ESV=74.0 mL (data 74). This is the ONE remaining fitted
+# quantity -- Caruel Table 1 uses 1000 Pa (~7.5 mmHg), which overshoots ESV to 76.4.
+# P_vs sets only the afterload/ESV floor (~1.8 mL per 500 Pa); EDV, peak P and
+# torsion are insensitive to it.
+P_VS = 350.0  # FIT to Fig 5 ESV (genet23 does not tabulate P_vs; Caruel = 1000)
 
 
 def atrial_pressure(period=0.8):
