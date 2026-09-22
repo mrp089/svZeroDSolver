@@ -16,9 +16,6 @@ void TimeIntegrator::init(Model* model, double time_step_size, double rho,
   gamma = 0.5 + alpha_m - alpha_f;
   ydot_init_coeff = 1.0 - 1.0 / gamma;
 
-  y_coeff = gamma * time_step_size;
-  y_coeff_jacobian = alpha_f * y_coeff;
-
   size = model->dofhandler.size();
   system = SparseSystem(size);
   this->time_step_size = time_step_size;
@@ -36,8 +33,6 @@ void TimeIntegrator::clean() { system.clean(); }
 
 void TimeIntegrator::update_params(double time_step_size) {
   this->time_step_size = time_step_size;
-  y_coeff = gamma * time_step_size;
-  y_coeff_jacobian = alpha_f * y_coeff;
   model->update_constant(system);
   model->update_time(system, 0.0);
 }
@@ -58,7 +53,8 @@ double TimeIntegrator::assemble_residual(const State& old_state,
 }
 
 // ---------------------------------------------------------------------------
-// GeneralizedAlpha (behavior identical to the original Integrator)
+// GeneralizedAlpha: the generalized-alpha scheme (\cite JANSEN2000305), the
+// default svZeroDSolver integrator.
 // ---------------------------------------------------------------------------
 
 GeneralizedAlpha::GeneralizedAlpha(Model* model, double time_step_size,
@@ -68,6 +64,10 @@ GeneralizedAlpha::GeneralizedAlpha(Model* model, double time_step_size,
 }
 
 State GeneralizedAlpha::step(const State& old_state, double time) {
+  // Step-size-dependent coefficients (mapping the ydot increment to y).
+  const double y_coeff = gamma * time_step_size;
+  const double y_coeff_jacobian = alpha_f * y_coeff;
+
   // Predictor: Constant y, consistent ydot
   State new_state = State::Zero(size);
   new_state.ydot += old_state.ydot * ydot_init_coeff;
@@ -131,8 +131,10 @@ ConsistentStiffIntegrator::ConsistentStiffIntegrator(Model* model,
                                                      double rho, double atol,
                                                      int max_iter,
                                                      bool max_iter_error_to_warning) {
-  // Use a maximally dissipative spectral radius for stiff (L-stable) damping,
-  // independent of the requested rho.
+  // Maximally dissipative spectral radius (rho_infty = 0, L-stable), independent
+  // of the requested rho: the stiff Bestel-Clement-Sorine active law of
+  // \cite genet23 needs the high-frequency damping. genet23 itself uses a bespoke
+  // energy-consistent midpoint scheme; this is its svZeroDSolver DAE counterpart.
   (void)rho;
   init(model, time_step_size, 0.0, atol, max_iter, max_iter_error_to_warning);
 }
@@ -140,9 +142,10 @@ ConsistentStiffIntegrator::ConsistentStiffIntegrator(Model* model,
 bool ConsistentStiffIntegrator::damped_step(const State& old_state,
                                             State& new_state, double dt,
                                             double time) {
-  // Coefficients for this (possibly sub-) step size.
-  y_coeff = gamma * dt;
-  y_coeff_jacobian = alpha_f * y_coeff;
+  // Step-size-dependent coefficients for this (possibly sub-) step, held locally
+  // so sub-stepping needs no save/restore of shared state.
+  const double y_coeff = gamma * dt;
+  const double y_coeff_jacobian = alpha_f * y_coeff;
 
   // Predictor: constant y, consistent ydot.
   new_state = State::Zero(size);
@@ -201,9 +204,6 @@ State ConsistentStiffIntegrator::step(const State& old_state, double time) {
       }
       st = next;
     }
-    // Restore full-step coefficients.
-    y_coeff = gamma * time_step_size;
-    y_coeff_jacobian = alpha_f * y_coeff;
     if (ok) {
       return st;
     }

@@ -18,8 +18,9 @@
  * @brief Available time-integration schemes.
  */
 enum class IntegratorType {
-  generalized_alpha,  ///< Generalized-alpha (default)
-  consistent_stiff    ///< Stiffly-stable damped-Newton with adaptive substeps
+  generalized_alpha,  ///< Generalized-alpha (default, \cite JANSEN2000305)
+  consistent_stiff    ///< Stiffly-stable damped-Newton with adaptive substeps,
+                      ///< for the stiff active law of \cite genet23
 };
 
 /**
@@ -34,13 +35,16 @@ enum class IntegratorType {
  */
 class TimeIntegrator {
  protected:
+  // Generalized-alpha coefficients that depend only on the spectral radius
+  // (shared by both schemes). The step-size-dependent coefficients (gamma*dt and
+  // its Jacobian factor) are computed locally in each step() so that no
+  // step-size state is shared between schemes -- the sub-stepping scheme can vary
+  // dt freely without save/restore.
   double alpha_m{0.0};
   double alpha_f{0.0};
   double gamma{0.0};
   double time_step_size{0.0};
   double ydot_init_coeff{0.0};
-  double y_coeff{0.0};
-  double y_coeff_jacobian{0.0};
   double atol{0.0};
   int max_iter{0};
   bool max_iter_error_to_warning{false};
