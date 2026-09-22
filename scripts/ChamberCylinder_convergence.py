@@ -32,7 +32,7 @@ NCYCLE = 15                    # reach the Windkessel limit cycle
 
 
 def metrics(ne, npts):
-    cfg = G.build(bcs_alpha=12.0, ne=ne, ncycle=NCYCLE, P_vs=G.PVS_PHYSIOBLOCKS)
+    cfg = G.build(bcs_alpha=12.0, ne=ne, ncycle=NCYCLE, P_vs=G.P_VS)
     cfg["simulation_parameters"]["number_of_time_pts_per_cardiac_cycle"] = npts
     cfg["simulation_parameters"]["absolute_tolerance"] = 1e-9
     out = pysvzerod.simulate(cfg)
