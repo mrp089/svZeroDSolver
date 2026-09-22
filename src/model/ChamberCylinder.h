@@ -54,15 +54,12 @@
  * - transversely isotropic deviatoric energy
  *   \f$W^e = C_1(\bar I_1-3) + C_2(\bar I_2-3) + C_3 e^{C_4(\bar I_1-3)^2} +
  *   C_5 e^{C_6(\bar I_4-1)^2}\f$, \f$\Sigma^d=\partial W^e/\partial E\f$;
- * - an incompressibility bulk term \f$\Sigma^b = \Pi\,J\,C^{-1}\f$. With
- *   `mixed = 0` (default) \f$\Pi=\kappa(J-1)\f$ is a near-incompressible
- *   displacement penalty; with `mixed = 1` \f$\Pi=p\f$ is an independent
- *   hydrostatic-pressure field (\cite genet23 mixed u/p formulation),
- *   discretized element-wise constant (P0, LBB-stable with the linear
- *   \f$\rho,\varphi,\eta\f$) and constrained by the weak incompressibility
- *   \f$\int_{\Omega_e}(J-1)\,\mathrm d\Omega=0\f$ per element. The penalty locks
- *   volumetrically at coarse meshes (linear elements, fully-integrated bulk
- *   term); the mixed form is locking-free;
+ * - an incompressibility bulk term \f$\Sigma^b = p\,J\,C^{-1}\f$ with \f$p\f$ an
+ *   independent hydrostatic-pressure field (\cite genet23 mixed u/p
+ *   formulation), discretized element-wise constant (P0, LBB-stable with the
+ *   linear \f$\rho,\varphi,\eta\f$) and constrained by the weak
+ *   incompressibility \f$\int_{\Omega_e}(J-1)\,\mathrm d\Omega=0\f$ per element
+ *   (locking-free at coarse meshes);
  * - a viscous term \f$\Sigma^v=\gamma\,\dot E\f$;
  * - an active fiber stress \f$\Sigma^a = \tau\,\mathbf{e}_F\otimes\mathbf{e}_F\f$
  *   along the local myofiber direction \f$\mathbf{e}_F(R) = (0,\cos\alpha(R),
@@ -72,18 +69,8 @@
  * The invariants are those of the isochoric tensor \f$\bar C = J^{-2/3}C\f$,
  * with \f$\bar I_4 = J^{-2/3}\,\mathbf{e}_F\cdot C\cdot\mathbf{e}_F\f$.
  *
- * ### Active contraction (two selectable models, `active_model`)
+ * ### Active contraction (\cite genet23 / Bestel-Clement-Sorine, Ref. 6)
  *
- * **`active_model = 0` (default, ChamberSphere-style).** A single active fiber
- * stress magnitude \f$\tau\f$ (spatially uniform, applied along
- * \f$\mathbf{e}_F(R)\f$) following the same smooth activation as ChamberSphere,
- * \f[
- * \dot\tau + a\,\tau - \sigma_\text{max}\,a_+ = 0,\quad a_+=\max(a,0),\quad
- * a = f\,\alpha_\text{max} + (1-f)\,\alpha_\text{min},
- * \f]
- * with the tanh systole/diastole indicator \f$f\f$.
- *
- * **`active_model = 1` (Genet et al. 2023 / Bestel-Clement-Sorine, Ref. 6).**
  * The active fiber stress is \f$\sigma_\text{1D} = (\tau_c+\mu\dot e_c)/
  * (1+e_\text{fib})\f$ (Eqs. 30-32 of the paper / Eq. 10 of Chapelle et al.
  * 2012), where \f$1+e_\text{fib}=\sqrt{\mathbf{e}_F\cdot C\cdot\mathbf{e}_F}=
@@ -96,43 +83,36 @@
  *   n_0(e_c)\sigma_0|\nu|_+,\quad
  * \dot k_c = -(|\nu|+\alpha|\dot e_c|)k_c + n_0(e_c)k_0|\nu|_+,
  * \f]
- * (Chapelle Eq. 9) with the same activation \f$\nu=a\f$ as model 0 (so the two
- * models share timing and differ only in the active law), \f$\sigma_0=\f$
- * `sigma_max`, and Frank-Starling reduction factor \f$n_0(e_c)=
- * \exp(-\tfrac12((e_c-\f$`n0_center`\f$)/\f$`n0_width`\f$)^2)\in(0,1]\f$.
- * Chapelle et al. 2012 (Ref. 6, Remark 4) leaves \f$n_0\f$ deliberately general
- * (a reduction factor for the Starling effect, a function of the history of
- * \f$e_c\f$); this Gaussian force-length curve is one concrete choice,
- * defaulting to \f$n_0\approx1\f$ (wide) so it is inactive unless configured.
- * Writing the stress through \f$\tau_c+\mu\dot e_c\f$ rather than the equivalent
- * \f$k_s(e_\text{fib}-e_c)\f$ keeps the paper's very stiff \f$k_s=10^8\f$ out of
- * the mechanical residual (confining it to the \f$e_c\f$ ODE), so the model
- * integrates with the standard generalized-alpha solver.
+ * (Chapelle Eq. 9) driven by the ECG-derived activation \f$\nu(t)\f$ (the
+ * authors' piecewise-linear `nagumo` waveform; see get_activation),
+ * \f$\sigma_0=\f$ `sigma_max`, and Frank-Starling reduction factor
+ * \f$n_0(e_c)\f$ (the fixed PhysioBlocks piecewise-linear force-length curve,
+ * frank_starling()). Writing the stress through \f$\tau_c+\mu\dot e_c\f$ rather
+ * than the equivalent \f$k_s(e_\text{fib}-e_c)\f$ keeps the paper's very stiff
+ * \f$k_s=10^8\f$ out of the mechanical residual (confining it to the \f$e_c\f$
+ * ODE), so the model integrates with the standard generalized-alpha solver.
  *
  * ### Governing equations
  *
- * The quasi-static principle of virtual work (inertia neglected), reduced to
- * one spatial dimension (\cite genet23 Appendix A.2, Eqs. A10-A12), reads
+ * The dynamic principle of virtual work (\cite genet23 Eqs. 8, 18, 45), reduced
+ * to one spatial dimension (\cite genet23 Appendix A.2, Eqs. A10-A12), reads
  * \f[
- * 2\pi L\int_{R_i}^{R_e}\Sigma:\mathrm{D}E(\hat\zeta)\,\mathrm{d}R
+ * P_a + 2\pi L\int_{R_i}^{R_e}\Sigma:\mathrm{D}E(\hat\zeta)\,\mathrm{d}R
  * = P_v\,2\pi L (R_i+\rho(R_i))(1+\varepsilon)\,\hat\rho(R_i)
  * + P_v\,\pi L (R_i+\rho(R_i))^2\,\hat\varepsilon \quad\forall\hat\zeta,
  * \f]
- * assembled with finite elements over the thickness. It is complemented by the
- * cavity volume \f$V=\pi(R_i+\rho(R_i))^2(1+\varepsilon)L\f$, mass conservation
- * \f$Q_\text{in}-Q_\text{out}-\dot V - C_\text{valve}\dot P_v = 0\f$, pressure
- * equality
+ * assembled with finite elements over the thickness, with the acceleration
+ * virtual power
+ * \f$P_a=\int_\Omega\varrho_0\,\ddot u\cdot\mathrm{D}u(\hat\zeta)\,\mathrm d\Omega\f$
+ * realized by velocity companion DOFs \f$w=\dot\zeta\f$ and the consistent mass
+ * matrix \f$M=\int\varrho_0(\mathrm{D}u)^\top\mathrm{D}u\,\mathrm d\Omega\f$
+ * (analytically integrated over \f$\Theta,Z\f$; \cite genet23 Eqs. A5-A6). For
+ * cardiac parameters inertia is \f$\sim\!10^{-4}\f$ of the internal/pressure
+ * forces. It is complemented by the cavity volume
+ * \f$V=\pi(R_i+\rho(R_i))^2(1+\varepsilon)L\f$, mass conservation
+ * \f$Q_\text{in}-Q_\text{out}-\dot V = 0\f$, pressure equality
  * \f$P_\text{in}=P_\text{out}=P_v\f$, and the rigid-body pins
  * \f$\varphi(R_i)=\eta(R_i)=0\f$.
- *
- * With `use_inertia = 1` the full dynamic formulation of \cite genet23 (Eqs. 8,
- * 18, 45) is used instead: the acceleration virtual power
- * \f$P_a=\int_\Omega\varrho_0\,\ddot u\cdot\mathrm{D}u(\hat\zeta)\,\mathrm d\Omega\f$
- * is added to the momentum, realized by velocity companion DOFs \f$w=\dot\zeta\f$
- * and the consistent mass matrix \f$M=\int\varrho_0(\mathrm{D}u)^\top\mathrm{D}u\,
- * \mathrm d\Omega\f$ (analytically integrated over \f$\Theta,Z\f$; \cite genet23
- * Eqs. A5-A6). For cardiac parameters inertia is \f$\sim\!10^{-4}\f$ of the
- * internal/pressure forces, so the response is within ~0.3% of quasi-static.
  *
  * ### Parameters
  *
@@ -144,19 +124,15 @@
  * * `alpha_endo` - Myofiber helix angle at endocardium \f$\alpha_i\f$ [deg]
  * * `alpha_epi` - Myofiber helix angle at epicardium \f$\alpha_e\f$ [deg]
  * * `C1` ... `C6` - Passive material constants \f$C_1\ldots C_6\f$
- * * `kappa` - Incompressibility penalty (bulk modulus) \f$\kappa\f$
  * * `gamma` - Material viscosity \f$\gamma\f$
- * * `sigma_max` - Maximum active fiber stress \f$\sigma_\text{max}\f$ (also the
- *   \f$\sigma_0\f$ of the BCS model)
+ * * `sigma_max` - Maximum active fiber stress \f$\sigma_0\f$ of the BCS model
  * * `alpha_max` - Maximum activation rate \f$\alpha_\text{max}\f$
  * * `alpha_min` - Minimum activation rate \f$\alpha_\text{min}\f$
- * * `tsys` - Systole timing parameter \f$t_\text{sys}\f$
- * * `tdias` - Diastole timing parameter \f$t_\text{dias}\f$
- * * `steepness` - Activation steepness \f$\gamma_\text{act}\f$
+ * * `tsys` - Activation upstroke time (\f$\nu=0\f$ crossing) \f$t_\text{sys}\f$
+ * * `tdias` - Activation downstroke time (\f$\nu=0\f$ crossing) \f$t_\text{dias}\f$
  * * `num_elements` - Number of (linear) finite elements through the wall
  *   (optional, default 10). The response converges under refinement; ~10-15
  *   elements are adequate for the baseline geometry.
- * * `active_model` - 0 = simple ChamberSphere-style (default), 1 = Genet BCS
  * * `k_s` - BCS series-spring stiffness \f$k_s\f$ (optional, default 1e8)
  * * `k_0` - BCS maximum active stiffness \f$k_0\f$ (optional, default 260e3)
  * * `mu` - BCS active dissipation \f$\mu\f$ (optional, default 70). Distinct
@@ -167,28 +143,12 @@
  *   generalized-alpha; set the simulation parameter `"integrator": "stiff"`
  *   (ConsistentStiffIntegrator) to enable \f$\alpha>0\f$. The \f$k_c\dot e_c\f$
  *   force-length-velocity source is retained regardless of \f$\alpha\f$.
- * * `n0_center`, `n0_width` - BCS Frank-Starling curve parameters (optional,
- *   defaults 0 and 1000 so that \f$n_0\approx1\f$)
- * * `c_valve` - Cavity/valve compliance \f$C_\text{valve}\f$ (optional, default
- *   0), adding \f$-C_\text{valve}\dot P_v\f$ to mass conservation (genet23
- *   Eq. 36); regularizes the isovolumic phases
  * * `density` - Reference mass density \f$\varrho_0\f$ (optional, default 1000
- *   kg/m^3 = the paper's 1 kg/L); only used when `use_inertia = 1`
- * * `use_inertia` - 0 = quasi-static (default), 1 = full dynamics with the
- *   consistent mass matrix and velocity companion DOFs
- * * `active_i4pow` - exponent in the active 2nd-PK stress
- *   \f$\sigma_{1D}=T_\text{fib}/I_4^{\,p}\f$ (optional, default 0.5 = correct).
- *   \f$p=0.5\f$ is \cite genet23 Eq. 30 / Kimmig 2019 Eq. 31
- *   (\f$\Sigma_a=[T_\text{fib}/(1+e_\text{fib})]\,e_F\otimes e_F\f$, since
- *   \f$\|F\,e_F\|=1+e_\text{fib}\f$), the authoritative form. \f$p=1\f$ is a
- *   diagnostic alternative only.
- * * `mixed` - incompressibility treatment (optional, default 0). `0` = the
- *   near-incompressible displacement penalty \f$\kappa\f$; `1` = the mixed u/p
- *   formulation of \cite genet23 with an independent element-wise-constant (P0)
- *   hydrostatic-pressure field enforcing \f$\int_{\Omega_e}(J-1)=0\f$. The
- *   penalty locks at coarse meshes; `mixed = 1` is locking-free and reproduces
- *   the paper's passive filling at the baseline mesh. `kappa` is ignored when
- *   `mixed = 1`.
+ *   kg/m^3 = the paper's 1 kg/L)
+ * * `act_qrs` - QRS duration: the \f$\nu\f$ rise (and fall-to-0) ramp width
+ *   (optional, default 0.080)
+ * * `act_ramp` - final repolarization ramp width (\f$\nu:0\to\alpha_\text{min}\f$)
+ *   (optional, default 0.010)
  *
  * ### Internal variables
  *
@@ -197,11 +157,12 @@
  * * `eta_<A>` - Out-of-plane shear field nodal values \f$\eta_A\f$
  * * `beta` - Twist per unit length \f$\beta\f$
  * * `eps` - Longitudinal strain \f$\varepsilon\f$
- * * `tau` - Active fiber stress \f$\tau\f$ (active_model = 0 only)
  * * `ec_<q>`, `tauc_<q>`, `kc_<q>` - BCS contractile-element strain, active
- *   bond stress and active stiffness at quadrature point `q` (active_model = 1)
+ *   bond stress and active stiffness at quadrature point `q`
  * * `volume` - Cavity volume \f$V\f$
- * * `pmix_<e>` - Element hydrostatic pressure \f$p_e\f$ (P0), `mixed = 1` only
+ * * `vrho_<A>`, `vphi_<A>`, `veta_<A>`, `vbeta`, `veps` - velocity companion
+ *   DOFs \f$w=\dot\zeta\f$ (full dynamics)
+ * * `pmix_<e>` - Element hydrostatic pressure \f$p_e\f$ (P0 mixed u/p)
  *
  * (node index `A` runs from 0 at the endocardium \f$R_i\f$ to `num_elements`
  * at the epicardium \f$R_e\f$.)
@@ -212,46 +173,31 @@ class ChamberCylinder : public Block {
    * @brief Local IDs of the parameters
    */
   enum ParamId {
-    Ri = 0,
-    Re = 1,
-    length = 2,
-    alpha_endo = 3,
-    alpha_epi = 4,
-    C1 = 5,
-    C2 = 6,
-    C3 = 7,
-    C4 = 8,
-    C5 = 9,
-    C6 = 10,
-    kappa = 11,
-    gamma = 12,
-    sigma_max = 13,
-    alpha_max = 14,
-    alpha_min = 15,
-    tsys = 16,
-    tdias = 17,
-    steepness = 18,
-    num_elements = 19,
-    active_model = 20,  // 0 = simple (ChamberSphere-style), 1 = Genet BCS
-    k_s = 21,           // BCS series-spring stiffness
-    k_0 = 22,           // BCS maximum active stiffness
-    mu = 23,            // BCS active dissipation
-    bcs_alpha = 24,     // BCS activation rate constant (paper's alpha)
-    n0_center = 25,     // BCS Frank-Starling curve center (strain)
-    n0_width = 26,      // BCS Frank-Starling curve width (strain)
-    c_valve = 27,       // cavity/valve compliance (genet23 Eq. 36)
-    density = 28,       // reference mass density rho_0 (inertia, genet23 Eq. 18)
-    use_inertia = 29,   // 0 = quasi-static (default), 1 = full dynamics (inertia)
-    active_i4pow = 30,  // sigma_1D = T_fib/I4^p; 0.5 = Eq.30, 1.0 = Eq.59 limit
-    mixed = 31,         // 0 = penalty incompressibility, 1 = mixed u/p (Genet)
-    activation_mode = 32,  // 0 = tanh systole/diastole switch; 1 = ECG-derived
-                           // piecewise-linear nu(t) (Genet `nagumo`; alpha_min/max)
-    bcs_relax = 33,     // 0 = fixed relaxation; 1 = length-dependent relaxation
-                        // (Caruel 2013: decay uses w*|u|_- with w->m0(e_c))
-    alpha_r = 34,       // time constant for the relaxation internal variable w
-                        // (Caruel 2013 Eq. 3); 0 = instantaneous w=m0(e_c)
-    act_qrs = 35,       // QRS duration: nu rise (and fall-to-0) ramp width (mode 1)
-    act_ramp = 36       // final repolarization ramp width (nu: 0 -> alpha_min)
+    Ri,
+    Re,
+    length,
+    alpha_endo,
+    alpha_epi,
+    C1,
+    C2,
+    C3,
+    C4,
+    C5,
+    C6,
+    gamma,
+    sigma_max,
+    alpha_max,
+    alpha_min,
+    tsys,
+    tdias,
+    num_elements,
+    k_s,           // BCS series-spring stiffness
+    k_0,           // BCS maximum active stiffness
+    mu,            // BCS active dissipation
+    bcs_alpha,     // BCS activation rate constant (paper's alpha)
+    density,       // reference mass density rho_0 (inertia, genet23 Eq. 18)
+    act_qrs,       // QRS duration: nu rise (and fall-to-0) ramp width
+    act_ramp       // final repolarization ramp width (nu: 0 -> alpha_min)
   };
 
   /**
@@ -273,30 +219,18 @@ class ChamberCylinder : public Block {
                {"C4", InputParameter()},
                {"C5", InputParameter()},
                {"C6", InputParameter()},
-               {"kappa", InputParameter()},
                {"gamma", InputParameter()},
                {"sigma_max", InputParameter()},
                {"alpha_max", InputParameter()},
                {"alpha_min", InputParameter()},
                {"tsys", InputParameter()},
                {"tdias", InputParameter()},
-               {"steepness", InputParameter()},
                {"num_elements", InputParameter(true, false, true, 10.0)},
-               {"active_model", InputParameter(true, false, true, 0.0)},
                {"k_s", InputParameter(true, false, true, 1.0e8)},
                {"k_0", InputParameter(true, false, true, 260.0e3)},
                {"mu", InputParameter(true, false, true, 70.0)},
                {"bcs_alpha", InputParameter(true, false, true, 0.0)},
-               {"n0_center", InputParameter(true, false, true, 0.0)},
-               {"n0_width", InputParameter(true, false, true, 1000.0)},
-               {"c_valve", InputParameter(true, false, true, 0.0)},
                {"density", InputParameter(true, false, true, 1000.0)},
-               {"use_inertia", InputParameter(true, false, true, 0.0)},
-               {"active_i4pow", InputParameter(true, false, true, 0.5)},
-               {"mixed", InputParameter(true, false, true, 0.0)},
-               {"activation_mode", InputParameter(true, false, true, 0.0)},
-               {"bcs_relax", InputParameter(true, false, true, 0.0)},
-               {"alpha_r", InputParameter(true, false, true, 0.12)},
                {"act_qrs", InputParameter(true, false, true, 0.080)},
                {"act_ramp", InputParameter(true, false, true, 0.010)}}) {}
 
@@ -360,7 +294,6 @@ class ChamberCylinder : public Block {
   int n_quad = 0;   ///< Number of quadrature points through the wall
   int n_var = 0;    ///< Number of block variables (external + internal)
   int n_eqn = 0;    ///< Number of block equations
-  bool use_bcs = false;  ///< Active model: false = simple, true = Genet BCS
 
   /// Reference nodal radii (endocardium at index 0, epicardium at n_node-1)
   std::vector<double> node_R;
@@ -379,34 +312,35 @@ class ChamberCylinder : public Block {
   std::vector<QuadPoint> quad;  ///< Quadrature points across the thickness
 
   // --- Local variable / equation index helpers ---
-  // Common layout (both models):
-  //   vars: [Pin, Qin, Pout, Qout, rho_0.., phi_0.., eta_0.., beta, eps, <active>, volume]
-  //   eqns: [rho.., phi.., eta.., beta, eps, <active>, volume, mass, pressure]
-  // Simple model active block: 1 var/eqn (tau). Genet BCS active block:
-  //   3*n_quad vars/eqns (e_c, tau_c, k_c per quadrature point).
+  // Layout:
+  //   vars: [Pin, Qin, Pout, Qout, rho_0.., phi_0.., eta_0.., beta, eps,
+  //          (e_c,tau_c,k_c)_q.., volume, vrho.., vphi.., veta.., vbeta, veps,
+  //          pmix_0..]
+  //   eqns: [rho.., phi.., eta.., beta, eps, (e_c,tau_c,k_c)_q.., volume, mass,
+  //          pressure, vrho.., vphi.., veta.., vbeta, veps, pmix_0..]
+  // The Genet BCS active block holds 3*n_quad vars/eqns (e_c, tau_c, k_c per
+  // quadrature point).
   int i_rho(int a) const { return 4 + a; }
   int i_phi(int a) const { return 4 + n_node + a; }
   int i_eta(int a) const { return 4 + 2 * n_node + a; }
   int i_beta() const { return 4 + 3 * n_node; }
   int i_eps() const { return 4 + 3 * n_node + 1; }
   int i_active0() const { return 4 + 3 * n_node + 2; }  ///< start of active vars
-  int i_tau() const { return i_active0(); }
   int i_ec(int q) const { return i_active0() + 3 * q; }
   int i_tauc(int q) const { return i_active0() + 3 * q + 1; }
   int i_kc(int q) const { return i_active0() + 3 * q + 2; }
-  int n_active_var() const { return use_bcs ? 3 * n_quad : 1; }
+  int n_active_var() const { return 3 * n_quad; }
   int i_vol() const { return i_active0() + n_active_var(); }
-  // Velocity companion DOFs (dynamics only): w = d(field)/dt, appended after
-  // the volume DOF so the quasi-static layout above is unchanged.
+  // Velocity companion DOFs (dynamics): w = d(field)/dt, appended after the
+  // volume DOF.
   int i_vel0() const { return i_vol() + 1; }
   int i_vrho(int a) const { return i_vel0() + a; }
   int i_vphi(int a) const { return i_vel0() + n_node + a; }
   int i_veta(int a) const { return i_vel0() + 2 * n_node + a; }
   int i_vbeta() const { return i_vel0() + 3 * n_node; }
   int i_veps() const { return i_vel0() + 3 * n_node + 1; }
-  // Mixed u/p element pressure DOFs (P0), appended after the velocity block so
-  // the penalty layout is unchanged when mixed/dynamics are off.
-  int i_pmix0() const { return i_vol() + 1 + (is_dynamic ? 3 * n_node + 2 : 0); }
+  // Mixed u/p element pressure DOFs (P0), appended after the velocity block.
+  int i_pmix0() const { return i_vel0() + 3 * n_node + 2; }
   int i_pmix(int e) const { return i_pmix0() + e; }
 
   int e_rho(int a) const { return a; }
@@ -415,14 +349,13 @@ class ChamberCylinder : public Block {
   int e_beta() const { return 3 * n_node; }
   int e_eps() const { return 3 * n_node + 1; }
   int e_active0() const { return 3 * n_node + 2; }  ///< start of active eqns
-  int e_active() const { return e_active0(); }
   int e_ec(int q) const { return e_active0() + 3 * q; }
   int e_tauc(int q) const { return e_active0() + 3 * q + 1; }
   int e_kc(int q) const { return e_active0() + 3 * q + 2; }
   int e_volume() const { return e_active0() + n_active_var(); }
   int e_mass() const { return e_volume() + 1; }
   int e_pressure() const { return e_volume() + 2; }
-  // Velocity companion equations (dynamics only): w - d(field)/dt = 0.
+  // Velocity companion equations (dynamics): w - d(field)/dt = 0.
   int e_vel0() const { return e_pressure() + 1; }
   int e_vrho(int a) const { return e_vel0() + a; }
   int e_vphi(int a) const { return e_vel0() + n_node + a; }
@@ -430,11 +363,8 @@ class ChamberCylinder : public Block {
   int e_vbeta() const { return e_vel0() + 3 * n_node; }
   int e_veps() const { return e_vel0() + 3 * n_node + 1; }
   // Mixed u/p element incompressibility-constraint equations, appended last.
-  int e_pmix0() const { return e_pressure() + 1 + (is_dynamic ? 3 * n_node + 2 : 0); }
+  int e_pmix0() const { return e_vel0() + 3 * n_node + 2; }
   int e_pmix(int e) const { return e_pmix0() + e; }
-
-  bool is_dynamic = false;  ///< full dynamics (inertia) vs quasi-static
-  bool use_mixed = false;   ///< mixed u/p incompressibility vs penalty
 
   double act = 0.0;       ///< Activation rate a(t) (= |nu| for the BCS input)
   double act_plus = 0.0;  ///< max(a(t), 0) (= |nu|_+ for the BCS input)

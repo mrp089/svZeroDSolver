@@ -41,22 +41,17 @@ inline T clamp_max(T x, double m) {
 
 /// Material parameters passed to the continuum kernel.
 struct MatParams {
-  double C1, C2, C3, C4, C5, C6, kappa, gamma;
-  bool mixed = false;    ///< true: bulk term uses the mixed pressure p_mix
-  double p_mix = 0.0;    ///< mixed u/p element hydrostatic pressure (if mixed)
+  double C1, C2, C3, C4, C5, C6, gamma;
+  double p_mix = 0.0;    ///< mixed u/p element hydrostatic pressure
 };
 
-/// Active-stress input at an integration point. Simple model: active fiber
-/// stress magnitude `tau`. Genet BCS: bond stress `tau_c` and contractile-
-/// element strain rate `ecdot`, giving sigma_1D = (tau_c + mu*ecdot)/sqrt(I4).
+/// Active-stress input at an integration point (Genet BCS): bond stress `tauc`
+/// and contractile-element strain rate `ecdot`, giving
+/// sigma_1D = (tauc + mu*ecdot)/sqrt(I4).
 struct ActiveInput {
-  bool bcs = false;
-  double tau = 0.0;    ///< simple model active fiber stress magnitude
   double tauc = 0.0;   ///< BCS active bond stress tau_c
   double ecdot = 0.0;  ///< BCS contractile-element strain rate
   double mu = 0.0;     ///< BCS active dissipation
-  double i4pow = 0.5;  ///< sigma_1D = T_fib / I4^i4pow; 0.5 = Genet Eq. 30
-                       ///< (T_fib/(1+e_fib)), 1.0 = Eq. 59 limit (T_fib/I4)
 };
 
 /// Full contraction A:B of two symmetric 3x3 tensors (no conjugation, so it is
@@ -199,26 +194,21 @@ Mat3<T> compute_stress(const Kinematics<T>& k, const T xidot[6],
   const Mat3<T> dI4b = Jm23 * (M - (I4 / 3.0) * Cinv);
 
   Mat3<T> Sd = 2.0 * (w1 * dI1b + w2 * dI2b + w4 * dI4b);   // deviatoric
-  // Bulk (incompressibility) 2nd-PK stress Sigma^b = Pi J C^{-1}. Penalty:
-  // Pi = kappa(J-1); mixed u/p: Pi = p_mix, the element hydrostatic pressure
-  // (held fixed under the xi complex-step; its column is added analytically).
-  const T bulk = p.mixed ? T(p.p_mix) : p.kappa * (J - 1.0);
+  // Bulk (incompressibility) 2nd-PK stress Sigma^b = p_mix J C^{-1}, with p_mix
+  // the element hydrostatic pressure (mixed u/p; held fixed under the xi
+  // complex-step, its column is added analytically).
+  const T bulk = T(p.p_mix);
   Mat3<T> Sb = bulk * J * Cinv;                            // bulk
 
   Mat3<T> Edot = Mat3<T>::Zero();                           // viscous
   for (int m = 0; m < 6; m++) Edot += k.dE[m] * xidot[m];
   Mat3<T> Sv = p.gamma * Edot;
 
-  // active fiber stress magnitude
-  T sigma_act;
-  if (act.bcs) {
-    // sigma_1D = (tau_c + mu * e_c_dot) / (1 + e_fib), 1 + e_fib = sqrt(I4).
-    // Written via the fiber tension tau_c + mu*e_c_dot (= T_fib) so the stiff
-    // series stiffness k_s stays out of the mechanical residual.
-    sigma_act = (act.tauc + act.mu * act.ecdot) / std::pow(I4, act.i4pow);
-  } else {
-    sigma_act = T(act.tau);
-  }
+  // active fiber stress magnitude:
+  // sigma_1D = (tau_c + mu * e_c_dot) / (1 + e_fib), 1 + e_fib = sqrt(I4).
+  // Written via the fiber tension tau_c + mu*e_c_dot (= T_fib) so the stiff
+  // series stiffness k_s stays out of the mechanical residual.
+  const T sigma_act = (act.tauc + act.mu * act.ecdot) / std::sqrt(I4);
   Mat3<T> Sa = sigma_act * M;
 
   return Sd + Sb + Sv + Sa;
@@ -241,9 +231,8 @@ void compute_g(const T xi[6], const T xidot[6], const ActiveInput& act,
 /// physiological contractile strain e_c in [0.20, 0.47], and falls back to 0.
 /// NOTE: the plateau sits at e_c ~ 0.2, not ~1 as Caruel Fig. 7(a) suggests -
 /// that figure is drawn over the wide isotonic papillary-muscle strain range.
-/// (The center/width of the earlier Gaussian placeholder are unused.)
 template <typename T>
-inline T frank_starling(T e_c, double /*center*/, double /*width*/) {
+inline T frank_starling(T e_c) {
   // Breakpoints (e_c, n_0) from PhysioBlocks (physioblocks/physioblocks).
   constexpr int NP = 9;
   static const double X[NP] = {-0.1668, -0.0073, 0.0534, 0.0969, 0.1326,
@@ -261,57 +250,24 @@ inline T frank_starling(T e_c, double /*center*/, double /*width*/) {
   return Y[k] + slope * (e_c - X[k]);
 }
 
-/// BCS load-dependent relaxation function m0(e_c) (Caruel 2013, Fig. 7a): a
-/// decreasing length-dependence that scales the relaxation rate, from ~1.6 at
-/// short (small e_c) to ~1.0 at long sarcomere. CSD-safe piecewise linear (the
-/// perturbation is kept in the linear term). m0 = 1 recovers the fixed model.
-template <typename T>
-inline T m0_relax(T e_c) {
-  constexpr int NP = 2;
-  static const double X[NP] = {0.0, 1.3};
-  static const double Y[NP] = {1.6, 1.0};
-  const double x = re(e_c);
-  if (x <= X[0]) return T(Y[0]);
-  if (x >= X[NP - 1]) return T(Y[NP - 1]);
-  const double slope = (Y[1] - Y[0]) / (X[1] - X[0]);
-  return Y[0] + slope * (e_c - X[0]);
-}
-
 /// BCS active-law parameters.
 struct BcsParams {
-  double k_s, k_0, mu, alpha, sigma0, n0_center, n0_width, alpha_r;
-  bool ld;  ///< length-dependent relaxation (Caruel 2013)
+  double k_s, k_0, mu, alpha, sigma0;
 };
 
 /// Residuals of the BCS internal-variable ODEs (Genet Eqs. 32-33 / Chapelle
-/// Eq. 9) at a quadrature point. a = [e_c, tau_c, k_c, (w)], ad = its rate; the
-/// contractile-element strain rate is e_c_dot = ad[0]. With `bp.ld` (Caruel
-/// 2013) a fourth internal variable w (a[3]) drives the load-dependent
-/// relaxation: alpha_r*w_dot = m0(e_c) - w, and the decay uses w on the negative
-/// (relaxation) part of the activation. alpha_r=0 uses the instantaneous limit
-/// w=m0(e_c) and needs no extra DOF (`nact`=3).
+/// Eq. 9) at a quadrature point. a = [e_c, tau_c, k_c], ad = its rate; the
+/// contractile-element strain rate is e_c_dot = ad[0].
 template <typename T>
 void bcs_residual(const T a[], const T ad[], T e_fib,
                   double nu_abs, double nu_plus, const BcsParams& bp,
-                  int nact, T res[]) {
+                  T res[]) {
   const T ecdot = ad[0];
   // Smoothed |e_c dot| (eps ~ 1e-2 /s regularizes the force-velocity kink so
   // Newton and its complex-step tangent behave; negligible vs |nu| physically).
   const T abs_ecd = std::sqrt(ecdot * ecdot + 1e-4);
-  const T n0 = frank_starling<T>(a[0], bp.n0_center, bp.n0_width);
-  T decay;
-  if (bp.ld) {
-    // Length-dependent relaxation: weight the negative (repolarization) part of
-    // the activation, |u|_- = nu_abs - nu_plus, by w. w is either the fourth
-    // internal variable (nact==4, with the alpha_r lag) or its instantaneous
-    // value m0(e_c) (nact==3).
-    const T w = (nact >= 4) ? a[3] : m0_relax<T>(a[0]);
-    decay = nu_plus + w * (nu_abs - nu_plus) + bp.alpha * abs_ecd;
-    if (nact >= 4)  // w ODE: alpha_r*w_dot = m0(e_c) - w
-      res[3] = ad[3] - (m0_relax<T>(a[0]) - a[3]) / bp.alpha_r;
-  } else {
-    decay = nu_abs + bp.alpha * abs_ecd;
-  }
+  const T n0 = frank_starling<T>(a[0]);
+  const T decay = nu_abs + bp.alpha * abs_ecd;
   // series-spring force balance: mu * e_c_dot = k_s (e_fib - e_c) - tau_c
   res[0] = ecdot - (bp.k_s * (e_fib - a[0]) - a[1]) / bp.mu;
   // tau_c dot = -decay*tau_c + e_c_dot*k_c + n0*sigma0*nu_+
@@ -334,12 +290,6 @@ void ChamberCylinder::setup_dofs(DOFHandler& dofhandler) {
       1, (int)std::lround(
              model->get_parameter_value(global_param_ids[ParamId::num_elements])));
   n_node = n_ele + 1;
-  use_bcs =
-      model->get_parameter_value(global_param_ids[ParamId::active_model]) > 0.5;
-  is_dynamic =
-      model->get_parameter_value(global_param_ids[ParamId::use_inertia]) > 0.5;
-  use_mixed =
-      model->get_parameter_value(global_param_ids[ParamId::mixed]) > 0.5;
 
   // Uniform nodes from endocardium (index 0, R_i) to epicardium (R_e).
   node_R.resize(n_node);
@@ -377,62 +327,49 @@ void ChamberCylinder::setup_dofs(DOFHandler& dofhandler) {
   for (int a = 0; a < n_node; a++) int_names.push_back("eta_" + std::to_string(a));
   int_names.push_back("beta");
   int_names.push_back("eps");
-  if (use_bcs) {
-    for (int q = 0; q < n_quad; q++) {
-      int_names.push_back("ec_" + std::to_string(q));
-      int_names.push_back("tauc_" + std::to_string(q));
-      int_names.push_back("kc_" + std::to_string(q));
-    }
-  } else {
-    int_names.push_back("tau");
+  // Genet BCS active block: e_c, tau_c, k_c per quadrature point.
+  for (int q = 0; q < n_quad; q++) {
+    int_names.push_back("ec_" + std::to_string(q));
+    int_names.push_back("tauc_" + std::to_string(q));
+    int_names.push_back("kc_" + std::to_string(q));
   }
   int_names.push_back("volume");
 
   // Full dynamics: velocity companion fields w = d(field)/dt (genet23 Eqs. 8,
-  // 18, 45, A5-A6). Appended after the volume DOF; absent when quasi-static.
-  if (is_dynamic) {
-    for (int a = 0; a < n_node; a++) int_names.push_back("vrho_" + std::to_string(a));
-    for (int a = 0; a < n_node; a++) int_names.push_back("vphi_" + std::to_string(a));
-    for (int a = 0; a < n_node; a++) int_names.push_back("veta_" + std::to_string(a));
-    int_names.push_back("vbeta");
-    int_names.push_back("veps");
-  }
+  // 18, 45, A5-A6). Appended after the volume DOF.
+  for (int a = 0; a < n_node; a++) int_names.push_back("vrho_" + std::to_string(a));
+  for (int a = 0; a < n_node; a++) int_names.push_back("vphi_" + std::to_string(a));
+  for (int a = 0; a < n_node; a++) int_names.push_back("veta_" + std::to_string(a));
+  int_names.push_back("vbeta");
+  int_names.push_back("veps");
 
   // Mixed u/p: one element-wise-constant (P0) hydrostatic pressure per element,
-  // appended last so the penalty/dynamics layouts above are unchanged.
-  if (use_mixed) {
-    for (int e = 0; e < n_ele; e++)
-      int_names.push_back("pmix_" + std::to_string(e));
-  }
+  // appended last so the velocity layout above is unchanged.
+  for (int e = 0; e < n_ele; e++)
+    int_names.push_back("pmix_" + std::to_string(e));
 
   // 3*n_node field eqns + beta + eps + active eqns + volume + mass + pressure
-  const int n_vel = is_dynamic ? 3 * n_node + 2 : 0;
-  const int n_pmix = use_mixed ? n_ele : 0;
+  // + velocity companion eqns + element incompressibility constraints.
+  const int n_vel = 3 * n_node + 2;
+  const int n_pmix = n_ele;
   n_eqn = 3 * n_node + 2 + n_active_var() + 3 + n_vel + n_pmix;
   Block::setup_dofs_(dofhandler, n_eqn, int_names);
   n_var = 4 + 3 * n_node + 2 + n_active_var() + 1 + n_vel + n_pmix;
 
-  // Dense block for dC_dy and dC_dydot; a few linear entries for F/E.
+  // Dense block for dC_dy and dC_dydot; a few linear entries for F/E. (These are
+  // reservation estimates only; see SparseSystem::reserve.)
   num_triplets.D = n_eqn * n_var;
-  num_triplets.F = 3 * n_node + 16 + (is_dynamic ? 3 * n_node + 4 : 0);
-  num_triplets.E = (use_bcs ? 1 : 4) + 1 +  // +1 for the C_valve dPv/dt term
-                   (is_dynamic ? 21 * n_node + 8 : 0);  // mass + companion
+  num_triplets.F = 6 * n_node + 20;
+  num_triplets.E = 21 * n_node + 8;  // consistent mass + velocity companions
 }
 
 void ChamberCylinder::update_constant(SparseSystem& system,
                                       std::vector<double>& parameters) {
-  // Simple active stress ODE: d(tau)/dt term. (The BCS model puts all of its
-  // rate terms in the nonlinear residual C, so it needs no E/F entries here.)
-  if (!use_bcs) {
-    system.E.coeffRef(global_eqn_ids[e_active()], global_var_ids[i_tau()]) = 1.0;
-  }
-
-  // Mass conservation: Qin - Qout - Vdot - C_valve * dPv/dt = 0
-  // (Vdot handled in update_solution; the compliance term is linear in dPin/dt).
+  // Mass conservation: Qin - Qout - Vdot = 0 (Vdot handled in update_solution).
+  // The BCS model puts all of its active rate terms in the nonlinear residual C,
+  // so it needs no E/F entries here.
   system.F.coeffRef(global_eqn_ids[e_mass()], global_var_ids[1]) = 1.0;   // Qin
   system.F.coeffRef(global_eqn_ids[e_mass()], global_var_ids[3]) = -1.0;  // Qout
-  const double cvalve = parameters[global_param_ids[ParamId::c_valve]];
-  system.E.coeffRef(global_eqn_ids[e_mass()], global_var_ids[0]) = -cvalve;
 
   // Pressure equality: Pin - Pout = 0.
   system.F.coeffRef(global_eqn_ids[e_pressure()], global_var_ids[0]) = 1.0;
@@ -457,7 +394,7 @@ void ChamberCylinder::update_constant(SparseSystem& system,
   // standard approximation - inertia is ~1e-4 of the internal/pressure forces
   // for cardiac parameters. The O(zeta_dot^2) centrifugal term D2u(zd,zd) is
   // assembled as a nonlinear force in update_solution (see "Convective inertia").
-  if (is_dynamic) {
+  {
     const double rho0 = parameters[global_param_ids[ParamId::density]];
     const double Lp = parameters[global_param_ids[ParamId::length]];
     const double cL1 = rho0 * 2.0 * M_PI * Lp;                    // int_Z 1  = L
@@ -512,11 +449,9 @@ void ChamberCylinder::update_constant(SparseSystem& system,
 
 void ChamberCylinder::update_time(SparseSystem& system,
                                   std::vector<double>& parameters) {
-  get_activation(parameters);  // sets act = |nu|, act_plus = |nu|_+
-  // Simple active stress ODE: a(t) * tau term. (BCS uses nu inside C.)
-  if (!use_bcs) {
-    system.F.coeffRef(global_eqn_ids[e_active()], global_var_ids[i_tau()]) = act;
-  }
+  // Sets act = |nu|, act_plus = |nu|_+ (the BCS activation input, used in the
+  // nonlinear residual C assembled by update_solution).
+  get_activation(parameters);
 }
 
 void ChamberCylinder::update_solution(
@@ -530,9 +465,7 @@ void ChamberCylinder::update_solution(
   p.C4 = parameters[global_param_ids[ParamId::C4]];
   p.C5 = parameters[global_param_ids[ParamId::C5]];
   p.C6 = parameters[global_param_ids[ParamId::C6]];
-  p.kappa = parameters[global_param_ids[ParamId::kappa]];
   p.gamma = parameters[global_param_ids[ParamId::gamma]];
-  p.mixed = use_mixed;  // bulk term uses the per-element pressure DOF below
   const double sigma_max = parameters[global_param_ids[ParamId::sigma_max]];
   const double Rip = parameters[global_param_ids[ParamId::Ri]];
   const double Lp = parameters[global_param_ids[ParamId::length]];
@@ -543,16 +476,11 @@ void ChamberCylinder::update_solution(
   bp.mu = parameters[global_param_ids[ParamId::mu]];
   bp.alpha = parameters[global_param_ids[ParamId::bcs_alpha]];
   bp.sigma0 = sigma_max;
-  bp.n0_center = parameters[global_param_ids[ParamId::n0_center]];
-  bp.n0_width = parameters[global_param_ids[ParamId::n0_width]];
-  bp.ld = parameters[global_param_ids[ParamId::bcs_relax]] > 0.5;
-  bp.alpha_r = parameters[global_param_ids[ParamId::alpha_r]];
-  const double i4pow = parameters[global_param_ids[ParamId::active_i4pow]];
 
   // Gather block DOFs and their rates.
   auto Y = [&](int lv) { return y[global_var_ids[lv]]; };
   auto Yd = [&](int lv) { return dy[global_var_ids[lv]]; };
-  const double beta = Y(i_beta()), eps = Y(i_eps()), tau = Y(i_tau());
+  const double beta = Y(i_beta()), eps = Y(i_eps());
   const double beta_d = Yd(i_beta()), eps_d = Yd(i_eps());
   const double Pin = Y(0);
 
@@ -583,22 +511,16 @@ void ChamberCylinder::update_solution(
     const double deta_d = dN0 * Yd(i_eta(A0)) + dN1 * Yd(i_eta(A1));
     const double xidot[6] = {rho_d, drho_d, dphi_d, beta_d, eps_d, deta_d};
 
-    // Active-stress input: simple model uses the global tau; BCS uses this
-    // quadrature point's contractile-element strain e_c and computes the fiber
-    // stress from the fiber stretch internally.
+    // Active-stress input (Genet BCS): this quadrature point's contractile-
+    // element bond stress tau_c and strain rate e_c_dot; the fiber stress is
+    // computed from the fiber stretch internally.
     ActiveInput ai;
-    ai.bcs = use_bcs;
-    ai.i4pow = i4pow;
-    if (use_bcs) {
-      ai.tauc = Y(i_tauc(q));
-      ai.ecdot = Yd(i_ec(q));
-      ai.mu = bp.mu;
-    } else {
-      ai.tau = tau;
-    }
+    ai.tauc = Y(i_tauc(q));
+    ai.ecdot = Yd(i_ec(q));
+    ai.mu = bp.mu;
 
     // Mixed u/p: this element's hydrostatic pressure enters the bulk stress.
-    if (use_mixed) p.p_mix = Y(i_pmix(pt.elem));
+    p.p_mix = Y(i_pmix(pt.elem));
 
     // Base (double) forces plus the analytic active/viscous rate derivatives.
     Kinematics<double> kin = compute_kinematics<double>(xi, pt.R);
@@ -607,12 +529,11 @@ void ChamberCylinder::update_solution(
     const double I4q = (kin.C * M).trace();  // fiber invariant e_F . C . e_F
     double g[6], dgdtau[6], dgdp[6], Kd[6][6], K[6][6];
     // Mixed u/p: d(g[k])/d(p_mix) = (J C^{-1}) : dE[k], since Sigma^b = p_mix J C^{-1}.
-    const Matrix3d JCinv =
-        use_mixed ? (kin.J * kin.C.inverse()).eval() : Matrix3d::Zero();
+    const Matrix3d JCinv = (kin.J * kin.C.inverse()).eval();
     for (int i = 0; i < 6; i++) {
       g[i] = contract<double>(S, kin.dE[i]);
       dgdtau[i] = contract<double>(M, kin.dE[i]);
-      dgdp[i] = use_mixed ? contract<double>(JCinv, kin.dE[i]) : 0.0;
+      dgdp[i] = contract<double>(JCinv, kin.dE[i]);
       for (int j = 0; j < 6; j++)
         Kd[i][j] = p.gamma * contract<double>(kin.dE[i], kin.dE[j]);
     }
@@ -634,12 +555,11 @@ void ChamberCylinder::update_solution(
       }
     }
 
-    // Active-DOF coupling of the mechanical forces: simple model couples to the
-    // global tau (d sigma_a/d tau = 1); BCS couples to this point's tau_c via
-    // d sigma_1D/d tau_c = 1/(1 + e_fib) = 1/sqrt(I4).
-    const int active_col = use_bcs ? i_tauc(q) : i_tau();
-    const double i4denom = std::pow(I4q, i4pow);  // sigma_1D = T_fib / I4^i4pow
-    const double active_coef = use_bcs ? (1.0 / i4denom) : 1.0;
+    // Active-DOF coupling of the mechanical forces: BCS couples to this point's
+    // tau_c via d sigma_1D/d tau_c = 1/(1 + e_fib) = 1/sqrt(I4).
+    const int active_col = i_tauc(q);
+    const double i4denom = std::sqrt(I4q);  // 1 + e_fib = sqrt(I4)
+    const double active_coef = 1.0 / i4denom;
 
     // Row (equation) and column (variable) contributions of each local force.
     // xi index: 0=rho(N), 1=rho'(dN), 2=phi'(dN), 3=beta, 4=eps, 5=eta'(dN).
@@ -674,10 +594,9 @@ void ChamberCylinder::update_solution(
         Cloc[re] += rwt * g[k];
         Kat(re, active_col) += rwt * active_coef * dgdtau[k];
         // Mixed u/p: coupling of the equilibrium to this element's pressure DOF.
-        if (use_mixed) Kat(re, i_pmix(pt.elem)) += rwt * dgdp[k];
+        Kat(re, i_pmix(pt.elem)) += rwt * dgdp[k];
         // BCS: sigma_1D also depends on e_c_dot via the mu*e_c_dot term.
-        if (use_bcs)
-          Kdat(re, i_ec(q)) += rwt * (bp.mu / i4denom) * dgdtau[k];
+        Kdat(re, i_ec(q)) += rwt * (bp.mu / i4denom) * dgdtau[k];
         for (int m = 0; m < 6; m++) {
           for (int ci = 0; ci < cn[m]; ci++) {
             const int cv = cvr[m][ci];
@@ -696,7 +615,7 @@ void ChamberCylinder::update_solution(
     // conjugate to the rho / phi / beta virtual fields below. Rates are the velocity
     // companion DOFs (w = zeta_dot). Small (inertia ~1e-4 of the internal forces) but
     // retained for exact genet23 dynamics. Reference-config radius R (as the mass).
-    if (is_dynamic) {
+    {
       const double rho0 = parameters[global_param_ids[ParamId::density]];
       const double Wr = N0 * Y(i_vrho(A0)) + N1 * Y(i_vrho(A1));  // rho_dot
       const double Wp = N0 * Y(i_vphi(A0)) + N1 * Y(i_vphi(A1));  // phi_dot
@@ -740,7 +659,7 @@ void ChamberCylinder::update_solution(
     // Residual C[e_pmix] = sum_{q in e} pref (J-1) = 0. J depends only on
     // rho, rho', eps; map the analytic dJ/dxi through the same columns as the
     // force assembly. The pressure-pressure block is zero (saddle-point form).
-    if (use_mixed) {
+    {
       const int erow = e_pmix(pt.elem);
       Cloc[erow] += pref * (kin.J - 1.0);
       const double Rq = pt.R;
@@ -756,7 +675,7 @@ void ChamberCylinder::update_solution(
     }
 
     // --- BCS internal-variable ODEs at this quadrature point (Eqs. 32-33) ---
-    if (use_bcs) {
+    {
       const double sfib = std::sqrt(I4q);
       const double e_fib = sfib - 1.0;
       const int erow[3] = {e_ec(q), e_tauc(q), e_kc(q)};
@@ -764,7 +683,7 @@ void ChamberCylinder::update_solution(
       double a[3] = {Y(i_ec(q)), Y(i_tauc(q)), Y(i_kc(q))};
       double ad[3] = {Yd(i_ec(q)), Yd(i_tauc(q)), Yd(i_kc(q))};
       double Ra[3];
-      bcs_residual<double>(a, ad, e_fib, act, act_plus, bp, 3, Ra);
+      bcs_residual<double>(a, ad, e_fib, act, act_plus, bp, Ra);
       for (int i = 0; i < 3; i++) Cloc[erow[i]] += Ra[i];
       // Complex-step tangents w.r.t. the local active state (dC_dy) and its
       // rates (dC_dydot). The regularized |e_c dot| makes the force-velocity
@@ -778,12 +697,12 @@ void ChamberCylinder::update_solution(
         }
         for (int jj = 0; jj < 3; jj++) {
           ac[jj] += cplx(0.0, h);
-          bcs_residual<cplx>(ac, adc, cplx(e_fib), act, act_plus, bp, 3, Rc);
+          bcs_residual<cplx>(ac, adc, cplx(e_fib), act, act_plus, bp, Rc);
           for (int ii = 0; ii < 3; ii++)
             Kat(erow[ii], avar[jj]) += std::imag(Rc[ii]) / h;
           ac[jj] = a[jj];
           adc[jj] += cplx(0.0, h);
-          bcs_residual<cplx>(ac, adc, cplx(e_fib), act, act_plus, bp, 3, Rc);
+          bcs_residual<cplx>(ac, adc, cplx(e_fib), act, act_plus, bp, Rc);
           for (int ii = 0; ii < 3; ii++)
             Kdat(erow[ii], avar[jj]) += std::imag(Rc[ii]) / h;
           adc[jj] = ad[jj];
@@ -846,10 +765,6 @@ void ChamberCylinder::update_solution(
     Kdat(re, i_eps()) -= piL * Rinner * Rinner;
   }
 
-  // --- Simple active stress ODE: -sigma_max * a_+ (linear parts in E/F). The
-  // BCS ODEs are assembled per quadrature point in the loop above. ---
-  if (!use_bcs) Cloc[e_active()] -= sigma_max * act_plus;
-
   // --- Scatter local contributions into the sparse system (assign) ---
   for (int i = 0; i < n_eqn; i++) {
     system.C(global_eqn_ids[i]) = Cloc[i];
@@ -865,56 +780,40 @@ void ChamberCylinder::get_activation(std::vector<double>& parameters) {
   const double alpha_min = parameters[global_param_ids[ParamId::alpha_min]];
   const double tsys = parameters[global_param_ids[ParamId::tsys]];
   const double tdias = parameters[global_param_ids[ParamId::tdias]];
-  const double steepness = parameters[global_param_ids[ParamId::steepness]];
-  const double mode = parameters[global_param_ids[ParamId::activation_mode]];
   const double qrs = parameters[global_param_ids[ParamId::act_qrs]];
   const double ramp = parameters[global_param_ids[ParamId::act_ramp]];
 
   const auto T_cardiac = model->cardiac_cycle_period;
   const auto t_in_cycle = fmod(model->time, T_cardiac);
 
+  // Genet ECG-derived activation nu(t): the authors' `nagumo_piecewise_linear`
+  // (cardiac_input_functions.py). Piecewise-linear between alpha_min and
+  // alpha_max with knee times set by ECG intervals. tsys is the nu=0 upstroke
+  // (depolarization_time = delay + ramp) and tdias the nu=0 downstroke
+  // (depolarization_end); the internal knees follow from the QRS width and the
+  // final repolarization ramp:
+  //   t_max     = tsys + QRSd                          (reach alpha_max)
+  //   t_plateau = tsys + QRSd + max(0, tdias-tsys-2 QRSd)  (plateau end)
+  //   t_finish  = tdias + ramp                         (reach alpha_min)
+  // The rising branch is a single line through (tsys, 0) with slope
+  // alpha_max/QRSd (so it leaves the alpha_min floor at tsys-QRSd); values below
+  // alpha_min are clamped. This is the exact author waveform and scales with the
+  // heart rate through the ECG-derived tsys/tdias supplied by the caller.
+  const double t = t_in_cycle;
+  const double t_max = tsys + qrs;
+  const double t_plateau = tsys + qrs + std::max(0.0, tdias - tsys - 2.0 * qrs);
+  const double t_finish = tdias + ramp;
   double act_t;
-  if (mode >= 0.5) {
-    // Genet ECG-derived activation nu(t): the authors' `nagumo_piecewise_linear`
-    // (cardiac_input_functions.py). Piecewise-linear between alpha_min and
-    // alpha_max with knee times set by ECG intervals. tsys is the nu=0 upstroke
-    // (depolarization_time = delay + ramp) and tdias the nu=0 downstroke
-    // (depolarization_end); the internal knees follow from the QRS width and the
-    // final repolarization ramp:
-    //   t_max     = tsys + QRSd                          (reach alpha_max)
-    //   t_plateau = tsys + QRSd + max(0, tdias-tsys-2 QRSd)  (plateau end)
-    //   t_finish  = tdias + ramp                         (reach alpha_min)
-    // The rising branch is a single line through (tsys, 0) with slope
-    // alpha_max/QRSd (so it leaves the alpha_min floor at tsys-QRSd); values below
-    // alpha_min are clamped. This is the exact author waveform (supersedes the
-    // earlier two-anchor PhysioBlocks trapezoid approximation) and scales with the
-    // heart rate through the ECG-derived tsys/tdias supplied by the caller.
-    const double t = t_in_cycle;
-    const double t_max = tsys + qrs;
-    const double t_plateau = tsys + qrs + std::max(0.0, tdias - tsys - 2.0 * qrs);
-    const double t_finish = tdias + ramp;
-    if (t < t_max) {
-      act_t = alpha_max * (t - tsys) / (t_max - tsys);
-    } else if (t < t_plateau) {
-      act_t = alpha_max;
-    } else if (t < tdias) {
-      act_t = alpha_max * (1.0 - (t - t_plateau) / (tdias - t_plateau));
-    } else {
-      act_t = alpha_min * (t - tdias) / (t_finish - tdias);
-    }
-    if (act_t < alpha_min) act_t = alpha_min;  // clamp to the diastolic floor
+  if (t < t_max) {
+    act_t = alpha_max * (t - tsys) / (t_max - tsys);
+  } else if (t < t_plateau) {
+    act_t = alpha_max;
+  } else if (t < tdias) {
+    act_t = alpha_max * (1.0 - (t - t_plateau) / (tdias - t_plateau));
   } else {
-    // tanh systole/diastole switch: act = alpha_max on [tsys, tdias], else min.
-    auto warp_signed = [T_cardiac](double dt) {
-      return fmod(dt + 1.5 * T_cardiac, T_cardiac) - 0.5 * T_cardiac;
-    };
-    const double phase_tsys = warp_signed(t_in_cycle - tsys);
-    const double phase_tdias = warp_signed(t_in_cycle - tdias);
-    const double S_plus = 0.5 * (1.0 + tanh(phase_tsys / steepness));
-    const double S_minus = 0.5 * (1.0 - tanh(phase_tdias / steepness));
-    const double f = S_plus * S_minus;
-    act_t = alpha_max * f + alpha_min * (1.0 - f);
+    act_t = alpha_min * (t - tdias) / (t_finish - tdias);
   }
+  if (act_t < alpha_min) act_t = alpha_min;  // clamp to the diastolic floor
   act = std::abs(act_t);
   act_plus = std::max(act_t, 0.0);
 }

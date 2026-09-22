@@ -47,11 +47,8 @@ Cd = 2.0158e-8
 GEOM = dict(Ri=0.019, Re=0.033, length=0.0571, alpha_endo=60.0, alpha_epi=-60.0)
 MAT = dict(C1=7.0, C2=0.0, C3=700.0, C4=2.0, C5=50.0, C6=4.0, gamma=70.0,
            k_s=1e8, k_0=260e3, mu=70.0)
-# Genet enforces incompressibility with a mixed u/p Lagrange-multiplier pressure
-# (mixed=1, the faithful default here). kappa is only the fallback displacement
-# penalty (mixed=0); a low-order penalty locks volumetrically at coarse meshes,
-# so it is NOT used for the reproduction. kappa is retained for the fallback.
-KAPPA = 1e7
+# Genet enforces incompressibility with a mixed u/p Lagrange-multiplier pressure,
+# the (only) formulation of the ChamberCylinder block.
 SIGMA0 = 65e3  # Genet Table 1 "Maximum active stress" sigma_0
 
 # ---------------------------------------------------------------------------
@@ -128,10 +125,9 @@ PAT_KICK_T, PAT_KICK_P = atrial_pressure(0.8)
 # shut before the aortic valve opens ~170 ms).
 def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
           tsys=TSYS_08, tdias=TDIAS_08, alpha_max=ACT_AMAX, alpha_min=ACT_AMIN,
-          alpha_r=0.0, act_qrs=ACT_QRSD, act_ramp=ACT_RAMP,
-          steepness=0.02, integrator="stiff", rho_infty=0.5, ncycle=8,
-          aortic_Rmax=None, active_model=1, atrial_kick=True, mixed=True,
-          bcs_relax=False, dynamics=True, density=1000.0):
+          act_qrs=ACT_QRSD, act_ramp=ACT_RAMP,
+          integrator="stiff", rho_infty=0.5, ncycle=8,
+          aortic_Rmax=None, atrial_kick=True, density=1000.0):
     # Integrator note: Genet's temporal scheme is the non-dissipative midpoint
     # (rho_infty=1) made *stable* by energy-preserving algorithmic stresses + the
     # Chapelle sqrt(k_c) internal-variable update. The plain midpoint alone
@@ -145,35 +141,30 @@ def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
     # NOT K_iso^-1. (The K_iso isovolumic leak in Eq 36 is on the ATRIAL side and is
     # carried by the mitral valve's Rmax=K_iso^-1.) Effect on Fig 5 is negligible.
     aortic_Rmax = aortic_Rmax if aortic_Rmax is not None else 1.0e12
-    vv = dict(GEOM); vv.update(MAT); vv["kappa"] = KAPPA
-    # BCS activation nu(t): authors' ECG-derived nagumo (activation_mode=1), built
-    # in the kernel from tsys/tdias (nu=0 up/down) + act_qrs/act_ramp; +-35 plateaus.
-    # NOTE bcs_relax defaults OFF: the authors' alpha_min=-35 already IS the diastolic
-    # relaxation rate, so the Caruel length-dependent m0 amplification (bcs_relax=1,
-    # w=m0~1.5) would double-count it and fire the E-wave ~30 ms early (rmsV 3.7 ->
-    # 9.3). => the cylinder model uses a FIXED relaxation (w=1), not Caruel w/m0.
-    # c_valve=0 on the ChamberCylinder: Cvalve is a Genet add-on that has no place
-    # in the Caruel valve+Windkessel topology (see docstring).
+    vv = dict(GEOM); vv.update(MAT)
+    # BCS activation nu(t): authors' ECG-derived nagumo (the kernel's only
+    # activation law), built from tsys/tdias (nu=0 up/down) + act_qrs/act_ramp;
+    # +-35 plateaus.
+    # Relaxation: the authors' alpha_min=-35 already IS the diastolic relaxation
+    # rate, so the kernel uses a FIXED relaxation (w=1), not the Caruel
+    # length-dependent m0 amplification (which would double-count it and fire the
+    # E-wave ~30 ms early).
+    # Cavity/valve compliance Cvalve is a Genet add-on that has no place in the
+    # Caruel valve+Windkessel topology (see docstring), so it is not modeled.
     # Full dynamics (genet23 Eqs 8,18,45): the model is fully DYNAMICAL -- the
     # inertia force rho_0*u_ddot (consistent mass matrix + velocity companion DOFs)
-    # is retained by default (use_inertia=1, density rho_0 = 1 kg/L = 1000, Table 1).
-    # For cardiac parameters the inertia is small (~1e-4 of the internal/pressure
-    # forces), so it barely shifts P/V and only modestly the twist; it is kept for
-    # faithfulness to genet23's dynamical formulation. (genet23's own non-dissipative
-    # midpoint scheme is singular on this DAE, so the L-stable "stiff" integrator is
-    # used; the O(zeta_dot^2) convective term D2u is omitted, as in the kernel note.)
+    # with density rho_0 = 1 kg/L = 1000 (Table 1). For cardiac parameters the
+    # inertia is small (~1e-4 of the internal/pressure forces), so it barely shifts
+    # P/V and only modestly the twist. (genet23's own non-dissipative midpoint
+    # scheme is singular on this DAE, so the L-stable "stiff" integrator is used;
+    # the O(zeta_dot^2) convective term D2u is omitted, as in the kernel note.)
     vv.update(dict(sigma_max=sigma_max, alpha_max=alpha_max, alpha_min=alpha_min,
-                   activation_mode=1.0, tsys=tsys, tdias=tdias, steepness=steepness,
-                   act_qrs=act_qrs, act_ramp=act_ramp,
-                   num_elements=ne, active_model=active_model, bcs_alpha=bcs_alpha,
-                   c_valve=0.0, mixed=1.0 if mixed else 0.0,
-                   bcs_relax=1.0 if bcs_relax else 0.0, alpha_r=alpha_r,
-                   use_inertia=1.0 if dynamics else 0.0, density=density))
+                   tsys=tsys, tdias=tdias, act_qrs=act_qrs, act_ramp=act_ramp,
+                   num_elements=ne, bcs_alpha=bcs_alpha, density=density))
     # n0(e_c): the Frank-Starling recruitment factor is the fixed PhysioBlocks
-    # piecewise-linear curve baked into the kernel (frank_starling()); it is NOT a
-    # builder input (the kernel's n0_center/n0_width inputs are vestigial/ignored).
-    # Over the operating range e_c in [-0.06, 0.29] it rides the ascending
-    # limb/plateau (n0 ~ 0.4 -> 1.0), so n0 ~ 1 at peak contraction.
+    # piecewise-linear curve baked into the kernel (frank_starling()); it is not a
+    # builder or block input. Over the operating range e_c in [-0.06, 0.29] it
+    # rides the ascending limb/plateau (n0 ~ 0.4 -> 1.0), so n0 ~ 1 at peak.
     cfg = {
         "boundary_conditions": [
             {"bc_name": "ATRIUM", "bc_type": "PRESSURE",

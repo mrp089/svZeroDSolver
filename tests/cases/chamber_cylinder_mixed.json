@@ -54,16 +54,13 @@
         "C4": 2.0,
         "C5": 50.0,
         "C6": 4.0,
-        "kappa": 1.0e7,
         "gamma": 70.0,
         "sigma_max": 55.0e3,
         "alpha_max": 30.0,
         "alpha_min": -30.0,
         "tsys": 0.17,
         "tdias": 0.484,
-        "steepness": 0.005,
-        "num_elements": 8,
-        "mixed": 1.0
+        "num_elements": 8
       }
     },
     {

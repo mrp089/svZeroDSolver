@@ -77,16 +77,13 @@
         "C4": 2.0,
         "C5": 50.0,
         "C6": 4.0,
-        "kappa": 10000000.0,
         "gamma": 70.0,
         "sigma_max": 55000.0,
         "alpha_max": 30.0,
         "alpha_min": -30.0,
         "tsys": 0.17,
         "tdias": 0.484,
-        "steepness": 0.005,
         "num_elements": 6,
-        "active_model": 1,
         "k_0": 260000.0,
         "bcs_alpha": 0.0
       }

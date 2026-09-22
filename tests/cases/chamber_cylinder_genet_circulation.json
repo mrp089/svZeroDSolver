@@ -76,7 +76,6 @@
         "C4": 2.0,
         "C5": 50.0,
         "C6": 4.0,
-        "kappa": 10000000.0,
         "gamma": 70.0,
         "k_s": 100000000.0,
         "k_0": 260000.0,
@@ -86,11 +85,8 @@
         "alpha_min": -30.0,
         "tsys": 0.13,
         "tdias": 0.45,
-        "steepness": 0.02,
         "num_elements": 6,
-        "active_model": 1,
-        "bcs_alpha": 0.0,
-        "c_valve": 9e-09
+        "bcs_alpha": 0.0
       }
     },
     {
