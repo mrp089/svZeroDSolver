@@ -1,5 +1,5 @@
 \documentclass[10pt]{article}
-\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage[a4paper,margin=1.8cm]{geometry}
 \usepackage{booktabs}
 \usepackage{array}
 \usepackage{xcolor}
@@ -9,20 +9,20 @@
 \usepackage{hyperref}
 
 % ---- source category tags ------------------------------------------------
-\definecolor{cgen}{RGB}{20,80,170}   % genet23
-\definecolor{ccar}{RGB}{0,130,120}   % caruel13
-\definecolor{coth}{RGB}{90,90,90}    % other source
-\definecolor{cgue}{RGB}{190,40,40}   % guessed
-\definecolor{cest}{RGB}{200,110,0}   % estimated from results
+\definecolor{cgen}{RGB}{20,80,170}   % genet23 (verified against the PDF)
+\definecolor{ccar}{RGB}{0,130,120}   % caruel13 fallback
+\definecolor{ccode}{RGB}{120,70,160} % authors' code (Refs 33/6)
+\definecolor{csvz}{RGB}{90,90,90}    % svZeroDSolver numerics/plumbing
+\definecolor{cnone}{RGB}{190,40,40}  % not found in either paper
 \newcommand{\gen}{\textcolor{cgen}{\textbf{genet23}}}
 \newcommand{\car}{\textcolor{ccar}{\textbf{caruel13}}}
-\newcommand{\oth}[1]{\textcolor{coth}{\textbf{#1}}}
-\newcommand{\gue}{\textcolor{cgue}{\textbf{guessed}}}
-\newcommand{\est}{\textcolor{cest}{\textbf{estimated}}}
+\newcommand{\code}{\textcolor{ccode}{\textbf{authors-code}}}
+\newcommand{\svz}{\textcolor{csvz}{\textbf{svZeroD}}}
+\newcommand{\none}{\textcolor{cnone}{\textbf{NOT-in-papers}}}
 
 \newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
 
-\title{\textbf{ChamberCylinder reproduction of Genet~(2023):\\ parameter and input-function provenance}}
+\title{\textbf{ChamberCylinder reproduction of Genet~(2023):\\ parameter \& input-function provenance (verified against the PDF)}}
 \author{svZeroDSolver \texttt{ChamberCylinder} block}
 \date{\today}
 
@@ -30,159 +30,114 @@
 \maketitle
 
 \noindent
-This document lists every parameter and input function of the reduced cylindrical
-left-ventricle model reproduced in the svZeroDSolver \texttt{ChamberCylinder} block,
-together with its provenance. The target is Figure~5 of
-Genet~et~al.~(2023, \emph{CMAME}, ``Reduced left ventricular dynamics modeling based
-on a cylindrical assumption''). The reduced active law and circulation derive from
-Caruel~et~al.~(2013, \emph{Biomech.\ Model.\ Mechanobiol.}\ \textbf{13}:897--914).
+Every parameter and input function of the \texttt{ChamberCylinder} reproduction of
+Genet~et~al.~(2023, \emph{Int.\ J.\ Numer.\ Meth.\ Biomed.\ Engng.}\ e3711), verified
+against the paper. Equation and Table numbers refer to that paper; the reduced
+active law and circulation trace back to Caruel~et~al.~(2013, \emph{BMMB}
+\textbf{13}:897).
 
 \paragraph{Source legend.}
 \begin{tabular}{ll}
-\gen & value attributed to Genet~(2023) Table~1 in the code (not independently verified against the PDF)\\
-\car & verified in Caruel~(2013) Table~1 or text \\
-\oth{source} & other source: PhysioBlocks (MEDISIM reference config), Regazzoni~(2022), svZeroDSolver \\
-\gue & chosen with no documented source \\
-\est & estimated / fitted from the Fig.~5 result curves \\
+\gen & value/form verified in genet23 Table~1 or its equations \\
+\car & not tabulated in genet23; taken from Caruel~(2013) \\
+\code & function from the authors' code \texttt{cardiac\_input\_functions.py} (genet23 Refs 33/6) \\
+\svz & svZeroDSolver numerical or plumbing choice (not a physical parameter) \\
+\none & appears in genet23 but is \emph{not} faithfully reproduced (see notes) \\
 \end{tabular}
 
-\medskip\noindent
-Values marked \gen{} that also equal Caruel~(2013) are noted ``$=$ Caruel'' in the
-Note column. Fitted quantities (\est) are the only ones with no tabulated source in
-either paper.
-
 % =========================================================================
-\section*{Geometry (\texttt{ChamberCylinder})}
-\begin{longtable}{l l l P{7.2cm}}
-\toprule
-Parameter & Value & Source & Note \\
-\midrule\endhead
-$R_i,\;R_e$ & \SI{0.019}{},\ \SI{0.033}{m} & \gen & endo/epi radii; wall \SI{14}{mm} \\
-length      & \SI{0.0571}{m} & \gen & \\
-$\alpha_\text{endo}/\alpha_\text{epi}$ & $+60^\circ/-60^\circ$ & \gen & standard helical fiber field \\
+\section*{Geometry (Table~1) --- all \gen}
+\begin{longtable}{l l l P{6.6cm}}
+\toprule Parameter & Value & Source & Note \\ \midrule\endhead
+$R_i,\,R_e,\,L$ & 19, 33, \SI{57.1}{mm} & \gen & $\Rightarrow$ chamber \SI{65}{mL}, wall \SI{130}{mL}, aspect 1.5 (all consistent) \\
+$\alpha_i/\alpha_e$ (Eq.~22) & $+60^\circ/-60^\circ$ & \gen & linear helix angle $\alpha(R)$ across the wall \\
 \bottomrule
 \end{longtable}
 
 % =========================================================================
-\section*{Passive material}
-Potential (isochoric, transversely isotropic) is Caruel's Holzapfel--Ogden form
-$W_e = C_0\,e^{C_1(\bar J_1-3)^2} + C_2\,e^{C_3(\bar J_4-1)^2}$ plus a small linear
-term; constants recalibrated by Genet for the human cylinder.
-\begin{longtable}{l l l P{7.2cm}}
-\toprule
-Parameter & Value & Source & Note \\
-\midrule\endhead
-potential form & --- & \car & Holzapfel--Ogden 2009 (Caruel Eq.\ for $W_e$) \\
-$C_1$ (linear iso.)     & 7   & \gen & Genet addition; Caruel has none \\
-$C_2$                   & 0   & \gen & $\bar I_2$ term, unused \\
-$C_3,\,C_4$ (iso.\ exp) & 700,\ 2 & \gen & $\leftrightarrow$ Caruel $C_0{=}1.9\times10^3,\,C_1{=}0.11$ \\
-$C_5,\,C_6$ (fiber exp) & 50,\ 4  & \gen & $\leftrightarrow$ Caruel $C_2{=}1.9\times10^3,\,C_3{=}0.11$ \\
-$\gamma$ (viscous)      & 70  & \gen & $=$ Caruel $\eta=70$; damps diastolic recoil \\
-mixed u/p               & on  & \gen & Lagrange-multiplier incompressibility \\
-$\kappa$ (penalty)      & $10^7$ & \oth{svZeroD} & fallback only (mixed off); unused \\
+\section*{Passive material (Eqs.~25, 26, 28; Table~1) --- all \gen}
+\begin{longtable}{l l l P{6.6cm}}
+\toprule Parameter & Value & Source & Note \\ \midrule\endhead
+$W^e$ form (Eq.~25) & --- & \gen & $C_1(\bar I_1{-}3){+}C_2(\bar I_2{-}3){+}C_3e^{C_4(\bar I_1-3)^2}{+}C_5e^{C_6(\bar I_4-1)^2}$; matches kernel exactly \\
+$C_1{,}C_2{,}C_3{,}C_4{,}C_5{,}C_6$ & 7,0,700,2,50,4 & \gen & Table~1 (Pa where dimensional) \\
+$\gamma$ (viscosity, Eq.~28) & \SI{70}{Pa\,s} & \gen & $W^v=\tfrac{\gamma}{2}|\dot E|^2\Rightarrow\Sigma^v=\gamma\dot E$ (full Kelvin--Voigt); matches kernel \\
+incompressibility (Eqs.~26--27) & mixed u/p & \gen & Lagrange multiplier $p$, $\int(J{-}1)\hat p=0$ \\
+$\kappa$ (penalty) & $10^7$ & \svz & fallback only (mixed off); unused \\
 \bottomrule
 \end{longtable}
 
 % =========================================================================
-\section*{Active contraction (Bestel--Cl\'ement--Sorine)}
-\begin{longtable}{l l l P{7.2cm}}
-\toprule
-Parameter & Value & Source & Note \\
-\midrule\endhead
-$\sigma_0$ (contractility)   & \SI{65}{kPa}  & \gen & Caruel 0D $=1.24\times10^5$ (rat sphere) \\
-$k_0$ (active stiffness)     & \SI{260}{kPa} & \gen & Caruel 0D $=10^5$ \\
-$k_s$ (series elastic)       & $10^8$        & \gen & Caruel $E_s=3\times10^7$ \\
-$\mu$ (active viscous)       & 70            & \gen & $=$ Caruel $\mu=70$ \\
-\texttt{active\_i4pow}       & 0.5           & \car & Caruel Eq.~(30) stress exponent \\
-$n_0(e_c)$ (Frank--Starling) & PWL, 9 pts    & \oth{PhysioBlocks} & baked into kernel; \emph{large} effect: $n_0$ sweeps $1.0$ (endo) $\to0.4$ (epi) through systole; essential for ESV/peak-$P$ (forcing $n_0{\equiv}1$: ESV $76{\to}62$, $P_\text{pk}$ $12.9{\to}16.0$) \\
-$\alpha$ (\texttt{bcs\_alpha}) & 12          & \gue & \textbf{Caruel $\alpha=1.5$; genet test cases use 0} \\
+\section*{Active contraction (Eqs.~29--33; Table~1)}
+\begin{longtable}{l l l P{6.6cm}}
+\toprule Parameter & Value & Source & Note \\ \midrule\endhead
+$\sigma_0$ & \SI{65}{kPa} & \gen & Table~1 \\
+$k_0$      & \SI{260}{kPa} & \gen & Table~1 \\
+$k_s$      & $10^8$ & \gen & Table~1 \\
+$\mu$      & \SI{70}{Pa\,s} & \gen & Table~1 (fiber dashpot, Eq.~32) \\
+$\alpha$ (\texttt{bcs\_alpha}) & \textbf{12.0} & \gen & \textbf{Table~1 ``time constant''} (Eq.~33 $\alpha|\dot e_c|$) --- \emph{not} a guess \\
+\texttt{active\_i4pow} & 0.5 & \gen & Eq.~30: $\sigma_{1D}=T_\text{fib}/(1{+}e_\text{fib})$, $1{+}e_\text{fib}=\sqrt{I_4}$ \\
+relaxation law (Eq.~33) & fixed ($w{=}1$) & \gen & Eq.~33 decay $=|\nu|+\alpha|\dot e_c|$, \textbf{no length-dependent $w$} $\Rightarrow$ \texttt{bcs\_relax=off} is correct \\
+$n_0(e_c)$ & 9-pt PWL & \code & Table~1 cites Ref~6; the authors' \texttt{starling} curve (matches exactly). Large, correct effect (endo $1.0\to$ epi $0.4$) \\
 \bottomrule
 \end{longtable}
 
 % =========================================================================
-\section*{Activation input $\nu(t)$}
-Trapezoidal $\nu(t)$; systole block $[\texttt{tsys},\texttt{tdias}]$ carries the
-PhysioBlocks ramp/plateau proportions (two-anchor retiming).
-\begin{longtable}{l l l P{7.2cm}}
-\toprule
-Parameter & Value & Source & Note \\
-\midrule\endhead
-trapezoid shape        & ---              & \oth{PhysioBlocks} & \texttt{rescale\_two\_phases} \\
-$\alpha_\text{max}$    & $+35\ \text{s}^{-1}$ & \oth{PhysioBlocks} & Caruel max $\approx +30$ \\
-$\alpha_\text{min}$    & $-20\ \text{s}^{-1}$ & \oth{PhysioBlocks} & Caruel min from Fig.~7b (graph); sets relaxation rate \\
-\texttt{tsys}          & \SI{0.11}{s}     & \est & contraction onset (Fig.~5 $P$ upstroke); no tabulated source \\
-\texttt{tdias}         & \SI{0.40}{s}     & \est & relaxation onset (Fig.~5 $P$ downstroke); no tabulated source \\
-period                 & \SI{0.8}{s}      & \gen & $=$ Caruel \\
+\section*{Input functions $\nu(t)$, $P_\text{at}(t)$ (Refs.~33/6, authors' code)}
+\begin{longtable}{l l l P{6.6cm}}
+\toprule Parameter & Value & Source & Note \\ \midrule\endhead
+$\nu(t)$ (\texttt{nagumo}) & --- & \code & ECG-parametric: delay 0.1, QRSd 0.08, QTc 0.33 (Bazett $QT{=}QTc\sqrt{T}$), ramp 0.01; $\alpha_\text{max/min}{=}\pm35$. Kernel port matches to $3\times10^{-14}$ \\
+$P_\text{at}(t)$ & 4.5 / 7 mmHg & \code & 603 / \SI{938}{Pa}; kick at $T{-}PQ{+}$ramp, $T{-}AV{+}$ramp (PQ 0.14, AV 0.08) \\
+period $T$ & \SI{0.8}{s} & \gen & \\
+\bottomrule
+\end{longtable}
+\noindent\footnotesize The ECG constants live in the authors' code (implementing genet23 Refs 33/6), not in genet23 Table~1. \normalsize
+
+% =========================================================================
+\section*{Valves (Eq.~35) \& two-stage Windkessel (Eq.~36; Table~1)}
+The valve law (Eq.~35) uses positive parts $\langle\cdot\rangle_+$, i.e.\ a sharp
+switch --- so the svZeroD \texttt{PiecewiseValve} diode ($R=1/K$) is \emph{faithful},
+not an approximation. Mapping Eq.~36: mitral $R_{\min}{=}K_{at}^{-1},R_{\max}{=}K_{iso}^{-1}$
+reproduces the atrial terms $K_{at}\langle P_{at}{-}P_v\rangle_+ - K_{iso}\langle P_v{-}P_{at}\rangle_+$ exactly.
+\begin{longtable}{l l l P{6.4cm}}
+\toprule Parameter & Value & Source & Note \\ \midrule\endhead
+$K_{at}^{-1},K_{ar}^{-1},K_{iso}^{-1}$ & 1.1111e5, 7.6923e4, 2.0e9 & \gen & Table~1 (Pa\,s\,m$^{-3}$) \\
+$R_p,\,C_\text{ar}$ & 1.35e7, 2.115e-10 & \gen & Table~1 (proximal Windkessel) \\
+$R_d,\,C_d$ & 1.0949e8, 2.0158e-8 & \gen & Table~1 (distal Windkessel) \\
+aortic $R_{\max}$ & $10^{12}$ ($\approx\infty$) & \gen & Eq.~36 arterial line has \emph{no} closed-leak; \emph{corrected} from $K_{iso}^{-1}$ (removed spurious regurgitation) \\
+$C_\text{valve}$ & 9e-9 & \none & Table~1; Eq.~36 puts $C_\text{valve}\dot P_v$ on the ventricle. Our sign is correct but the value ($43\times C_\text{ar}$) destabilises the stiff-integrator/diode realisation (ESV$\to$40); set to 0. Numerical regulariser tied to the energy-preserving scheme \\
+$P_\text{vs}$ (venous) & \SI{1000}{Pa} & \car & \textbf{not in genet23 Table~1}; Eq.~36 prescribes it. Caruel $P_{sv}{=}10^3$ \\
 \bottomrule
 \end{longtable}
 
 % =========================================================================
-\section*{Load-dependent relaxation (Caruel Eqs.\ 3--4)}
-\begin{longtable}{l l l P{7.2cm}}
-\toprule
-Parameter & Value & Source & Note \\
-\midrule\endhead
-\texttt{bcs\_relax}      & on            & \car & length-dependent relaxation active \\
-$m_0(e_c)$               & PWL $1.6\to1.0$ & \car & shape est.\ from Caruel Fig.~7a; $\approx 1.5$ in range \\
-$\alpha_r$               & 0 ($\to0$ limit) & \est & \textbf{Caruel $\alpha_r=0.12$; we use the instantaneous limit} \\
+\section*{Numerics}
+\begin{longtable}{l l l P{6.4cm}}
+\toprule Parameter & Value & Source & Note \\ \midrule\endhead
+time step $\Delta t$ & \SI{1}{ms} & \gen & matches genet23 \S3.1 \\
+interpolation / quadrature & $n_e{=}3$ / Gauss & \svz & genet23: 1 element, order 3, quadrature 5. Verified converged (twist unchanged $n_e{=}3{\to}16$) \\
+time integrator & stiff (L-stable) & \none & genet23 uses the \emph{energy-preserving midpoint} scheme (Eqs.~51,55--60). Verified this does \emph{not} change the twist \\
+cycles & 12, take last & \svz & genet23 analyses cycle 5; both are the periodic limit cycle \\
+initial state, upstream buffer & --- & \svz & inflate to $P_\text{at}$ then run; washes out over cycles \\
 \bottomrule
 \end{longtable}
 
 % =========================================================================
-\section*{Valves and two-stage Windkessel}
-Valve law (Caruel Eq.~12) realized by the svZeroDSolver \texttt{PiecewiseValve}
-diode ($R=1/K$; Regazzoni 2022 Eq.~16/22). Windkessel is the Caruel C--R--C--R ladder.
-\begin{longtable}{l l l P{7.2cm}}
-\toprule
-Parameter & Value & Source & Note \\
-\midrule\endhead
-$K_{at}^{-1}$ & $1.111\times10^5$ & \gen & $=$ Caruel $K_{at}=9\times10^{-6}$ \\
-$K_{ar}^{-1}$ & $7.692\times10^4$ & \gen & $=$ Caruel $K_{ar}=1.3\times10^{-5}$ \\
-$K_{iso}^{-1}$& $2.0\times10^9$   & \gen & $=$ Caruel $K_p=5\times10^{-10}$ \\
-valve law form & diode           & \oth{Regazzoni22} & $=$ Caruel Eq.~12 / Sainte-Marie 06 \\
-$R_p$ (proximal) & $1.35\times10^7$ & \gen & Caruel $8\times10^6$ \\
-$C_\text{ar}$ ($=C_p$) & $2.115\times10^{-10}$ & \gen & Caruel $C_p=2.5\times10^{-9}$; \emph{corrected} (was $C_\text{ar}{+}C_\text{valve}$) \\
-$R_d$ (distal)   & $1.095\times10^8$ & \gen & Caruel $10^8$ \\
-$C_d$ (distal)   & $2.016\times10^{-8}$ & \gen & Caruel $10^{-8}$ \\
-$C_\text{valve}$ & $9\times10^{-9}$ & \gen & \textbf{UNUSED}; absent from Caruel; role unknown \\
-$P_\text{vs}$ (venous) & \SI{1000}{Pa} & \car & Caruel $P_{sv}=10^3$; \emph{corrected} (was \SI{1600}{Pa}, PhysioBlocks) \\
-\bottomrule
-\end{longtable}
-
-% =========================================================================
-\section*{Atrial pressure $P_\text{at}(t)$ and numerics}
-\begin{longtable}{l l l P{7.2cm}}
-\toprule
-Parameter & Value & Source & Note \\
-\midrule\endhead
-$P_\text{at}$ levels & 450 / \SI{900}{Pa} & \oth{PhysioBlocks} & E-wave floor / A-wave peak \\
-kick onset           & \SI{0.64}{s}       & \est & A-wave window (Fig.~5); amplitude gives E:A too low \\
-integrator / $\rho_\infty$ & stiff / 0.5  & \oth{svZeroD} & Genet uses Hauret--Le~Tallec energy-preserving (not built) \\
-$n_e$ / $\Delta t$   & 3 / \SI{2}{ms}     & \est & coarsest converged (convergence study) \\
-$n_\text{cycles}$    & 12                 & \oth{svZeroD} & reaches Windkessel limit cycle \\
-initial $V,\,P$      & \SI{65}{mL},\ $P_\text{at}$ & \gue & initial condition \\
-upstream $R,\,C$     & 1000,\ $10^{-12}$  & \oth{svZeroD} & numerical buffer block \\
-\bottomrule
-\end{longtable}
-
-% =========================================================================
-\section*{Fit quality (\texttt{ne}=3) and residual discrepancies}
-Against the 1\,ms digitized Fig.~5: pressure RMS \SI{0.16}{kPa}, volume RMS
-\SI{2.9}{mL}; EDV \SI{135}{mL} (data 135.7), ESV \SI{76}{mL} (74),
-EF \SI{44}{\percent} (45), peak $P$ \SI{12.9}{kPa} (12.8), peak twist $21^\circ$ (20).
+\section*{Fit and the residual torsion discrepancy}
+Against the digitised Fig.~5: pressure RMS \SI{0.16}{kPa}, volume RMS \SI{2.8}{mL};
+EDV/ESV 136/76 (data 135.7/74), peak $P$ 13.0 (12.8), peak twist $21^\circ$ (20).
 
 \medskip\noindent
-\textbf{Open discrepancy: E-wave / A-wave partition.} The volume \emph{levels} track
-Fig.~5 to \SI{2.9}{mL}, but the filling \emph{dynamics} differ: the E-wave peak
-inflow is too low and the A-wave too high (E:A peak $1.6$ vs.\ Fig.~5 $3.6$ /
-Guyton $2{:}1$; A-wave 33\,\% of filling vs.\ $\sim$20--24\,\%). A parameter study
-shows this is \emph{not} a single mis-set knob:
+\textbf{Torsion recovers $\sim$100 ms too fast} (tw@550 ms $5^\circ$ vs.\ data $13^\circ$;
+resting $-3.3^\circ$ vs.\ $-2.3^\circ$; flat over 0--100 ms vs.\ a gentle downslope).
+Systematically excluded as causes:
 \begin{itemize}
-  \item \textbf{$n_0$ is essential and correct} --- not inert (see above); no scaling/offset bug.
-  \item \textbf{Activation rates do not fix it.} Caruel's set ($\alpha_\text{max}{=}30$, $\alpha{=}1.5$, $\alpha_r{=}0.12$) worsens the fit (rmsV $2.9{\to}7.5$, over-ejects); $\alpha_\text{min}$ more negative raises E:A ($1.6{\to}2.0$ at $-45$) but degrades rmsV/rmsP; \texttt{bcs\_alpha} is inert on E:A and $\ge 20$ destabilizes the solver.
-  \item \textbf{Passive stiffness trades E:A against EDV.} Stiffer ($C\times2$) strengthens the E-wave (E:A $1.6{\to}2.1$) but under-fills (EDV $135{\to}117$); softer over-fills; $\gamma$ cannot be lowered below 70 (solver fails).
+  \item \textbf{Parameters}: every physical value matches Table~1 (above). Note $\gamma{=}70$ is genet23's own value, so the earlier ``$\gamma{=}250$'' was a fit that contradicts the paper --- \emph{retracted}.
+  \item \textbf{Numerics}: $\Delta t$ (2$\to$0.5 ms), $n_e$ (3$\to$16) and integrator (stiff vs.\ midpoint) all leave the twist unchanged.
+  \item \textbf{Circulation}: the diode+RC blocks reproduce Eq.~35/36; the aortic no-leak fix and $C_\text{valve}$ both have negligible / no beneficial effect on the twist.
 \end{itemize}
-No single parameter reconciles E:A with EDV and the pressure/volume curves, so the
-residual is a coordinated-recalibration or structural feature of the reduced
-diastolic coupling --- a specific question for the authors, not a fit error.
+So the discrepancy is \emph{mechanical}. Leading candidates: (i) genet23 is fully
+\textbf{dynamical} (inertia $\rho_0\ddot u$, Eq.~18) whereas we run quasi-statically
+(enabling inertia nudges tw@550 $5\to7^\circ$, the right direction); (ii) the coupling
+of the viscous shear $\gamma\dot E$ to the twist DOF $\beta$. This is the one open item
+for the authors.
 \end{document}
