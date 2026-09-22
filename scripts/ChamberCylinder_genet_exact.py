@@ -125,7 +125,7 @@ def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
           alpha_r=0.0, act_qrs=ACT_QRSD, act_ramp=ACT_RAMP,
           steepness=0.02, integrator="stiff", rho_infty=0.5, ncycle=8,
           aortic_Rmax=None, active_model=1, atrial_kick=True, mixed=True,
-          bcs_relax=False):
+          bcs_relax=False, dynamics=True, density=1000.0):
     # Integrator note: Genet's temporal scheme is the non-dissipative midpoint
     # (rho_infty=1) made *stable* by energy-preserving algorithmic stresses + the
     # Chapelle sqrt(k_c) internal-variable update. The plain midpoint alone
@@ -148,12 +148,21 @@ def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
     # 9.3). => the cylinder model uses a FIXED relaxation (w=1), not Caruel w/m0.
     # c_valve=0 on the ChamberCylinder: Cvalve is a Genet add-on that has no place
     # in the Caruel valve+Windkessel topology (see docstring).
+    # Full dynamics (genet23 Eqs 8,18,45): the model is fully DYNAMICAL -- the
+    # inertia force rho_0*u_ddot (consistent mass matrix + velocity companion DOFs)
+    # is retained by default (use_inertia=1, density rho_0 = 1 kg/L = 1000, Table 1).
+    # For cardiac parameters the inertia is small (~1e-4 of the internal/pressure
+    # forces), so it barely shifts P/V and only modestly the twist; it is kept for
+    # faithfulness to genet23's dynamical formulation. (genet23's own non-dissipative
+    # midpoint scheme is singular on this DAE, so the L-stable "stiff" integrator is
+    # used; the O(zeta_dot^2) convective term D2u is omitted, as in the kernel note.)
     vv.update(dict(sigma_max=sigma_max, alpha_max=alpha_max, alpha_min=alpha_min,
                    activation_mode=1.0, tsys=tsys, tdias=tdias, steepness=steepness,
                    act_qrs=act_qrs, act_ramp=act_ramp,
                    num_elements=ne, active_model=active_model, bcs_alpha=bcs_alpha,
                    c_valve=0.0, mixed=1.0 if mixed else 0.0,
-                   bcs_relax=1.0 if bcs_relax else 0.0, alpha_r=alpha_r))
+                   bcs_relax=1.0 if bcs_relax else 0.0, alpha_r=alpha_r,
+                   use_inertia=1.0 if dynamics else 0.0, density=density))
     # n0(e_c): the Frank-Starling recruitment factor is the fixed PhysioBlocks
     # piecewise-linear curve baked into the kernel (frank_starling()); it is NOT a
     # builder input (the kernel's n0_center/n0_width inputs are vestigial/ignored).
