@@ -43,6 +43,7 @@ class TimeIntegrator {
   double y_coeff_jacobian{0.0};
   double atol{0.0};
   int max_iter{0};
+  bool max_iter_error_to_warning{false};
   int size{0};
   int n_iter{0};
   int n_nonlin_iter{0};
@@ -53,9 +54,12 @@ class TimeIntegrator {
 
   /**
    * @brief Set up coefficients and reserve system memory (shared by schemes).
+   *
+   * @param max_iter_error_to_warning If true, print a warning instead of
+   * throwing an error when the maximum nonlinear iterations is reached.
    */
   void init(Model* model, double time_step_size, double rho, double atol,
-            int max_iter);
+            int max_iter, bool max_iter_error_to_warning = false);
 
   /**
    * @brief Evaluate the residual at the generalized mid-point for a candidate
@@ -96,7 +100,7 @@ class GeneralizedAlpha : public TimeIntegrator {
  public:
   GeneralizedAlpha() {}
   GeneralizedAlpha(Model* model, double time_step_size, double rho, double atol,
-                   int max_iter);
+                   int max_iter, bool max_iter_error_to_warning = false);
   State step(const State& state, double time) override;
 };
 
@@ -127,17 +131,16 @@ class ConsistentStiffIntegrator : public TimeIntegrator {
  public:
   ConsistentStiffIntegrator() {}
   ConsistentStiffIntegrator(Model* model, double time_step_size, double rho,
-                            double atol, int max_iter);
+                            double atol, int max_iter,
+                            bool max_iter_error_to_warning = false);
   State step(const State& state, double time) override;
 };
 
 /**
  * @brief Create a time integrator of the requested type.
  */
-std::unique_ptr<TimeIntegrator> make_integrator(IntegratorType type,
-                                                Model* model,
-                                                double time_step_size,
-                                                double rho, double atol,
-                                                int max_iter);
+std::unique_ptr<TimeIntegrator> make_integrator(
+    IntegratorType type, Model* model, double time_step_size, double rho,
+    double atol, int max_iter, bool max_iter_error_to_warning = false);
 
 #endif  // SVZERODSOLVER_ALGEBRA_INTEGRATOR_HPP_

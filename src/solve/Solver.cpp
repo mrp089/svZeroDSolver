@@ -91,7 +91,8 @@ void Solver::setup_integrator() {
   integrator = make_integrator(itype, this->model.get(),
                                simparams.sim_time_step_size,
                                simparams.sim_rho_infty, simparams.sim_abs_tol,
-                               simparams.sim_nliter);
+                               simparams.sim_nliter,
+                               simparams.sim_max_iter_error_to_warning);
 
   // Initialize loop
   states = std::vector<State>();

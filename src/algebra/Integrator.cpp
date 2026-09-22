@@ -8,7 +8,8 @@
 // ---------------------------------------------------------------------------
 
 void TimeIntegrator::init(Model* model, double time_step_size, double rho,
-                          double atol, int max_iter) {
+                          double atol, int max_iter,
+                          bool max_iter_error_to_warning) {
   this->model = model;
   alpha_m = 0.5 * (3.0 - rho) / (1.0 + rho);
   alpha_f = 1.0 / (1.0 + rho);
@@ -23,6 +24,7 @@ void TimeIntegrator::init(Model* model, double time_step_size, double rho,
   this->time_step_size = time_step_size;
   this->atol = atol;
   this->max_iter = max_iter;
+  this->max_iter_error_to_warning = max_iter_error_to_warning;
 
   y_af = Eigen::Matrix<double, Eigen::Dynamic, 1>(size);
   ydot_am = Eigen::Matrix<double, Eigen::Dynamic, 1>(size);
@@ -60,8 +62,9 @@ double TimeIntegrator::assemble_residual(const State& old_state,
 // ---------------------------------------------------------------------------
 
 GeneralizedAlpha::GeneralizedAlpha(Model* model, double time_step_size,
-                                   double rho, double atol, int max_iter) {
-  init(model, time_step_size, rho, atol, max_iter);
+                                   double rho, double atol, int max_iter,
+                                   bool max_iter_error_to_warning) {
+  init(model, time_step_size, rho, atol, max_iter, max_iter_error_to_warning);
 }
 
 State GeneralizedAlpha::step(const State& old_state, double time) {
@@ -90,9 +93,13 @@ State GeneralizedAlpha::step(const State& old_state, double time) {
     }
     // Abort if maximum number of non-linear iterations is reached
     else if (i == max_iter - 1) {
-      throw std::runtime_error(
+      if (max_iter_error_to_warning) {
+        std::cout << "Warning: Maximum number of non-linear iterations reached at time " << time << std::endl;
+      } else {
+        throw std::runtime_error(
           "Maximum number of non-linear iterations reached at time " +
           std::to_string(time));
+      }
     }
 
     // Evaluate Jacobian
@@ -122,11 +129,12 @@ State GeneralizedAlpha::step(const State& old_state, double time) {
 ConsistentStiffIntegrator::ConsistentStiffIntegrator(Model* model,
                                                      double time_step_size,
                                                      double rho, double atol,
-                                                     int max_iter) {
+                                                     int max_iter,
+                                                     bool max_iter_error_to_warning) {
   // Use a maximally dissipative spectral radius for stiff (L-stable) damping,
   // independent of the requested rho.
   (void)rho;
-  init(model, time_step_size, 0.0, atol, max_iter);
+  init(model, time_step_size, 0.0, atol, max_iter, max_iter_error_to_warning);
 }
 
 bool ConsistentStiffIntegrator::damped_step(const State& old_state,
@@ -213,14 +221,17 @@ std::unique_ptr<TimeIntegrator> make_integrator(IntegratorType type,
                                                 Model* model,
                                                 double time_step_size,
                                                 double rho, double atol,
-                                                int max_iter) {
+                                                int max_iter,
+                                                bool max_iter_error_to_warning) {
   switch (type) {
     case IntegratorType::consistent_stiff:
       return std::make_unique<ConsistentStiffIntegrator>(
-          model, time_step_size, rho, atol, max_iter);
+          model, time_step_size, rho, atol, max_iter,
+          max_iter_error_to_warning);
     case IntegratorType::generalized_alpha:
     default:
-      return std::make_unique<GeneralizedAlpha>(model, time_step_size, rho,
-                                                atol, max_iter);
+      return std::make_unique<GeneralizedAlpha>(
+          model, time_step_size, rho, atol, max_iter,
+          max_iter_error_to_warning);
   }
 }
