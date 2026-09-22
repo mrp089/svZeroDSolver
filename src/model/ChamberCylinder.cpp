@@ -456,7 +456,7 @@ void ChamberCylinder::update_constant(SparseSystem& system,
   // eta-eps. The mass is evaluated at the reference configuration (R), a
   // standard approximation - inertia is ~1e-4 of the internal/pressure forces
   // for cardiac parameters. The O(zeta_dot^2) centrifugal term D2u(zd,zd) is
-  // likewise negligible and omitted.
+  // assembled as a nonlinear force in update_solution (see "Convective inertia").
   if (is_dynamic) {
     const double rho0 = parameters[global_param_ids[ParamId::density]];
     const double Lp = parameters[global_param_ids[ParamId::length]];
@@ -683,6 +683,54 @@ void ChamberCylinder::update_solution(
             const int cv = cvr[m][ci];
             Kat(re, cv) += rwt * K[k][m] * cw[m][ci];
             Kdat(re, cv) += rwt * Kd[k][m] * cw[m][ci];
+          }
+        }
+      }
+    }
+
+    // --- Convective (centrifugal) inertia D2u(zeta_dot,zeta_dot) (genet23 Eqs 8,10,18) ---
+    // The O(zeta_dot^2) part of the acceleration a = D2u(zd,zd) + Du(zdd), omitted
+    // from the linear consistent mass. With the angular velocity w_om = beta_dot*Z +
+    // phi_dot, contracting D2u (Eq 10) with the virtual velocity Du (Eq 9) and
+    // integrating over Theta (2 pi) and Z (moments L, L^2/2, L^3/3) gives the forces
+    // conjugate to the rho / phi / beta virtual fields below. Rates are the velocity
+    // companion DOFs (w = zeta_dot). Small (inertia ~1e-4 of the internal forces) but
+    // retained for exact genet23 dynamics. Reference-config radius R (as the mass).
+    if (is_dynamic) {
+      const double rho0 = parameters[global_param_ids[ParamId::density]];
+      const double Wr = N0 * Y(i_vrho(A0)) + N1 * Y(i_vrho(A1));  // rho_dot
+      const double Wp = N0 * Y(i_vphi(A0)) + N1 * Y(i_vphi(A1));  // phi_dot
+      const double Wb = Y(i_vbeta());                             // beta_dot
+      const double base = 2.0 * M_PI * rho0 * pt.R * pt.w;
+      const double L1 = Lp, L2 = Lp * Lp / 2.0, L3 = Lp * Lp * Lp / 3.0;
+      const double Iw2 = Wb * Wb * L3 + 2.0 * Wb * Wp * L2 + Wp * Wp * L1;  // int w_om^2
+      const double Qp = Wb * L2 + Wp * L1;   // int w_om
+      const double Qb = Wb * L3 + Wp * L2;   // int w_om Z
+      const int An[2] = {A0, A1};
+      const double Nn[2] = {N0, N1};
+      // beta (global twist): + 2 rho_dot (int w_om Z)
+      Cloc[e_beta()] += base * 2.0 * Wr * Qb;
+      Kat(e_beta(), i_vbeta()) += base * 2.0 * Wr * L3;
+      for (int j = 0; j < 2; j++) {
+        Kat(e_beta(), i_vrho(An[j])) += base * 2.0 * Nn[j] * Qb;
+        Kat(e_beta(), i_vphi(An[j])) += base * 2.0 * Wr * L2 * Nn[j];
+      }
+      for (int i = 0; i < 2; i++) {
+        const int a = An[i];
+        const double Na = Nn[i];
+        // rho: - (int w_om^2)
+        Cloc[e_rho(a)] += -base * Iw2 * Na;
+        Kat(e_rho(a), i_vbeta()) += -base * Na * (2.0 * Wb * L3 + 2.0 * Wp * L2);
+        for (int j = 0; j < 2; j++)
+          Kat(e_rho(a), i_vphi(An[j])) +=
+              -base * Na * (2.0 * Wb * L2 + 2.0 * Wp * L1) * Nn[j];
+        // phi (skip pinned inner node): + 2 rho_dot (int w_om)
+        if (a != 0) {
+          Cloc[e_phi(a)] += base * 2.0 * Wr * Qp * Na;
+          Kat(e_phi(a), i_vbeta()) += base * 2.0 * Wr * L2 * Na;
+          for (int j = 0; j < 2; j++) {
+            Kat(e_phi(a), i_vrho(An[j])) += base * 2.0 * Nn[j] * Qp * Na;
+            Kat(e_phi(a), i_vphi(An[j])) += base * 2.0 * Wr * L1 * Nn[j] * Na;
           }
         }
       }
