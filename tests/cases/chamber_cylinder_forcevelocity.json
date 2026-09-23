@@ -80,13 +80,18 @@
         "C6": 4.0,
         "gamma": 70.0,
         "sigma_max": 55000.0,
-        "alpha_max": 30.0,
-        "alpha_min": -30.0,
-        "tsys": 0.17,
-        "tdias": 0.484,
         "num_elements": 4,
         "k_0": 260000.0,
         "bcs_alpha": 12.0
+      },
+      "activation_function": {
+        "type": "nagumo",
+        "tsys": 0.17,
+        "tdias": 0.484,
+        "qrs": 0.080,
+        "ramp": 0.010,
+        "alpha_max": 30.0,
+        "alpha_min": -30.0
       }
     },
     {

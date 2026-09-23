@@ -7,7 +7,10 @@
 #include <cmath>
 #include <complex>
 #include <map>
+#include <stdexcept>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "Model.h"
 
@@ -224,21 +227,19 @@ void compute_g(const T xi[6], const T xidot[6], const ActiveInput& act,
 }
 
 /// BCS Frank-Starling force-length function n_0(e_c): the calibrated
-/// piecewise-linear length-dependence curve from the MEDISIM PhysioBlocks
-/// reference implementation (n_0 = interp(e_c, abscissas, ordinates); Caruel et
-/// al. 2013, \cite genet23 Ref. 13). It represents the actin-myosin overlap
-/// (length-tension) relationship: n_0 rises from 0, plateaus at 1 over the
-/// physiological contractile strain e_c in [0.20, 0.47], and falls back to 0.
+/// piecewise-linear length-dependence curve (n_0 = interp(e_c, abscissas,
+/// ordinates); Caruel et al. 2013, \cite genet23 Ref. 13). It represents the
+/// actin-myosin overlap (length-tension) relationship: n_0 rises from 0,
+/// plateaus at 1 over the physiological contractile strain e_c in [0.20, 0.47],
+/// and falls back to 0. The default breakpoints are the MEDISIM PhysioBlocks
+/// reference values (see ChamberCylinder::n0_ec_/n0_val_), overridable per block.
 /// NOTE: the plateau sits at e_c ~ 0.2, not ~1 as Caruel Fig. 7(a) suggests -
 /// that figure is drawn over the wide isotonic papillary-muscle strain range.
+/// X, Y are the (double) breakpoints; e_c may be complex (complex-step).
 template <typename T>
-inline T frank_starling(T e_c) {
-  // Breakpoints (e_c, n_0) from PhysioBlocks (physioblocks/physioblocks).
-  constexpr int NP = 9;
-  static const double X[NP] = {-0.1668, -0.0073, 0.0534, 0.0969, 0.1326,
-                               0.2016,  0.4663,  0.9187, 1.1762};
-  static const double Y[NP] = {0.0,    0.5614, 0.7748, 0.8933, 0.9618,
-                               1.0,    1.0,    0.1075, 0.0};
+inline T frank_starling(T e_c, const std::vector<double>& X,
+                        const std::vector<double>& Y) {
+  const int NP = static_cast<int>(X.size());
   const double x = re(e_c);
   if (x <= X[0]) return T(Y[0]);
   if (x >= X[NP - 1]) return T(Y[NP - 1]);
@@ -253,20 +254,23 @@ inline T frank_starling(T e_c) {
 /// BCS active-law parameters.
 struct BcsParams {
   double k_s, k_0, mu, alpha, sigma0;
+  double fv_reg = 1e-4;  ///< force-velocity regularizer eps (|e_c dot| smoothing)
 };
 
 /// Residuals of the BCS internal-variable ODEs (Genet Eqs. 32-33 / Chapelle
 /// Eq. 9) at a quadrature point. a = [e_c, tau_c, k_c], ad = its rate; the
-/// contractile-element strain rate is e_c_dot = ad[0].
+/// contractile-element strain rate is e_c_dot = ad[0]. n0_x/n0_y are the
+/// Frank-Starling force-length breakpoints passed to frank_starling().
 template <typename T>
 void bcs_residual(const T a[], const T ad[], T e_fib,
                   double nu_abs, double nu_plus, const BcsParams& bp,
-                  T res[]) {
+                  const std::vector<double>& n0_x,
+                  const std::vector<double>& n0_y, T res[]) {
   const T ecdot = ad[0];
-  // Smoothed |e_c dot| (eps ~ 1e-2 /s regularizes the force-velocity kink so
+  // Smoothed |e_c dot| (eps = bp.fv_reg regularizes the force-velocity kink so
   // Newton and its complex-step tangent behave; negligible vs |nu| physically).
-  const T abs_ecd = std::sqrt(ecdot * ecdot + 1e-4);
-  const T n0 = frank_starling<T>(a[0]);
+  const T abs_ecd = std::sqrt(ecdot * ecdot + bp.fv_reg);
+  const T n0 = frank_starling<T>(a[0], n0_x, n0_y);
   const T decay = nu_abs + bp.alpha * abs_ecd;
   // series-spring force balance: mu * e_c_dot = k_s (e_fib - e_c) - tau_c
   res[0] = ecdot - (bp.k_s * (e_fib - a[0]) - a[1]) / bp.mu;
@@ -449,9 +453,20 @@ void ChamberCylinder::update_constant(SparseSystem& system,
 
 void ChamberCylinder::update_time(SparseSystem& system,
                                   std::vector<double>& parameters) {
-  // Sets act = |nu|, act_plus = |nu|_+ (the BCS activation input, used in the
-  // nonlinear residual C assembled by update_solution).
-  get_activation(parameters);
+  (void)parameters;
+  // Evaluate the ECG-derived activation nu(t) and set the BCS inputs act = |nu|
+  // and act_plus = |nu|_+ (used in the nonlinear residual C assembled by
+  // update_solution). nu is the SIGNED contraction rate from the activation
+  // function (type `nagumo`); it is deliberately not clamped to [0, 1].
+  if (activation_function_ == nullptr) {
+    throw std::runtime_error(
+        "ChamberCylinder block '" + get_name() +
+        "': no activation_function set. Provide an 'activation_function' "
+        "(type 'nagumo') on the vessel configuration.");
+  }
+  const double nu = activation_function_->compute(model->time);
+  act = std::abs(nu);
+  act_plus = std::max(nu, 0.0);
 }
 
 void ChamberCylinder::update_solution(
@@ -476,6 +491,7 @@ void ChamberCylinder::update_solution(
   bp.mu = parameters[global_param_ids[ParamId::mu]];
   bp.alpha = parameters[global_param_ids[ParamId::bcs_alpha]];
   bp.sigma0 = sigma_max;
+  bp.fv_reg = parameters[global_param_ids[ParamId::fv_reg]];
 
   // Gather block DOFs and their rates.
   auto Y = [&](int lv) { return y[global_var_ids[lv]]; };
@@ -683,7 +699,7 @@ void ChamberCylinder::update_solution(
       double a[3] = {Y(i_ec(q)), Y(i_tauc(q)), Y(i_kc(q))};
       double ad[3] = {Yd(i_ec(q)), Yd(i_tauc(q)), Yd(i_kc(q))};
       double Ra[3];
-      bcs_residual<double>(a, ad, e_fib, act, act_plus, bp, Ra);
+      bcs_residual<double>(a, ad, e_fib, act, act_plus, bp, n0_ec_, n0_val_, Ra);
       for (int i = 0; i < 3; i++) Cloc[erow[i]] += Ra[i];
       // Complex-step tangents w.r.t. the local active state (dC_dy) and its
       // rates (dC_dydot). The regularized |e_c dot| makes the force-velocity
@@ -697,12 +713,14 @@ void ChamberCylinder::update_solution(
         }
         for (int jj = 0; jj < 3; jj++) {
           ac[jj] += cplx(0.0, h);
-          bcs_residual<cplx>(ac, adc, cplx(e_fib), act, act_plus, bp, Rc);
+          bcs_residual<cplx>(ac, adc, cplx(e_fib), act, act_plus, bp, n0_ec_,
+                             n0_val_, Rc);
           for (int ii = 0; ii < 3; ii++)
             Kat(erow[ii], avar[jj]) += std::imag(Rc[ii]) / h;
           ac[jj] = a[jj];
           adc[jj] += cplx(0.0, h);
-          bcs_residual<cplx>(ac, adc, cplx(e_fib), act, act_plus, bp, Rc);
+          bcs_residual<cplx>(ac, adc, cplx(e_fib), act, act_plus, bp, n0_ec_,
+                             n0_val_, Rc);
           for (int ii = 0; ii < 3; ii++)
             Kdat(erow[ii], avar[jj]) += std::imag(Rc[ii]) / h;
           adc[jj] = ad[jj];
@@ -775,45 +793,14 @@ void ChamberCylinder::update_solution(
   }
 }
 
-void ChamberCylinder::get_activation(std::vector<double>& parameters) {
-  const double alpha_max = parameters[global_param_ids[ParamId::alpha_max]];
-  const double alpha_min = parameters[global_param_ids[ParamId::alpha_min]];
-  const double tsys = parameters[global_param_ids[ParamId::tsys]];
-  const double tdias = parameters[global_param_ids[ParamId::tdias]];
-  const double qrs = parameters[global_param_ids[ParamId::act_qrs]];
-  const double ramp = parameters[global_param_ids[ParamId::act_ramp]];
-
-  const auto T_cardiac = model->cardiac_cycle_period;
-  const auto t_in_cycle = fmod(model->time, T_cardiac);
-
-  // Genet ECG-derived activation nu(t): the authors' `nagumo_piecewise_linear`
-  // (cardiac_input_functions.py). Piecewise-linear between alpha_min and
-  // alpha_max with knee times set by ECG intervals. tsys is the nu=0 upstroke
-  // (depolarization_time = delay + ramp) and tdias the nu=0 downstroke
-  // (depolarization_end); the internal knees follow from the QRS width and the
-  // final repolarization ramp:
-  //   t_max     = tsys + QRSd                          (reach alpha_max)
-  //   t_plateau = tsys + QRSd + max(0, tdias-tsys-2 QRSd)  (plateau end)
-  //   t_finish  = tdias + ramp                         (reach alpha_min)
-  // The rising branch is a single line through (tsys, 0) with slope
-  // alpha_max/QRSd (so it leaves the alpha_min floor at tsys-QRSd); values below
-  // alpha_min are clamped. This is the exact author waveform and scales with the
-  // heart rate through the ECG-derived tsys/tdias supplied by the caller.
-  const double t = t_in_cycle;
-  const double t_max = tsys + qrs;
-  const double t_plateau = tsys + qrs + std::max(0.0, tdias - tsys - 2.0 * qrs);
-  const double t_finish = tdias + ramp;
-  double act_t;
-  if (t < t_max) {
-    act_t = alpha_max * (t - tsys) / (t_max - tsys);
-  } else if (t < t_plateau) {
-    act_t = alpha_max;
-  } else if (t < tdias) {
-    act_t = alpha_max * (1.0 - (t - t_plateau) / (tdias - t_plateau));
-  } else {
-    act_t = alpha_min * (t - tdias) / (t_finish - tdias);
+void ChamberCylinder::set_frank_starling_curve(std::vector<double> ec,
+                                               std::vector<double> val) {
+  if (ec.size() != val.size() || ec.size() < 2) {
+    throw std::runtime_error(
+        "ChamberCylinder::set_frank_starling_curve: e_c and n0 arrays must have "
+        "equal length >= 2 (got " +
+        std::to_string(ec.size()) + " and " + std::to_string(val.size()) + ").");
   }
-  if (act_t < alpha_min) act_t = alpha_min;  // clamp to the diastolic floor
-  act = std::abs(act_t);
-  act_plus = std::max(act_t, 0.0);
+  n0_ec_ = std::move(ec);
+  n0_val_ = std::move(val);
 }

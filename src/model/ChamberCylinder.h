@@ -10,8 +10,11 @@
 #include <math.h>
 
 #include <Eigen/Dense>
+#include <memory>
+#include <utility>
 #include <vector>
 
+#include "ActivationFunction.h"
 #include "Block.h"
 #include "SparseSystem.h"
 
@@ -84,10 +87,12 @@
  * \dot k_c = -(|\nu|+\alpha|\dot e_c|)k_c + n_0(e_c)k_0|\nu|_+,
  * \f]
  * (Chapelle Eq. 9) driven by the ECG-derived activation \f$\nu(t)\f$ (the
- * authors' piecewise-linear `nagumo` waveform; see get_activation),
+ * authors' piecewise-linear `nagumo` waveform, supplied as an
+ * `activation_function` object; see \ref NagumoActivation),
  * \f$\sigma_0=\f$ `sigma_max`, and Frank-Starling reduction factor
- * \f$n_0(e_c)\f$ (the fixed PhysioBlocks piecewise-linear force-length curve,
- * frank_starling()). Writing the stress through \f$\tau_c+\mu\dot e_c\f$ rather
+ * \f$n_0(e_c)\f$ (the PhysioBlocks piecewise-linear force-length curve,
+ * frank_starling(); overridable via a `frank_starling` config object).
+ * Writing the stress through \f$\tau_c+\mu\dot e_c\f$ rather
  * than the equivalent \f$k_s(e_\text{fib}-e_c)\f$ keeps the paper's very stiff
  * \f$k_s=10^8\f$ out of the mechanical residual (confining it to the \f$e_c\f$
  * ODE), so the model integrates with the standard generalized-alpha solver.
@@ -126,10 +131,6 @@
  * * `C1` ... `C6` - Passive material constants \f$C_1\ldots C_6\f$
  * * `gamma` - Material viscosity \f$\gamma\f$
  * * `sigma_max` - Maximum active fiber stress \f$\sigma_0\f$ of the BCS model
- * * `alpha_max` - Maximum activation rate \f$\alpha_\text{max}\f$
- * * `alpha_min` - Minimum activation rate \f$\alpha_\text{min}\f$
- * * `tsys` - Activation upstroke time (\f$\nu=0\f$ crossing) \f$t_\text{sys}\f$
- * * `tdias` - Activation downstroke time (\f$\nu=0\f$ crossing) \f$t_\text{dias}\f$
  * * `num_elements` - Number of (linear) finite elements through the wall
  *   (optional, default 10). The response converges under refinement; ~10-15
  *   elements are adequate for the baseline geometry.
@@ -145,10 +146,14 @@
  *   force-length-velocity source is retained regardless of \f$\alpha\f$.
  * * `density` - Reference mass density \f$\varrho_0\f$ (optional, default 1000
  *   kg/m^3 = the paper's 1 kg/L)
- * * `act_qrs` - QRS duration: the \f$\nu\f$ rise (and fall-to-0) ramp width
- *   (optional, default 0.080)
- * * `act_ramp` - final repolarization ramp width (\f$\nu:0\to\alpha_\text{min}\f$)
- *   (optional, default 0.010)
+ * * `fv_reg` - BCS force-velocity regularizer \f$\epsilon\f$ smoothing
+ *   \f$|\dot e_c|\approx\sqrt{\dot e_c^2+\epsilon}\f$ (optional, default 1e-4)
+ *
+ * The ECG-derived activation \f$\nu(t)\f$ is supplied separately as an
+ * `activation_function` object (type `nagumo`, see \ref NagumoActivation) with
+ * parameters `tsys`, `tdias`, `qrs`, `ramp`, `alpha_max`, `alpha_min`. An
+ * optional `frank_starling` object with arrays `e_c` and `n0` overrides the
+ * default force-length curve \f$n_0(e_c)\f$.
  *
  * ### Internal variables
  *
@@ -186,18 +191,13 @@ class ChamberCylinder : public Block {
     C6,
     gamma,
     sigma_max,
-    alpha_max,
-    alpha_min,
-    tsys,
-    tdias,
     num_elements,
     k_s,           // BCS series-spring stiffness
     k_0,           // BCS maximum active stiffness
     mu,            // BCS active dissipation
     bcs_alpha,     // BCS activation rate constant (paper's alpha)
     density,       // reference mass density rho_0 (inertia, genet23 Eq. 18)
-    act_qrs,       // QRS duration: nu rise (and fall-to-0) ramp width
-    act_ramp       // final repolarization ramp width (nu: 0 -> alpha_min)
+    fv_reg         // BCS force-velocity regularizer (|e_c dot| smoothing eps)
   };
 
   /**
@@ -221,18 +221,13 @@ class ChamberCylinder : public Block {
                {"C6", InputParameter()},
                {"gamma", InputParameter()},
                {"sigma_max", InputParameter()},
-               {"alpha_max", InputParameter()},
-               {"alpha_min", InputParameter()},
-               {"tsys", InputParameter()},
-               {"tdias", InputParameter()},
                {"num_elements", InputParameter(true, false, true, 10.0)},
                {"k_s", InputParameter(true, false, true, 1.0e8)},
                {"k_0", InputParameter(true, false, true, 260.0e3)},
                {"mu", InputParameter(true, false, true, 70.0)},
                {"bcs_alpha", InputParameter(true, false, true, 0.0)},
                {"density", InputParameter(true, false, true, 1000.0)},
-               {"act_qrs", InputParameter(true, false, true, 0.080)},
-               {"act_ramp", InputParameter(true, false, true, 0.010)}}) {}
+               {"fv_reg", InputParameter(true, false, true, 1.0e-4)}}) {}
 
   /**
    * @brief Set up the degrees of freedom (DOF) of the block
@@ -286,6 +281,31 @@ class ChamberCylinder : public Block {
    * @return TripletsContributions Number of triplets of element
    */
   TripletsContributions get_num_triplets() override { return num_triplets; }
+
+  /**
+   * @brief Set the activation function driving the BCS active law nu(t).
+   *
+   * Takes ownership of the activation function (type `nagumo`), whose
+   * compute(time) returns the signed activation rate nu(t).
+   *
+   * @param af Unique pointer to the activation function
+   */
+  void set_activation_function(
+      std::unique_ptr<ActivationFunction> af) override {
+    activation_function_ = std::move(af);
+  }
+
+  /**
+   * @brief Override the Frank-Starling force-length curve n_0(e_c).
+   *
+   * Replaces the default (genet/PhysioBlocks) piecewise-linear breakpoints with
+   * a user-supplied curve. `ec` (abscissas) and `val` (ordinates) must have
+   * equal length >= 2.
+   *
+   * @param ec Contractile-element strain breakpoints e_c
+   * @param val Recruitment factor values n_0 at those breakpoints
+   */
+  void set_frank_starling_curve(std::vector<double> ec, std::vector<double> val);
 
  private:
   // --- Finite element discretization of the wall thickness ---
@@ -369,12 +389,16 @@ class ChamberCylinder : public Block {
   double act = 0.0;       ///< Activation rate a(t) (= |nu| for the BCS input)
   double act_plus = 0.0;  ///< max(a(t), 0) (= |nu|_+ for the BCS input)
 
-  /**
-   * @brief Evaluate the activation function a(t) and a_+(t)
-   *
-   * @param parameters Parameters of the model
-   */
-  void get_activation(std::vector<double>& parameters);
+  /// Activation function nu(t) driving the BCS active law (type `nagumo`).
+  std::unique_ptr<ActivationFunction> activation_function_;
+
+  /// Frank-Starling force-length curve n_0(e_c) breakpoints. Default: the
+  /// genet/PhysioBlocks 9-point piecewise-linear curve (Caruel 2013, \cite
+  /// genet23 Ref. 13); overridable via set_frank_starling_curve().
+  std::vector<double> n0_ec_ = {-0.1668, -0.0073, 0.0534, 0.0969, 0.1326,
+                                0.2016,  0.4663,  0.9187, 1.1762};
+  std::vector<double> n0_val_ = {0.0, 0.5614, 0.7748, 0.8933, 0.9618,
+                                 1.0, 1.0,    0.1075, 0.0};
 };
 
 #endif  // SVZERODSOLVER_MODEL_ChamberCylinder_HPP_

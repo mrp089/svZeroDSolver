@@ -81,12 +81,17 @@
         "k_0": 260000.0,
         "mu": 70.0,
         "sigma_max": 45000.0,
-        "alpha_max": 30.0,
-        "alpha_min": -30.0,
-        "tsys": 0.13,
-        "tdias": 0.45,
         "num_elements": 6,
         "bcs_alpha": 0.0
+      },
+      "activation_function": {
+        "type": "nagumo",
+        "tsys": 0.13,
+        "tdias": 0.45,
+        "qrs": 0.080,
+        "ramp": 0.010,
+        "alpha_max": 30.0,
+        "alpha_min": -30.0
       }
     },
     {

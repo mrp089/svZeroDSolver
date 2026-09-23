@@ -158,9 +158,14 @@ def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
     # P/V and only modestly the twist. (genet23's own non-dissipative midpoint
     # scheme is singular on this DAE, so the L-stable "stiff" integrator is used;
     # the O(zeta_dot^2) convective term D2u is omitted, as in the kernel note.)
-    vv.update(dict(sigma_max=sigma_max, alpha_max=alpha_max, alpha_min=alpha_min,
-                   tsys=tsys, tdias=tdias, act_qrs=act_qrs, act_ramp=act_ramp,
+    vv.update(dict(sigma_max=sigma_max,
                    num_elements=ne, bcs_alpha=bcs_alpha, density=density))
+    # BCS activation nu(t) lives in a separate `activation_function` block
+    # (type "nagumo", the ChamberCylinder's only activation law); the six knee
+    # parameters below drive the ECG-derived piecewise-linear waveform.
+    activation = {"type": "nagumo", "tsys": tsys, "tdias": tdias,
+                  "qrs": act_qrs, "ramp": act_ramp,
+                  "alpha_max": alpha_max, "alpha_min": alpha_min}
     # n0(e_c): the Frank-Starling recruitment factor is the fixed PhysioBlocks
     # piecewise-linear curve baked into the kernel (frank_starling()); it is not a
     # builder or block input. Over the operating range e_c in [-0.06, 0.29] it
@@ -189,7 +194,7 @@ def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
              "zero_d_element_values": {"R_poiseuille": 1000.0, "C": 1e-12}},
             {"boundary_conditions": {}, "vessel_id": 1, "vessel_length": 1.0,
              "vessel_name": "ventricle", "zero_d_element_type": "ChamberCylinder",
-             "zero_d_element_values": vv},
+             "zero_d_element_values": vv, "activation_function": activation},
             # proximal stage (Caruel first Windkessel eq): C_p=C_ar at the aortic
             # root, then R_p to the distal stage. C_p is C_ar ALONE -- Cvalve is
             # NOT added here (see module docstring: it destroys the proximal time

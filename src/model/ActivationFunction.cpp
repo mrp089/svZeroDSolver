@@ -50,10 +50,13 @@ std::unique_ptr<ActivationFunction> ActivationFunction::create_default(
   if (type_str == "wrapping_cosine") {
     return std::make_unique<WrappingCosineActivation>(cardiac_period);
   }
+  if (type_str == "nagumo") {
+    return std::make_unique<NagumoActivation>(cardiac_period);
+  }
   throw std::runtime_error(
       "Unknown activation_function type '" + type_str +
       "'. Must be one of: half_cosine, piecewise_cosine, two_hill, "
-      "double_tanh, fourier, wrapping_cosine");
+      "double_tanh, fourier, wrapping_cosine, nagumo");
 }
 
 double HalfCosineActivation::compute(double time) {
@@ -250,4 +253,30 @@ double FourierActivation::compute(double time) {
   }
   double t_in_cycle = std::fmod(time, cardiac_period_);
   return (compute_raw(t_in_cycle) - norm_min_) / norm_range_;
+}
+
+// ============================================================
+// NagumoActivation — Genet 2023 ECG-derived piecewise-linear
+// activation rate nu(t) (nagumo_piecewise_linear)
+// ============================================================
+
+double NagumoActivation::compute(double time) {
+  double T = cardiac_period_, t = std::fmod(time, T);
+  double tsys = params_.at("tsys"), tdias = params_.at("tdias"),
+         qrs = params_.at("qrs"), ramp = params_.at("ramp"),
+         amax = params_.at("alpha_max"), amin = params_.at("alpha_min");
+  double t_max = tsys + qrs;
+  double t_plateau = tsys + qrs + std::max(0.0, tdias - tsys - 2.0 * qrs);
+  double t_finish = tdias + ramp;
+  double nu;
+  if (t < t_max)
+    nu = amax * (t - tsys) / (t_max - tsys);
+  else if (t < t_plateau)
+    nu = amax;
+  else if (t < tdias)
+    nu = amax * (1.0 - (t - t_plateau) / (tdias - t_plateau));
+  else
+    nu = amin * (t - tdias) / (t_finish - tdias);
+  if (nu < amin) nu = amin;
+  return nu;
 }

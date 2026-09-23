@@ -2,6 +2,8 @@
 // University of California, and others. SPDX-License-Identifier: BSD-3-Clause
 #include "SimulationParameters.h"
 
+#include "ChamberCylinder.h"
+
 bool get_param_scalar(const nlohmann::json& data, const std::string& name,
                       const InputParameter& param, double& val) {
   if (data.contains(name)) {
@@ -389,6 +391,40 @@ void create_vessels(
     vessel_id_map.insert({vessel_config["vessel_id"], vessel_name});
 
     generate_block(model, vessel_values, vessel_type, vessel_name);
+
+    // ChamberCylinder is loaded as a vessel but, like the chamber blocks, may
+    // carry an ECG-derived activation function nu(t) and, optionally, a
+    // Frank-Starling force-length curve (mirroring create_chambers).
+    if (vessel_config.contains("activation_function")) {
+      // create_vessels runs before the cardiac period is otherwise set (by the
+      // boundary-condition parameters or the Solver), and the activation
+      // function captures the period at construction. Mirror create_chambers and
+      // take it from simulation_parameters when specified.
+      if (model.cardiac_cycle_period < 0.0 &&
+          config.contains("simulation_parameters") &&
+          config["simulation_parameters"].contains("cardiac_period")) {
+        double period = config["simulation_parameters"]["cardiac_period"];
+        if (period > 0.0) {
+          model.cardiac_cycle_period = period;
+        }
+      }
+      auto act_func = generate_activation_function(
+          model, vessel_config["activation_function"], vessel_name);
+      model.get_block(vessel_name)->set_activation_function(std::move(act_func));
+    }
+
+    // Optional Frank-Starling curve override for ChamberCylinder: an object with
+    // arrays "e_c" and "n0". Absent -> the block keeps its default curve.
+    if (vessel_type == "ChamberCylinder" &&
+        vessel_config.contains("frank_starling")) {
+      const auto& fs = vessel_config["frank_starling"];
+      std::vector<double> ec = fs.at("e_c").get<std::vector<double>>();
+      std::vector<double> n0 = fs.at("n0").get<std::vector<double>>();
+      auto* cc = dynamic_cast<ChamberCylinder*>(model.get_block(vessel_name));
+      if (cc != nullptr) {
+        cc->set_frank_starling_curve(std::move(ec), std::move(n0));
+      }
+    }
 
     // Read connected boundary conditions
     if (vessel_config.contains("boundary_conditions")) {

@@ -60,7 +60,7 @@ class ActivationFunction {
    * @brief Create a default activation function from activation function type
    *
    * @param type_str One of: "half_cosine", "piecewise_cosine", "two_hill",
-   * "double_tanh", "wrapping_cosine", "fourier"
+   * "double_tanh", "wrapping_cosine", "fourier", "nagumo"
    * @param cardiac_period Cardiac cycle period
    * @return Unique pointer to the created activation function
    */
@@ -302,6 +302,41 @@ class FourierActivation : public ActivationFunction {
   double norm_min_;
   double norm_range_;
   bool normalization_initialized_;
+};
+
+/**
+ * @brief Nagumo piecewise-linear activation-rate function
+ *
+ * ECG-derived activation waveform \f$\nu(t)\f$ of the Genet 2023 cylindrical
+ * ventricle (\cite genet23; the authors' `nagumo_piecewise_linear` from
+ * cardiac_input_functions.py), used to drive the Bestel-Clement-Sorine active
+ * law in \ref ChamberCylinder. It is piecewise linear between `alpha_min` and
+ * `alpha_max` with knee times set by ECG intervals: `tsys` is the \f$\nu=0\f$
+ * upstroke and `tdias` the \f$\nu=0\f$ downstroke, `qrs` the QRS rise/fall ramp
+ * width and `ramp` the final repolarization ramp.
+ *
+ * NOTE: unlike the other activation functions, compute() returns the SIGNED
+ * contraction RATE \f$\nu(t)\f$ and is deliberately NOT clamped to [0, 1]. The
+ * base class's [0, 1] range is a convention (an elastance activation level), not
+ * a constraint; here the output is a rate spanning [`alpha_min`, `alpha_max`].
+ */
+class NagumoActivation : public ActivationFunction {
+ public:
+  /**
+   * @brief Construct with default parameter values (loader fills via
+   * set_param).
+   *
+   * @param cardiac_period Cardiac cycle period
+   */
+  explicit NagumoActivation(double cardiac_period)
+      : ActivationFunction(cardiac_period, {{"tsys", InputParameter()},
+                                            {"tdias", InputParameter()},
+                                            {"qrs", InputParameter()},
+                                            {"ramp", InputParameter()},
+                                            {"alpha_max", InputParameter()},
+                                            {"alpha_min", InputParameter()}}) {}
+
+  double compute(double time) override;
 };
 
 #endif  // SVZERODSOLVER_MODEL_ACTIVATIONFUNCTION_HPP_
