@@ -394,10 +394,13 @@ void ChamberCylinder::update_constant(SparseSystem& system,
   // Du (Eq. A5) is orthogonal between the radial/azimuthal (rho,phi,beta) and
   // axial (eta,eps) groups, so after integrating Theta (2 pi) and Z the only
   // couplings are rho-rho, eta-eta, phi-phi, eps-eps, beta-beta, phi-beta and
-  // eta-eps. The mass is evaluated at the reference configuration (R), a
-  // standard approximation - inertia is ~1e-4 of the internal/pressure forces
-  // for cardiac parameters. The O(zeta_dot^2) centrifugal term D2u(zd,zd) is
-  // assembled as a nonlinear force in update_solution (see "Convective inertia").
+  // eta-eps. The reference-configuration (R) part of the mass is assembled here;
+  // the state-dependent current-config correction R^2 -> (R+rho)^2 for the
+  // beta/phi moment arms (genet23 Eq A5) is added as a nonlinear inertia force in
+  // update_solution (see "Current-configuration inertia correction"). Inertia is
+  // ~1e-4 of the peak internal/pressure forces but the twist untwist is inertia-
+  // sensitive. The O(zeta_dot^2) centrifugal term D2u(zd,zd) is likewise a
+  // nonlinear force in update_solution (see "Convective inertia").
   {
     const double rho0 = parameters[global_param_ids[ParamId::density]];
     const double Lp = parameters[global_param_ids[ParamId::length]];
@@ -630,7 +633,10 @@ void ChamberCylinder::update_solution(
     // integrating over Theta (2 pi) and Z (moments L, L^2/2, L^3/3) gives the forces
     // conjugate to the rho / phi / beta virtual fields below. Rates are the velocity
     // companion DOFs (w = zeta_dot). Small (inertia ~1e-4 of the internal forces) but
-    // retained for exact genet23 dynamics. Reference-config radius R (as the mass).
+    // retained for exact genet23 dynamics. This O(zeta_dot^2) term keeps the
+    // reference radius R (the current-config (R+rho) correction is applied to the
+    // dominant linear mass only; the resulting error here is second order in
+    // zeta_dot and negligible).
     {
       const double rho0 = parameters[global_param_ids[ParamId::density]];
       const double Wr = N0 * Y(i_vrho(A0)) + N1 * Y(i_vrho(A1));  // rho_dot
@@ -668,6 +674,53 @@ void ChamberCylinder::update_solution(
             Kat(e_phi(a), i_vphi(An[j])) += base * 2.0 * Wr * L1 * Nn[j] * Na;
           }
         }
+      }
+    }
+
+    // --- Current-configuration inertia correction (genet23 Eq A5, Eq 52) ---
+    // The consistent mass M = rho0 int (Du[zeta])^T Du[zeta] dOmega uses the
+    // CURRENT kinematics gradient Du[zeta], whose twist/azimuthal moment arm is
+    // the current radius (R+rho) (Eq A5: entries (R+rho) sin/cos(beta Z+phi)),
+    // NOT the reference R. Since Du^T Du is rotation-invariant (sin^2+cos^2=1),
+    // only the beta/phi moment arms change: R^2 -> (R+rho)^2. The reference-R^2
+    // mass is assembled once in E (update_constant); here we add the state-
+    // dependent (R+rho)^2 - R^2 correction to the RESIDUAL (it vanishes at rho=0,
+    // a pure addition to the reference dynamics). Rates are the velocity
+    // companions (w_dot = zeta_ddot), so the mass enters dC_dydot (Kdat).
+    //
+    // Jacobian: we deliberately OMIT the d(mass)/d(rho) coupling from dC_dy. That
+    // term is a small, non-symmetric rho <-> momentum block (the mass depends on
+    // the radial position); keeping it tips the stiff cases (e.g.
+    // chamber_cylinder_mixed) past the Newton iteration limit. Dropping it is an
+    // inexact-Newton choice: the RESIDUAL is still the exact current-config mass,
+    // so the converged solution is unchanged (only the local convergence rate is,
+    // and it stays robustly convergent). The total beta/phi mass is (R+rho)^2 > 0.
+    {
+      const double rho0m = parameters[global_param_ids[ParamId::density]];
+      const double cL1 = rho0m * 2.0 * M_PI * Lp;                 // int_Z 1   = L
+      const double cL2 = rho0m * 2.0 * M_PI * Lp * Lp / 2.0;      // int_Z Z   = L^2/2
+      const double cL3 = rho0m * 2.0 * M_PI * Lp * Lp * Lp / 3.0; // int_Z Z^2 = L^3/3
+      const double rcur = pt.R + rho;                 // current radius R + rho
+      const double dr2 = rcur * rcur - pt.R * pt.R;   // (R+rho)^2 - R^2
+      const int Am[2] = {A0, A1};
+      const double Nm[2] = {N0, N1};
+      const double aBeta = Yd(i_vbeta());                            // beta_ddot
+      const double aPhi = N0 * Yd(i_vphi(A0)) + N1 * Yd(i_vphi(A1)); // phi-field ddot
+      // beta momentum row: couples to beta (cL3) and the phi field (cL2).
+      const double fBeta = cL3 * aBeta + cL2 * aPhi;
+      Cloc[e_beta()] += pt.w * dr2 * fBeta;
+      Kdat(e_beta(), i_vbeta()) += pt.w * dr2 * cL3;
+      for (int j = 0; j < 2; j++)
+        Kdat(e_beta(), i_vphi(Am[j])) += pt.w * dr2 * cL2 * Nm[j];
+      // phi momentum rows (skip pinned inner node): couple to beta (cL2), phi (cL1).
+      const double fPhi = cL2 * aBeta + cL1 * aPhi;
+      for (int i = 0; i < 2; i++) {
+        const int a = Am[i];
+        if (a == 0) continue;
+        Cloc[e_phi(a)] += pt.w * dr2 * Nm[i] * fPhi;
+        Kdat(e_phi(a), i_vbeta()) += pt.w * dr2 * Nm[i] * cL2;
+        for (int j = 0; j < 2; j++)
+          Kdat(e_phi(a), i_vphi(Am[j])) += pt.w * dr2 * Nm[i] * cL1 * Nm[j];
       }
     }
 

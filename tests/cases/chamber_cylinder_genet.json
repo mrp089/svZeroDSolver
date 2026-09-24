@@ -38,7 +38,7 @@
     "steady_initial": false,
     "output_variable_based": true,
     "absolute_tolerance": 1e-09,
-    "maximum_nonlinear_iterations": 50,
+    "maximum_nonlinear_iterations": 100,
     "output_all_cycles": false
   },
   "initial_condition": {

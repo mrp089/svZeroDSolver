@@ -151,13 +151,16 @@ def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
     # E-wave ~30 ms early).
     # Cavity/valve compliance Cvalve is a Genet add-on that has no place in the
     # Caruel valve+Windkessel topology (see docstring), so it is not modeled.
-    # Full dynamics (genet23 Eqs 8,18,45): the model is fully DYNAMICAL -- the
-    # inertia force rho_0*u_ddot (consistent mass matrix + velocity companion DOFs)
-    # with density rho_0 = 1 kg/L = 1000 (Table 1). For cardiac parameters the
-    # inertia is small (~1e-4 of the internal/pressure forces), so it barely shifts
-    # P/V and only modestly the twist. (genet23's own non-dissipative midpoint
-    # scheme is singular on this DAE, so the L-stable "stiff" integrator is used;
-    # the O(zeta_dot^2) convective term D2u is omitted, as in the kernel note.)
+    # Full dynamics (genet23 Eqs 8,10,18,45): the model is fully DYNAMICAL -- the
+    # linear inertia rho_0*u_ddot (consistent mass matrix + velocity companion DOFs)
+    # AND the O(zeta_dot^2) convective/centrifugal term D2u(zeta_dot,zeta_dot) (Eq 10:
+    # centrifugal on rho + Coriolis coupling on beta/phi) are both assembled in the
+    # kernel; density rho_0 = 1 kg/L = 1000 (Table 1). Inertia is ~1e-4 of the peak
+    # internal/pressure forces so it barely shifts P/V, but the twist untwist is
+    # inertia-SENSITIVE (weak diastolic twist restoring): at rho_0=1000 inertia
+    # already contributes ~+2.5 deg to tw@550 vs the massless limit. (genet23's own
+    # non-dissipative midpoint scheme is singular on this DAE, so the L-stable
+    # "stiff" integrator is used.)
     vv.update(dict(sigma_max=sigma_max,
                    num_elements=ne, bcs_alpha=bcs_alpha, density=density))
     # BCS activation nu(t) lives in a separate `activation_function` block
