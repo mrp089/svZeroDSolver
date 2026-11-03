@@ -1,15 +1,19 @@
 strict digraph {
 J0;
 V3;
+J1;
+V4;
 mitral;
 V1;
 aortic;
 V2;
 BC0_inlet;
 V0;
-BC3_outlet;
+BC4_outlet;
 J0 -> V3;
-V3 -> BC3_outlet;
+V3 -> J1;
+J1 -> V4;
+V4 -> BC4_outlet;
 mitral -> V1;
 V1 -> aortic;
 aortic -> V2;

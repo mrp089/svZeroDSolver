@@ -115,9 +115,11 @@
  * cardiac parameters inertia is \f$\sim\!10^{-4}\f$ of the internal/pressure
  * forces. It is complemented by the cavity volume
  * \f$V=\pi(R_i+\rho(R_i))^2(1+\varepsilon)L\f$, mass conservation
- * \f$Q_\text{in}-Q_\text{out}-\dot V = 0\f$, pressure equality
- * \f$P_\text{in}=P_\text{out}=P_v\f$, and the rigid-body pins
- * \f$\varphi(R_i)=\eta(R_i)=0\f$.
+ * \f$Q_\text{in}-Q_\text{out}-\dot V = 0\f$ and pressure equality
+ * \f$P_\text{in}=P_\text{out}=P_v\f$. Without inertia (`density` = 0) the rigid
+ * rotation and axial translation are removed by the pins
+ * \f$\varphi(R_i)=\eta(R_i)=0\f$; with inertia they are free and fixed by
+ * momentum conservation (\cite genet23 Sec. 2.4).
  *
  * ### Parameters
  *
@@ -312,6 +314,10 @@ class ChamberCylinder : public Block {
   int n_ele = 0;    ///< Number of finite elements through the wall
   int n_node = 0;   ///< Number of nodes (n_ele + 1)
   int n_quad = 0;   ///< Number of quadrature points through the wall
+  /// Rigid-body pins phi(R_i) = eta(R_i) = 0. genet23 (Sec 2.4) needs them only
+  /// in the static setting; with inertia (density > 0) the rigid rotation and
+  /// axial translation are free and governed by momentum conservation.
+  bool pin_rigid_ = true;
   int n_var = 0;    ///< Number of block variables (external + internal)
   int n_eqn = 0;    ///< Number of block equations
 

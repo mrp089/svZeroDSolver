@@ -294,6 +294,8 @@ void ChamberCylinder::setup_dofs(DOFHandler& dofhandler) {
       1, (int)std::lround(
              model->get_parameter_value(global_param_ids[ParamId::num_elements])));
   n_node = n_ele + 1;
+  pin_rigid_ =
+      model->get_parameter_value(global_param_ids[ParamId::density]) == 0.0;
 
   // Uniform nodes from endocardium (index 0, R_i) to epicardium (R_e).
   node_R.resize(n_node);
@@ -382,9 +384,14 @@ void ChamberCylinder::update_constant(SparseSystem& system,
   // Cavity volume definition: V - pi (R_i + rho_i)^2 (1+eps) L = 0 (linear V).
   system.F.coeffRef(global_eqn_ids[e_volume()], global_var_ids[i_vol()]) = 1.0;
 
-  // Rigid-body pins: phi(R_i) = 0 and eta(R_i) = 0 (inner node, index 0).
-  system.F.coeffRef(global_eqn_ids[e_phi(0)], global_var_ids[i_phi(0)]) = 1.0;
-  system.F.coeffRef(global_eqn_ids[e_eta(0)], global_var_ids[i_eta(0)]) = 1.0;
+  // Rigid-body pins phi(R_i) = 0 and eta(R_i) = 0 (inner node, index 0), only
+  // in the static setting (genet23 Sec 2.4: "These constraints are not
+  // necessary in the dynamic setting"). With inertia the rigid rotation and
+  // axial translation are free; momentum conservation fixes them.
+  if (pin_rigid_) {
+    system.F.coeffRef(global_eqn_ids[e_phi(0)], global_var_ids[i_phi(0)]) = 1.0;
+    system.F.coeffRef(global_eqn_ids[e_eta(0)], global_var_ids[i_eta(0)]) = 1.0;
+  }
 
   // --- Full dynamics: consistent mass matrix + velocity companion equations ---
   // (genet23 Eqs. 8,18,45; App. A.2 Eqs. A5-A6). The velocity field is the
@@ -420,16 +427,18 @@ void ChamberCylinder::update_constant(SparseSystem& system,
       Madd(e_beta(), i_vbeta(), cL3 * pt.w * R2);   // beta-beta
       Madd(e_eps(), i_veps(), cL3 * pt.w);          // eps-eps
       for (int i = 0; i < 2; i++) {
+        // phi_0/eta_0 momentum rows are replaced by the pins when pinned.
+        const bool free_row = !pin_rigid_ || A[i] != 0;
         Madd(e_beta(), i_vphi(A[i]), cL2 * pt.w * R2 * N[i]);  // beta-phi
         Madd(e_eps(), i_veta(A[i]), cL2 * pt.w * N[i]);        // eps-eta
-        if (A[i] != 0) {  // skip the pinned phi_0/eta_0 momentum rows
+        if (free_row) {
           Madd(e_phi(A[i]), i_vbeta(), cL2 * pt.w * R2 * N[i]);
           Madd(e_eta(A[i]), i_veps(), cL2 * pt.w * N[i]);
         }
         for (int j = 0; j < 2; j++) {
           const double mrr = cL1 * pt.w * N[i] * N[j];       // rho-rho / eta-eta
           Madd(e_rho(A[i]), i_vrho(A[j]), mrr);
-          if (A[i] != 0) {
+          if (free_row) {
             Madd(e_eta(A[i]), i_veta(A[j]), mrr);
             Madd(e_phi(A[i]), i_vphi(A[j]), cL1 * pt.w * R2 * N[i] * N[j]);
           }
@@ -588,9 +597,9 @@ void ChamberCylinder::update_solution(
     cvr[0][0] = i_rho(A0); cw[0][0] = N0; cvr[0][1] = i_rho(A1); cw[0][1] = N1; cn[0] = 2;
     req[1][0] = e_rho(A0); rw[1][0] = dN0; req[1][1] = e_rho(A1); rw[1][1] = dN1; rn[1] = 2;
     cvr[1][0] = i_rho(A0); cw[1][0] = dN0; cvr[1][1] = i_rho(A1); cw[1][1] = dN1; cn[1] = 2;
-    {  // phi': rows skip the pinned inner node
+    {  // phi': rows skip the inner node when it is pinned (static setting)
       int c = 0;
-      if (A0 != 0) { req[2][c] = e_phi(A0); rw[2][c] = dN0; c++; }
+      if (!pin_rigid_ || A0 != 0) { req[2][c] = e_phi(A0); rw[2][c] = dN0; c++; }
       req[2][c] = e_phi(A1); rw[2][c] = dN1; c++; rn[2] = c;
     }
     cvr[2][0] = i_phi(A0); cw[2][0] = dN0; cvr[2][1] = i_phi(A1); cw[2][1] = dN1; cn[2] = 2;
@@ -598,9 +607,9 @@ void ChamberCylinder::update_solution(
     cvr[3][0] = i_beta(); cw[3][0] = 1.0; cn[3] = 1;
     req[4][0] = e_eps(); rw[4][0] = 1.0; rn[4] = 1;
     cvr[4][0] = i_eps(); cw[4][0] = 1.0; cn[4] = 1;
-    {  // eta': rows skip the pinned inner node
+    {  // eta': rows skip the inner node when it is pinned (static setting)
       int c = 0;
-      if (A0 != 0) { req[5][c] = e_eta(A0); rw[5][c] = dN0; c++; }
+      if (!pin_rigid_ || A0 != 0) { req[5][c] = e_eta(A0); rw[5][c] = dN0; c++; }
       req[5][c] = e_eta(A1); rw[5][c] = dN1; c++; rn[5] = c;
     }
     cvr[5][0] = i_eta(A0); cw[5][0] = dN0; cvr[5][1] = i_eta(A1); cw[5][1] = dN1; cn[5] = 2;
@@ -632,17 +641,16 @@ void ChamberCylinder::update_solution(
     // phi_dot, contracting D2u (Eq 10) with the virtual velocity Du (Eq 9) and
     // integrating over Theta (2 pi) and Z (moments L, L^2/2, L^3/3) gives the forces
     // conjugate to the rho / phi / beta virtual fields below. Rates are the velocity
-    // companion DOFs (w = zeta_dot). Small (inertia ~1e-4 of the internal forces) but
-    // retained for exact genet23 dynamics. This O(zeta_dot^2) term keeps the
-    // reference radius R (the current-config (R+rho) correction is applied to the
-    // dominant linear mass only; the resulting error here is second order in
-    // zeta_dot and negligible).
+    // companion DOFs (w = zeta_dot). With a_c = 2 rho_dot w_om e_theta - (R+rho)
+    // w_om^2 e_r and the virtual velocity rho^ e_r + (beta^ Z + phi^)(R+rho) e_theta,
+    // every term carries one factor of the CURRENT radius R+rho.
     {
       const double rho0 = parameters[global_param_ids[ParamId::density]];
       const double Wr = N0 * Y(i_vrho(A0)) + N1 * Y(i_vrho(A1));  // rho_dot
       const double Wp = N0 * Y(i_vphi(A0)) + N1 * Y(i_vphi(A1));  // phi_dot
       const double Wb = Y(i_vbeta());                             // beta_dot
-      const double base = 2.0 * M_PI * rho0 * pt.R * pt.w;
+      const double c0 = 2.0 * M_PI * rho0 * pt.w;
+      const double base = c0 * (pt.R + rho);  // d(base)/d(rho) = c0
       const double L1 = Lp, L2 = Lp * Lp / 2.0, L3 = Lp * Lp * Lp / 3.0;
       const double Iw2 = Wb * Wb * L3 + 2.0 * Wb * Wp * L2 + Wp * Wp * L1;  // int w_om^2
       const double Qp = Wb * L2 + Wp * L1;   // int w_om
@@ -655,6 +663,7 @@ void ChamberCylinder::update_solution(
       for (int j = 0; j < 2; j++) {
         Kat(e_beta(), i_vrho(An[j])) += base * 2.0 * Nn[j] * Qb;
         Kat(e_beta(), i_vphi(An[j])) += base * 2.0 * Wr * L2 * Nn[j];
+        Kat(e_beta(), i_rho(An[j])) += c0 * Nn[j] * 2.0 * Wr * Qb;
       }
       for (int i = 0; i < 2; i++) {
         const int a = An[i];
@@ -662,16 +671,19 @@ void ChamberCylinder::update_solution(
         // rho: - (int w_om^2)
         Cloc[e_rho(a)] += -base * Iw2 * Na;
         Kat(e_rho(a), i_vbeta()) += -base * Na * (2.0 * Wb * L3 + 2.0 * Wp * L2);
-        for (int j = 0; j < 2; j++)
+        for (int j = 0; j < 2; j++) {
           Kat(e_rho(a), i_vphi(An[j])) +=
               -base * Na * (2.0 * Wb * L2 + 2.0 * Wp * L1) * Nn[j];
-        // phi (skip pinned inner node): + 2 rho_dot (int w_om)
-        if (a != 0) {
+          Kat(e_rho(a), i_rho(An[j])) += -c0 * Nn[j] * Iw2 * Na;
+        }
+        // phi (skip the inner node when pinned): + 2 rho_dot (int w_om)
+        if (!pin_rigid_ || a != 0) {
           Cloc[e_phi(a)] += base * 2.0 * Wr * Qp * Na;
           Kat(e_phi(a), i_vbeta()) += base * 2.0 * Wr * L2 * Na;
           for (int j = 0; j < 2; j++) {
             Kat(e_phi(a), i_vrho(An[j])) += base * 2.0 * Nn[j] * Qp * Na;
             Kat(e_phi(a), i_vphi(An[j])) += base * 2.0 * Wr * L1 * Nn[j] * Na;
+            Kat(e_phi(a), i_rho(An[j])) += c0 * Nn[j] * 2.0 * Wr * Qp * Na;
           }
         }
       }
@@ -690,8 +702,8 @@ void ChamberCylinder::update_solution(
     //
     // Jacobian: we deliberately OMIT the d(mass)/d(rho) coupling from dC_dy. That
     // term is a small, non-symmetric rho <-> momentum block (the mass depends on
-    // the radial position); keeping it tips the stiff cases (e.g.
-    // chamber_cylinder_mixed) past the Newton iteration limit. Dropping it is an
+    // the radial position); keeping it tipped stiff coarse-mesh cases past the
+    // Newton iteration limit. Dropping it is an
     // inexact-Newton choice: the RESIDUAL is still the exact current-config mass,
     // so the converged solution is unchanged (only the local convergence rate is,
     // and it stays robustly convergent). The total beta/phi mass is (R+rho)^2 > 0.
@@ -712,11 +724,11 @@ void ChamberCylinder::update_solution(
       Kdat(e_beta(), i_vbeta()) += pt.w * dr2 * cL3;
       for (int j = 0; j < 2; j++)
         Kdat(e_beta(), i_vphi(Am[j])) += pt.w * dr2 * cL2 * Nm[j];
-      // phi momentum rows (skip pinned inner node): couple to beta (cL2), phi (cL1).
+      // phi momentum rows (skip the inner node when pinned): beta (cL2), phi (cL1).
       const double fPhi = cL2 * aBeta + cL1 * aPhi;
       for (int i = 0; i < 2; i++) {
         const int a = Am[i];
-        if (a == 0) continue;
+        if (pin_rigid_ && a == 0) continue;
         Cloc[e_phi(a)] += pt.w * dr2 * Nm[i] * fPhi;
         Kdat(e_phi(a), i_vbeta()) += pt.w * dr2 * Nm[i] * cL2;
         for (int j = 0; j < 2; j++)
