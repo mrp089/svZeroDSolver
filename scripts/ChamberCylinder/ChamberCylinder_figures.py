@@ -2,8 +2,8 @@
 # University of California, and others. SPDX-License-Identifier: BSD-3-Clause
 """Reproduce the Genet (2023) Fig. 5-9 comparisons for the ChamberCylinder block.
 
-Each figure reads the *digitized* Genet traces stored in this repo
-(``scripts/genet23_fig{5..9}_digitized.csv``), runs the ChamberCylinder model for
+Each figure reads the *digitized* Genet traces stored next to this script
+(``genet23_fig{5..9}_digitized.csv``), runs the ChamberCylinder model for
 the matching case(s), and plots both in the paper's own layout: cavity pressure,
 cavity volume, PV loop and ventricular torsion, with the twin kPa/mmHg pressure
 axis. Solid = digitized Genet; dashed = our model. The digitized CSVs (not the
@@ -15,7 +15,9 @@ copyrighted figures) are the only paper data kept in the repo.
   Fig 8  wall volume           = 117 / 130 / 143 mL
   Fig 9  fiber angle  +-alpha  = 30 / 45 / 60 / 75 / 90 deg
 
-Run:  PYTHONPATH=build/python python scripts/ChamberCylinder_figures.py
+Run (from the repository root, after building the Python module):
+  PYTHONPATH=build/python python scripts/ChamberCylinder/ChamberCylinder_figures.py
+Writes fig5.png ... fig9.png to scripts/ChamberCylinder/output/.
 """
 import os
 import sys
@@ -27,16 +29,16 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-import pysvzerod
+import svzerod
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ChamberCylinder_genet_exact as G  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = os.path.join(HERE, "output")
 kPa = 1e-3
 MMHG_PER_KPA = 7.50062          # 14 kPa -> 105 mmHg (paper's right-hand axis)
 GAMMA_TABLE1 = 70.0             # genet23 Table 1 viscosity [Pa s]
-GAMMA_FIT = 240.0              # fit to the Fig 5 torsion untwist (RMS 3.4 -> 0.44 deg)
 
 # Spectral colors sampled from the paper renders; variations use them in order.
 CMAP = {'red': (213/255, 62/255, 80/255), 'orange': (248/255, 157/255, 91/255),
@@ -44,7 +46,9 @@ CMAP = {'red': (213/255, 62/255, 80/255), 'orange': (248/255, 157/255, 91/255),
         'blue': (46/255, 136/255, 189/255)}
 
 
-def run(overrides=None, ne=3, ncycle=10, gamma=GAMMA_TABLE1):
+# ne = 6 is within 0.2 mL of ne = 12 (torsion within 0.05 deg); 12 cycles reach
+# the periodic state to 0.01 mL from the all-pressures-at-P_at start.
+def run(overrides=None, ne=6, ncycle=12, gamma=GAMMA_TABLE1):
     """Run ChamberCylinder with the exact Table-1 build, optionally overriding a
     few vessel parameters (geometry or fiber angle) for a sensitivity case, and
     the wall viscosity gamma."""
@@ -58,7 +62,7 @@ def run(overrides=None, ne=3, ncycle=10, gamma=GAMMA_TABLE1):
                 np.pi * vv["Ri"] ** 2 * vv["length"])
     cfg["simulation_parameters"]["absolute_tolerance"] = 1e-6
     try:
-        out = pysvzerod.simulate(cfg)
+        out = svzerod.simulate(cfg)
     except Exception as e:  # pragma: no cover - diagnostic only
         print("  FAIL", str(e)[:70]); return None
 
@@ -82,7 +86,7 @@ def geom(aspect, Vint, Vwall):
     return dict(Ri=Ri, Re=np.sqrt(Ri ** 2 + Vwall / (np.pi * L)), length=L)
 
 
-# Baseline volumes from the Table-1 geometry (Ri=19, Re=33, L=57.1 mm).
+# Baseline internal and wall volumes (65 and 130 mL, genet23 Table 1).
 _d = G.build()["vessels"][1]["zero_d_element_values"]
 RI0, RE0, L0 = _d["Ri"], _d["Re"], _d["length"]
 VINT0 = np.pi * RI0 ** 2 * L0
@@ -214,7 +218,8 @@ def overlay(key, gamma=GAMMA_TABLE1, tag="", note=""):
     fig.suptitle(f"Genet (2023) {key.upper()} — solid: digitized paper   "
                  f"dashed: ChamberCylinder{note}", fontsize=12)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
-    fig.savefig(os.path.join(HERE, "..", f"{key}{tag}.png"), dpi=120, bbox_inches="tight")
+    os.makedirs(OUT, exist_ok=True)
+    fig.savefig(os.path.join(OUT, f"{key}{tag}.png"), dpi=120, bbox_inches="tight")
     plt.close(); print(f"  saved {key}{tag}.png")
 
 
@@ -245,7 +250,8 @@ def fig5(gamma=GAMMA_TABLE1, tag="", note=""):
     fig.suptitle(f"Genet (2023) FIG5 — solid: digitized paper   dashed: ChamberCylinder{note}",
                  fontsize=12)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
-    fig.savefig(os.path.join(HERE, "..", f"fig5{tag}.png"), dpi=120, bbox_inches="tight")
+    os.makedirs(OUT, exist_ok=True)
+    fig.savefig(os.path.join(OUT, f"fig5{tag}.png"), dpi=120, bbox_inches="tight")
     plt.close(); print(f"  saved fig5{tag}.png")
 
 

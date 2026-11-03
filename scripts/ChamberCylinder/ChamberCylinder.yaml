@@ -11,7 +11,8 @@
 # discretizes; it is NOT a code-generation input. The block implements the
 # single faithful genet23 configuration: Bestel-Clement-Sorine (BCS) active law,
 # ECG-derived activation nu(t), mixed u/p incompressibility, and full dynamics
-# (inertia). It is integrated with the L-stable "stiff" time integrator.
+# (inertia). With the BCS force-velocity term (bcs_alpha > 0) it needs the
+# L-stable "stiff" time integrator.
 
 # --- Kinematic unknowns (Eq. 1) ---
 # Radial fields (linear finite elements over R in [Ri, Re]):
@@ -57,8 +58,8 @@ constitutive_law: |
   #   mu e_c_dot = k_s (e_fib - e_c) - tau_c                 (series-spring balance)
   #   tau_c_dot  = -(|nu| + alpha|e_c_dot|) tau_c + e_c_dot k_c + n0(e_c) sigma0 |nu|_+
   #   k_c_dot    = -(|nu| + alpha|e_c_dot|) k_c   + n0(e_c) k0    |nu|_+
-  # nu = ECG-derived activation rate (nagumo waveform from tsys/tdias/act_qrs/
-  # act_ramp/alpha_max/alpha_min); alpha = bcs_alpha (Table-1 = 12); n0(e_c) = a
+  # nu = ECG-derived activation rate (nagumo waveform from tsys/tdias/qrs/ramp/
+  # alpha_max/alpha_min); alpha = bcs_alpha (Table-1 = 12); n0(e_c) = a
   # fixed piecewise-linear Frank-Starling recruitment factor. Writing sigma_1D
   # through tau_c + mu*e_c_dot keeps the stiff k_s (= 1e8) out of the mechanical
   # residual.
@@ -86,8 +87,10 @@ equations:
   # 7. BCS active internal-variable ODEs per quadrature point (see constitutive_law):
   #    e_c (series-spring balance), tau_c, k_c
   active_bcs: "mu*e_c_dot - [k_s(e_fib-e_c) - tau_c] = 0 ; tau_c_dot = ... ; k_c_dot = ..."
-  # 8. Rigid-body pins (Sec. 2.4): block Z-translation and Z-rotation
-  pins: "phi(Ri) = 0 ; eta(Ri) = 0"
+  # 8. Rigid-body pins (Sec. 2.4): block Z-translation and Z-rotation, only in
+  #    the static setting (density = 0); with inertia momentum conservation
+  #    fixes the rigid modes.
+  pins: "phi(Ri) = 0 ; eta(Ri) = 0   (density = 0 only)"
 
 # Numerical note: genet23 uses a bespoke energy-consistent midpoint scheme with a
 # mixed finite-element formulation. This block instead reuses the svZeroDSolver
@@ -95,4 +98,4 @@ equations:
 # maximal dissipation + damped-Newton line search + adaptive sub-stepping), which
 # is required to carry the stiff BCS law (k_s = 1e8). The one documented residual
 # is that the ventricular torsion untwists ~100 ms too early under the full
-# damping model; see ChamberCylinder_provenance for the analysis.
+# damping model; see ChamberCylinder_provenance.tex for the analysis.
