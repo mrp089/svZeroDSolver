@@ -1,17 +1,22 @@
 """Build the EXACT Genet 2023 valve + 2-stage Windkessel circulation around the
 ChamberCylinder, using only existing svZeroDSolver blocks:
-  PressureBC(Pat) -> upstream(tiny) -[mitral PiecewiseValve]-> ventricle(ChamberCylinder)
-    -[aortic PiecewiseValve]-> arterial(BloodVesselRC: Car,Rp) -> distal(BloodVesselRC: Cd,Rd) -> PressureBC(Pvs)
+  PressureBC(Pat) -> upstream(R=0,C=0) -[mitral PiecewiseValve]-> ventricle(ChamberCylinder)
+    -[aortic PiecewiseValve]-> aortic_root(C_ar) -> arterial(R_p, C_d) -> distal(R_d) -> PressureBC(Pvs)
 
 This is the Caruel et al. (2013, Biomech Model Mechanobiol 13:897-914) reduced
 circulation that Genet inherits. Caruel Eq 12 is the piecewise valve conductance
 law (filling K_at / isovolumic K_p / ejection K_ar), realized here by the
 svZeroDSolver PiecewiseValve (a diode resistor, Regazzoni 2022 Eq 16/22, with
-R=1/K). Caruel's "two-stage Windkessel" is the C-R-C-R ladder
-  C_p Pdot_ar + (P_ar - P_d)/R_p = Q            (proximal node)
-  C_d Pdot_d  + (P_d - P_ar)/R_p = (P_vs - P_d)/R_d   (distal node)
-which BloodVesselRC (C at inlet, R to outlet) reproduces exactly with the two
-stages in series: proximal Cp=C_ar, Rpd=R_p; distal Cp=C_d, Rpd=R_d.
+R=1/K). Genet Eq 36b-c is the C-R-C-R ladder
+  C_ar Pdot_ar + (P_ar - P_d)/R_p = Q_ao                (aortic-root node)
+  C_d  Pdot_d  + (P_d - P_ar)/R_p = (P_vs - P_d)/R_d    (distal node)
+built from BloodVessel blocks, whose capacitor sits at the OUTLET node
+(Q_in - Q_out = C dP_out/dt when L = 0): BloodVessel(R=0, C=C_ar) puts C_ar at
+the valve outlet, BloodVessel(R_p, C_d) then C_d at P_d, BloodVessel(R_d, 0).
+(BloodVesselRC is NOT usable here: it is a flow-through element with
+Q_in = Q_out whose capacitor stores no volume, so the distal node would receive
+the full valve flow instead of (P_ar - P_d)/R_p.) The upstream vessel only
+exists because valves connect blocks; R = C = 0 makes it a pass-through.
 
 Genet Table 1 valve/circulation parameters (SI):
   K_at^-1 = 1.1111e5, K_ar^-1 = 7.6923e4, K_iso^-1 = 2.0e9  (Pa.s.m^-3)
@@ -44,7 +49,18 @@ Car = 2.115e-10
 Cd = 2.0158e-8
 
 # Genet Table 1 geometry + material (baseline) — EXACT values, no fitting.
-GEOM = dict(Ri=0.019, Re=0.033, length=0.0571, alpha_endo=60.0, alpha_epi=-60.0)
+# Table 1 defines the geometry by chamber volume 65 mL, wall volume 130 mL and
+# aspect ratio L/2Ri = 1.5; its radii/length (19.0, 33.0, 57.1 mm; thickness
+# 13.9 mm) are these values rounded. Using the rounded ones would give 64.76 mL,
+# 130.6 mL and 14.0 mm, so the geometry is derived from the defining volumes.
+V_INT, V_WALL, ASPECT = 65e-6, 130e-6, 1.5
+_RI = (V_INT / (2.0 * math.pi * ASPECT)) ** (1.0 / 3.0)  # 19.03 mm
+_L = 2.0 * ASPECT * _RI                                    # 57.10 mm
+_RE = math.sqrt(_RI ** 2 + V_WALL / (math.pi * _L))        # 32.97 mm
+GEOM = dict(Ri=_RI, Re=_RE, length=_L, alpha_endo=60.0, alpha_epi=-60.0)
+# |e_c dot| enters the BCS decay exactly (Eq 33); the kernel's default 1e-4
+# smoothing eps is a Newton aid, reduced here to a numerically inert value.
+FV_REG = 1e-10
 MAT = dict(C1=7.0, C2=0.0, C3=700.0, C4=2.0, C5=50.0, C6=4.0, gamma=70.0,
            k_s=1e8, k_0=260e3, mu=70.0)
 # Genet enforces incompressibility with a mixed u/p Lagrange-multiplier pressure,
@@ -161,8 +177,11 @@ def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
     # already contributes ~+2.5 deg to tw@550 vs the massless limit. (genet23's own
     # non-dissipative midpoint scheme is singular on this DAE, so the L-stable
     # "stiff" integrator is used.)
-    vv.update(dict(sigma_max=sigma_max,
-                   num_elements=ne, bcs_alpha=bcs_alpha, density=density))
+    vv.update(dict(sigma_max=sigma_max, num_elements=ne, bcs_alpha=bcs_alpha,
+                   density=density, fv_reg=FV_REG))
+    # Rigid-body pins: the kernel default (rigid_pins = -1) leaves phi(R_i) and
+    # eta(R_i) free whenever density > 0, as in genet23 Sec 2.4 ("not necessary
+    # in the dynamic setting").
     # BCS activation nu(t) lives in a separate `activation_function` block
     # (type "nagumo", the ChamberCylinder's only activation law); the six knee
     # parameters below drive the ECG-derived piecewise-linear waveform.
@@ -183,33 +202,41 @@ def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
         ],
         "simulation_parameters": {
             "number_of_cardiac_cycles": ncycle,
-            "number_of_time_pts_per_cardiac_cycle": 800,  # dt=1 ms (genet23 sec 3.1)
+            # 801 points = 800 steps of exactly 1 ms (genet23 Sec 3.1)
+            "number_of_time_pts_per_cardiac_cycle": 801,
             "cardiac_period": 0.8, "steady_initial": False,
             "output_variable_based": True, "absolute_tolerance": 1e-9,
             "maximum_nonlinear_iterations": 50, "output_all_cycles": False,
             "integrator": integrator, "rho_infty": rho_infty,
         },
-        "initial_condition": {"pressure_all": P_at, "volume:ventricle": 6.5e-5},
+        # Unloaded reference geometry at rest (rho = eps = 0), so the consistent
+        # cavity volume is pi Ri^2 L. genet23 preloads statically to P_at and does
+        # not state the arterial initial pressures; with all pressures starting at
+        # P_at the arterial transient (R_d C_d = 2.2 s) is periodic by ~cycle 12.
+        "initial_condition": {"pressure_all": P_at,
+                              "volume:ventricle": math.pi * vv["Ri"] ** 2 * vv["length"]},
         "vessels": [
             {"boundary_conditions": {"inlet": "ATRIUM"}, "vessel_id": 0,
              "vessel_length": 1.0, "vessel_name": "upstream",
              "zero_d_element_type": "BloodVessel",
-             "zero_d_element_values": {"R_poiseuille": 1000.0, "C": 1e-12}},
+             "zero_d_element_values": {"R_poiseuille": 0.0, "C": 0.0}},
             {"boundary_conditions": {}, "vessel_id": 1, "vessel_length": 1.0,
              "vessel_name": "ventricle", "zero_d_element_type": "ChamberCylinder",
              "zero_d_element_values": vv, "activation_function": activation},
-            # proximal stage (Caruel first Windkessel eq): C_p=C_ar at the aortic
-            # root, then R_p to the distal stage. C_p is C_ar ALONE -- Cvalve is
-            # NOT added here (see module docstring: it destroys the proximal time
-            # constant and is absent from Caruel).
+            # Eq 36b: C_ar at the aortic-valve outlet node P_ar (C_ar ALONE --
+            # Cvalve is not modeled, see module docstring).
             {"boundary_conditions": {}, "vessel_id": 2, "vessel_length": 1.0,
-             "vessel_name": "arterial", "zero_d_element_type": "BloodVesselRC",
-             "zero_d_element_values": {"Rpd": Rp, "Cp": Car}},
-            # distal stage (Caruel second Windkessel eq): Cd, Rd -> venous
-            {"boundary_conditions": {"outlet": "VENOUS"}, "vessel_id": 3,
+             "vessel_name": "aortic_root", "zero_d_element_type": "BloodVessel",
+             "zero_d_element_values": {"R_poiseuille": 0.0, "C": Car}},
+            # Eq 36b-c: R_p from P_ar to P_d, C_d at P_d.
+            {"boundary_conditions": {}, "vessel_id": 3, "vessel_length": 1.0,
+             "vessel_name": "arterial", "zero_d_element_type": "BloodVessel",
+             "zero_d_element_values": {"R_poiseuille": Rp, "C": Cd}},
+            # Eq 36c: R_d from P_d to the venous pressure P_vs.
+            {"boundary_conditions": {"outlet": "VENOUS"}, "vessel_id": 4,
              "vessel_length": 1.0, "vessel_name": "distal",
-             "zero_d_element_type": "BloodVesselRC",
-             "zero_d_element_values": {"Rpd": Rd, "Cp": Cd}},
+             "zero_d_element_type": "BloodVessel",
+             "zero_d_element_values": {"R_poiseuille": Rd, "C": 0.0}},
         ],
         "valves": [
             {"type": "PiecewiseValve", "name": "mitral",
@@ -217,9 +244,11 @@ def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
                         "upstream_block": "upstream", "downstream_block": "ventricle"}},
             {"type": "PiecewiseValve", "name": "aortic",
              "params": {"Rmax": aortic_Rmax, "Rmin": K_ar_inv,
-                        "upstream_block": "ventricle", "downstream_block": "arterial"}},
+                        "upstream_block": "ventricle", "downstream_block": "aortic_root"}},
         ],
         "junctions": [
+            {"junction_name": "J_root", "junction_type": "NORMAL_JUNCTION",
+             "inlet_blocks": ["aortic_root"], "outlet_blocks": ["arterial"]},
             {"junction_name": "J_ar", "junction_type": "NORMAL_JUNCTION",
              "inlet_blocks": ["arterial"], "outlet_blocks": ["distal"]},
         ],

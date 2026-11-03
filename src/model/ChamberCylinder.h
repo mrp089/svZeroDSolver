@@ -197,7 +197,38 @@ class ChamberCylinder : public Block {
     mu,            // BCS active dissipation
     bcs_alpha,     // BCS activation rate constant (paper's alpha)
     density,       // reference mass density rho_0 (inertia, genet23 Eq. 18)
-    fv_reg         // BCS force-velocity regularizer (|e_c dot| smoothing eps)
+    fv_reg,        // BCS force-velocity regularizer (|e_c dot| smoothing eps)
+    // Literal readings of genet23 that disagree with its continuous model
+    // (diagnostics; the defaults reproduce the continuous model, Eqs 8-45):
+    vmem_dt,             // A7/A9 Z-independent velocity memory at step dt [s]; 0 = off
+    active_stretch_pow,  // sigma_1D = T_fib/(1+e_fib)^pow; 1 = Eq 30, 2 = Eq 59 limit
+    inertia_metric,      // 1 = inertia over R dR (Eq 18); 0 = A7 as printed (dR)
+    rigid_pins,          // -1 = auto (pinned iff density == 0), 0 = free, 1 = pinned
+    tauc_alpha,          // alpha in the tau_c decay (Eq 33); -1 = bcs_alpha. Chapelle
+                         // 2012 Eq 26 as printed is equivalent to (bcs_alpha + 1)/2
+    // Alternative formulations from the INRIA literature (diagnostics; the
+    // defaults reproduce genet23):
+    series_law,          // 0 additive engineering (genet23), 1 multiplicative GL (Chapelle 2012)
+    starling_out,        // 0 n0 on sources (genet23), 1 d(e_c) on the tension (Sainte-Marie 2006)
+    visc_mode,           // 0 gamma E_dot (Eq 28), 1 gamma tr(E_dot) I (literal (tr e_dot)^2)
+    act_delay,           // transmural activation delay [s]; >0 endo->epi (Chabiniok 2012)
+    support_ends,        // end-cap tangential support: 0 off, 1 base, 2 apex, 3 both
+    support_k,           // its spring [Pa/m]
+    support_c,           // its dashpot [Pa s/m]
+    // passive law: 0 genet23 Eq 25 (C1-C6), 1 Fung exponential in the fiber
+    // basis (f, r, n) (Guccione 1991/1995, Genet 2014, Lee 2014, Xi 2011),
+    // 2 Holzapfel-Ogden (Pfaller 2019, Asner 2015, Nordsletten 2021)
+    passive_law,
+    fung_C, fung_blin, fung_bff, fung_brr, fung_bnn, fung_bfr, fung_bfn, fung_brn,
+    ho_a, ho_b, ho_af, ho_bf, ho_as, ho_bs, ho_afs, ho_bfs,
+    ho_sheet,            // HO sheet vector: 0 transmural e_R, 1 in-plane e_F x e_R (Pfaller 2019)
+    // visc_mode = 2: Kelvin-Voigt gamma_ab in the fiber basis (Nordsletten 2021)
+    gam_ff, gam_rr, gam_nn, gam_fr, gam_fn, gam_rn,
+    // epicardial spring-dashpot support [Pa/m, Pa s/m]: normal (Pfaller 2019
+    // Eq 5), circumferential and axial (Moireau 2011 Eq 9)
+    epi_kn, epi_cn, epi_kt, epi_ct, epi_kz, epi_cz,
+    vmem_mask,           // vmem_dt components: bit 0 in-plane (twist), bit 1 axial; 3 = both
+    twist_c              // probe: generalized dashpot D beta_dot on the twist equation [N m^3 s]
   };
 
   /**
@@ -227,7 +258,51 @@ class ChamberCylinder : public Block {
                {"mu", InputParameter(true, false, true, 70.0)},
                {"bcs_alpha", InputParameter(true, false, true, 0.0)},
                {"density", InputParameter(true, false, true, 1000.0)},
-               {"fv_reg", InputParameter(true, false, true, 1.0e-4)}}) {}
+               {"fv_reg", InputParameter(true, false, true, 1.0e-4)},
+               {"vmem_dt", InputParameter(true, false, true, 0.0)},
+               {"active_stretch_pow", InputParameter(true, false, true, 1.0)},
+               {"inertia_metric", InputParameter(true, false, true, 1.0)},
+               {"rigid_pins", InputParameter(true, false, true, -1.0)},
+               {"tauc_alpha", InputParameter(true, false, true, -1.0)},
+               {"series_law", InputParameter(true, false, true, 0.0)},
+               {"starling_out", InputParameter(true, false, true, 0.0)},
+               {"visc_mode", InputParameter(true, false, true, 0.0)},
+               {"act_delay", InputParameter(true, false, true, 0.0)},
+               {"support_ends", InputParameter(true, false, true, 0.0)},
+               {"support_k", InputParameter(true, false, true, 0.0)},
+               {"support_c", InputParameter(true, false, true, 0.0)},
+               {"passive_law", InputParameter(true, false, true, 0.0)},
+               {"fung_C", InputParameter(true, false, true, 0.0)},
+               {"fung_blin", InputParameter(true, false, true, 0.0)},
+               {"fung_bff", InputParameter(true, false, true, 0.0)},
+               {"fung_brr", InputParameter(true, false, true, 0.0)},
+               {"fung_bnn", InputParameter(true, false, true, 0.0)},
+               {"fung_bfr", InputParameter(true, false, true, 0.0)},
+               {"fung_bfn", InputParameter(true, false, true, 0.0)},
+               {"fung_brn", InputParameter(true, false, true, 0.0)},
+               {"ho_a", InputParameter(true, false, true, 0.0)},
+               {"ho_b", InputParameter(true, false, true, 1.0)},
+               {"ho_af", InputParameter(true, false, true, 0.0)},
+               {"ho_bf", InputParameter(true, false, true, 1.0)},
+               {"ho_as", InputParameter(true, false, true, 0.0)},
+               {"ho_bs", InputParameter(true, false, true, 1.0)},
+               {"ho_afs", InputParameter(true, false, true, 0.0)},
+               {"ho_bfs", InputParameter(true, false, true, 1.0)},
+               {"ho_sheet", InputParameter(true, false, true, 0.0)},
+               {"gam_ff", InputParameter(true, false, true, 0.0)},
+               {"gam_rr", InputParameter(true, false, true, 0.0)},
+               {"gam_nn", InputParameter(true, false, true, 0.0)},
+               {"gam_fr", InputParameter(true, false, true, 0.0)},
+               {"gam_fn", InputParameter(true, false, true, 0.0)},
+               {"gam_rn", InputParameter(true, false, true, 0.0)},
+               {"epi_kn", InputParameter(true, false, true, 0.0)},
+               {"epi_cn", InputParameter(true, false, true, 0.0)},
+               {"epi_kt", InputParameter(true, false, true, 0.0)},
+               {"epi_ct", InputParameter(true, false, true, 0.0)},
+               {"epi_kz", InputParameter(true, false, true, 0.0)},
+               {"epi_cz", InputParameter(true, false, true, 0.0)},
+               {"vmem_mask", InputParameter(true, false, true, 3.0)},
+               {"twist_c", InputParameter(true, false, true, 0.0)}}) {}
 
   /**
    * @brief Set up the degrees of freedom (DOF) of the block
@@ -312,6 +387,10 @@ class ChamberCylinder : public Block {
   int n_ele = 0;    ///< Number of finite elements through the wall
   int n_node = 0;   ///< Number of nodes (n_ele + 1)
   int n_quad = 0;   ///< Number of quadrature points through the wall
+  /// Rigid-body pins phi(R_i) = eta(R_i) = 0. genet23 (Sec 2.4) needs them only
+  /// in the static setting; with inertia (density > 0) the rigid rotation and
+  /// axial translation are free and governed by momentum conservation.
+  bool pin_rigid_ = true;
   int n_var = 0;    ///< Number of block variables (external + internal)
   int n_eqn = 0;    ///< Number of block equations
 
@@ -330,6 +409,12 @@ class ChamberCylinder : public Block {
     double dN[2];     ///< Shape function radial derivatives
   };
   std::vector<QuadPoint> quad;  ///< Quadrature points across the thickness
+
+  /// Quadrature weight for the inertia terms: the cylindrical measure R dR
+  /// (inertia_metric = 1, Eq 18) or dR as printed in genet23 App. A7
+  /// (inertia_metric = 0).
+  double inertia_weight(const QuadPoint& pt,
+                        const std::vector<double>& parameters) const;
 
   // --- Local variable / equation index helpers ---
   // Layout:
@@ -388,6 +473,9 @@ class ChamberCylinder : public Block {
 
   double act = 0.0;       ///< Activation rate a(t) (= |nu| for the BCS input)
   double act_plus = 0.0;  ///< max(a(t), 0) (= |nu|_+ for the BCS input)
+  /// Per-quadrature-point |nu|, |nu|_+ (differ from act/act_plus only with a
+  /// transmural activation delay, parameter act_delay).
+  std::vector<double> act_q, act_plus_q;
 
   /// Activation function nu(t) driving the BCS active law (type `nagumo`).
   std::unique_ptr<ActivationFunction> activation_function_;

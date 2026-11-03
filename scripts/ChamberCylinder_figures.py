@@ -44,7 +44,9 @@ CMAP = {'red': (213/255, 62/255, 80/255), 'orange': (248/255, 157/255, 91/255),
         'blue': (46/255, 136/255, 189/255)}
 
 
-def run(overrides=None, ne=3, ncycle=10, gamma=GAMMA_TABLE1):
+# ne = 6 is within 0.2 mL of ne = 12 (torsion within 0.05 deg); 12 cycles reach
+# the periodic state to 0.01 mL from the all-pressures-at-P_at start.
+def run(overrides=None, ne=6, ncycle=12, gamma=GAMMA_TABLE1):
     """Run ChamberCylinder with the exact Table-1 build, optionally overriding a
     few vessel parameters (geometry or fiber angle) for a sensitivity case, and
     the wall viscosity gamma."""
