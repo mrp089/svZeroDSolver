@@ -19,6 +19,7 @@ void TimeIntegrator::init(Model* model, double time_step_size, double rho,
   size = model->dofhandler.size();
   system = SparseSystem(size);
   this->time_step_size = time_step_size;
+  this->model->set_time_step_size(time_step_size);
   this->atol = atol;
   this->max_iter = max_iter;
   this->max_iter_error_to_warning = max_iter_error_to_warning;
@@ -33,6 +34,7 @@ void TimeIntegrator::clean() { system.clean(); }
 
 void TimeIntegrator::update_params(double time_step_size) {
   this->time_step_size = time_step_size;
+  model->set_time_step_size(time_step_size);
   model->update_constant(system);
   model->update_time(system, 0.0);
 }
@@ -94,11 +96,13 @@ State GeneralizedAlpha::step(const State& old_state, double time) {
     // Abort if maximum number of non-linear iterations is reached
     else if (i == max_iter - 1) {
       if (max_iter_error_to_warning) {
-        std::cout << "Warning: Maximum number of non-linear iterations reached at time " << time << std::endl;
+        std::cout << "Warning: Maximum number of non-linear iterations reached "
+                     "at time "
+                  << time << std::endl;
       } else {
         throw std::runtime_error(
-          "Maximum number of non-linear iterations reached at time " +
-          std::to_string(time));
+            "Maximum number of non-linear iterations reached at time " +
+            std::to_string(time));
       }
     }
 
@@ -118,7 +122,7 @@ State GeneralizedAlpha::step(const State& old_state, double time) {
     // Count total number of nonlinear iterations
     n_nonlin_iter++;
   }
-
+  model->accept_timestep(new_state.y);
   return new_state;
 }
 
@@ -205,6 +209,9 @@ State ConsistentStiffIntegrator::step(const State& old_state, double time) {
       st = next;
     }
     if (ok) {
+      // Blocks with persistent memory (e.g. ImpedanceBC) see one accepted step
+      // of the nominal size; they assume no sub-stepping.
+      model->accept_timestep(st.y);
       return st;
     }
   }
