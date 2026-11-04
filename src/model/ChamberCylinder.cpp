@@ -45,7 +45,7 @@ inline T clamp_max(T x, double m) {
 /// Material parameters passed to the continuum kernel.
 struct MatParams {
   double C1, C2, C3, C4, C5, C6, gamma;
-  double p_mix = 0.0;    ///< mixed u/p element hydrostatic pressure
+  double p_mix = 0.0;  ///< mixed u/p element hydrostatic pressure
 };
 
 /// Active-stress input at an integration point (Genet BCS): bond stress `tauc`
@@ -83,9 +83,9 @@ template <typename T>
 Kinematics<T> compute_kinematics(const T xi[6], double R) {
   const T rho = xi[0], drho = xi[1], dphi = xi[2];
   const T beta = xi[3], eps = xi[4], deta = xi[5];
-  const T a = 1.0 + drho;      // radial stretch F_RR
-  const T b = 1.0 + rho / R;   // circumferential stretch F_ThTh
-  const T e = 1.0 + eps;       // longitudinal stretch F_ZZ
+  const T a = 1.0 + drho;     // radial stretch F_RR
+  const T b = 1.0 + rho / R;  // circumferential stretch F_ThTh
+  const T e = 1.0 + eps;      // longitudinal stretch F_ZZ
 
   Kinematics<T> k;
   // Right Cauchy-Green tensor in the orthonormal (e_R, e_Th, e_Z) basis.
@@ -188,22 +188,21 @@ Mat3<T> compute_stress(const Kinematics<T>& k, const T xidot[6],
   const T w1 =
       p.C1 + 2.0 * p.C3 * p.C4 * (I1b - 3.0) * std::exp(clamp_max(a1, 300.0));
   const T w2 = T(p.C2);
-  const T w4 =
-      2.0 * p.C5 * p.C6 * (I4b - 1.0) * std::exp(clamp_max(a4, 300.0));
+  const T w4 = 2.0 * p.C5 * p.C6 * (I4b - 1.0) * std::exp(clamp_max(a4, 300.0));
 
   // d(isochoric invariant)/dC
   const Mat3<T> dI1b = Jm23 * (I - (I1 / 3.0) * Cinv);
   const Mat3<T> dI2b = Jm43 * (I1 * I - C - (2.0 / 3.0) * I2 * Cinv);
   const Mat3<T> dI4b = Jm23 * (M - (I4 / 3.0) * Cinv);
 
-  Mat3<T> Sd = 2.0 * (w1 * dI1b + w2 * dI2b + w4 * dI4b);   // deviatoric
+  Mat3<T> Sd = 2.0 * (w1 * dI1b + w2 * dI2b + w4 * dI4b);  // deviatoric
   // Bulk (incompressibility) 2nd-PK stress Sigma^b = p_mix J C^{-1}, with p_mix
   // the element hydrostatic pressure (mixed u/p; held fixed under the xi
   // complex-step, its column is added analytically).
   const T bulk = T(p.p_mix);
-  Mat3<T> Sb = bulk * J * Cinv;                            // bulk
+  Mat3<T> Sb = bulk * J * Cinv;  // bulk
 
-  Mat3<T> Edot = Mat3<T>::Zero();                           // viscous
+  Mat3<T> Edot = Mat3<T>::Zero();  // viscous
   for (int m = 0; m < 6; m++) Edot += k.dE[m] * xidot[m];
   Mat3<T> Sv = p.gamma * Edot;
 
@@ -232,10 +231,11 @@ void compute_g(const T xi[6], const T xidot[6], const ActiveInput& act,
 /// actin-myosin overlap (length-tension) relationship: n_0 rises from 0,
 /// plateaus at 1 over the physiological contractile strain e_c in [0.20, 0.47],
 /// and falls back to 0. The default breakpoints are the MEDISIM PhysioBlocks
-/// reference values (see ChamberCylinder::n0_ec_/n0_val_), overridable per block.
-/// NOTE: the plateau sits at e_c ~ 0.2, not ~1 as Caruel Fig. 7(a) suggests -
-/// that figure is drawn over the wide isotonic papillary-muscle strain range.
-/// X, Y are the (double) breakpoints; e_c may be complex (complex-step).
+/// reference values (see ChamberCylinder::n0_ec_/n0_val_), overridable per
+/// block. NOTE: the plateau sits at e_c ~ 0.2, not ~1 as Caruel Fig. 7(a)
+/// suggests - that figure is drawn over the wide isotonic papillary-muscle
+/// strain range. X, Y are the (double) breakpoints; e_c may be complex
+/// (complex-step).
 template <typename T>
 inline T frank_starling(T e_c, const std::vector<double>& X,
                         const std::vector<double>& Y) {
@@ -254,7 +254,8 @@ inline T frank_starling(T e_c, const std::vector<double>& X,
 /// BCS active-law parameters.
 struct BcsParams {
   double k_s, k_0, mu, alpha, sigma0;
-  double fv_reg = 1e-4;  ///< force-velocity regularizer eps (|e_c dot| smoothing)
+  double fv_reg =
+      1e-4;  ///< force-velocity regularizer eps (|e_c dot| smoothing)
 };
 
 /// Residuals of the BCS internal-variable ODEs (Genet Eqs. 32-33 / Chapelle
@@ -262,8 +263,8 @@ struct BcsParams {
 /// contractile-element strain rate is e_c_dot = ad[0]. n0_x/n0_y are the
 /// Frank-Starling force-length breakpoints passed to frank_starling().
 template <typename T>
-void bcs_residual(const T a[], const T ad[], T e_fib,
-                  double nu_abs, double nu_plus, const BcsParams& bp,
+void bcs_residual(const T a[], const T ad[], T e_fib, double nu_abs,
+                  double nu_plus, const BcsParams& bp,
                   const std::vector<double>& n0_x,
                   const std::vector<double>& n0_y, T res[]) {
   const T ecdot = ad[0];
@@ -290,9 +291,8 @@ void ChamberCylinder::setup_dofs(DOFHandler& dofhandler) {
       model->get_parameter_value(global_param_ids[ParamId::alpha_endo]);
   const double a_epi =
       model->get_parameter_value(global_param_ids[ParamId::alpha_epi]);
-  n_ele = std::max(
-      1, (int)std::lround(
-             model->get_parameter_value(global_param_ids[ParamId::num_elements])));
+  n_ele = std::max(1, (int)std::lround(model->get_parameter_value(
+                          global_param_ids[ParamId::num_elements])));
   n_node = n_ele + 1;
   pin_rigid_ =
       model->get_parameter_value(global_param_ids[ParamId::density]) == 0.0;
@@ -328,9 +328,12 @@ void ChamberCylinder::setup_dofs(DOFHandler& dofhandler) {
 
   // Internal variables: rho/phi/eta fields, beta, eps, active block, volume.
   std::list<std::string> int_names;
-  for (int a = 0; a < n_node; a++) int_names.push_back("rho_" + std::to_string(a));
-  for (int a = 0; a < n_node; a++) int_names.push_back("phi_" + std::to_string(a));
-  for (int a = 0; a < n_node; a++) int_names.push_back("eta_" + std::to_string(a));
+  for (int a = 0; a < n_node; a++)
+    int_names.push_back("rho_" + std::to_string(a));
+  for (int a = 0; a < n_node; a++)
+    int_names.push_back("phi_" + std::to_string(a));
+  for (int a = 0; a < n_node; a++)
+    int_names.push_back("eta_" + std::to_string(a));
   int_names.push_back("beta");
   int_names.push_back("eps");
   // Genet BCS active block: e_c, tau_c, k_c per quadrature point.
@@ -343,9 +346,12 @@ void ChamberCylinder::setup_dofs(DOFHandler& dofhandler) {
 
   // Full dynamics: velocity companion fields w = d(field)/dt (genet23 Eqs. 8,
   // 18, 45, A5-A6). Appended after the volume DOF.
-  for (int a = 0; a < n_node; a++) int_names.push_back("vrho_" + std::to_string(a));
-  for (int a = 0; a < n_node; a++) int_names.push_back("vphi_" + std::to_string(a));
-  for (int a = 0; a < n_node; a++) int_names.push_back("veta_" + std::to_string(a));
+  for (int a = 0; a < n_node; a++)
+    int_names.push_back("vrho_" + std::to_string(a));
+  for (int a = 0; a < n_node; a++)
+    int_names.push_back("vphi_" + std::to_string(a));
+  for (int a = 0; a < n_node; a++)
+    int_names.push_back("veta_" + std::to_string(a));
   int_names.push_back("vbeta");
   int_names.push_back("veps");
 
@@ -362,8 +368,8 @@ void ChamberCylinder::setup_dofs(DOFHandler& dofhandler) {
   Block::setup_dofs_(dofhandler, n_eqn, int_names);
   n_var = 4 + 3 * n_node + 2 + n_active_var() + 1 + n_vel + n_pmix;
 
-  // Dense block for dC_dy and dC_dydot; a few linear entries for F/E. (These are
-  // reservation estimates only; see SparseSystem::reserve.)
+  // Dense block for dC_dy and dC_dydot; a few linear entries for F/E. (These
+  // are reservation estimates only; see SparseSystem::reserve.)
   num_triplets.D = n_eqn * n_var;
   num_triplets.F = 6 * n_node + 20;
   num_triplets.E = 21 * n_node + 8;  // consistent mass + velocity companions
@@ -372,10 +378,11 @@ void ChamberCylinder::setup_dofs(DOFHandler& dofhandler) {
 void ChamberCylinder::update_constant(SparseSystem& system,
                                       std::vector<double>& parameters) {
   // Mass conservation: Qin - Qout - Vdot = 0 (Vdot handled in update_solution).
-  // The BCS model puts all of its active rate terms in the nonlinear residual C,
-  // so it needs no E/F entries here.
-  system.F.coeffRef(global_eqn_ids[e_mass()], global_var_ids[1]) = 1.0;   // Qin
-  system.F.coeffRef(global_eqn_ids[e_mass()], global_var_ids[3]) = -1.0;  // Qout
+  // The BCS model puts all of its active rate terms in the nonlinear residual
+  // C, so it needs no E/F entries here.
+  system.F.coeffRef(global_eqn_ids[e_mass()], global_var_ids[1]) = 1.0;  // Qin
+  system.F.coeffRef(global_eqn_ids[e_mass()], global_var_ids[3]) =
+      -1.0;  // Qout
 
   // Pressure equality: Pin - Pout = 0.
   system.F.coeffRef(global_eqn_ids[e_pressure()], global_var_ids[0]) = 1.0;
@@ -393,7 +400,7 @@ void ChamberCylinder::update_constant(SparseSystem& system,
     system.F.coeffRef(global_eqn_ids[e_eta(0)], global_var_ids[i_eta(0)]) = 1.0;
   }
 
-  // --- Full dynamics: consistent mass matrix + velocity companion equations ---
+  // --- Full dynamics: consistent mass + velocity companion equations ---
   // (genet23 Eqs. 8,18,45; App. A.2 Eqs. A5-A6). The velocity field is the
   // push-forward v = Du[zeta] zeta_dot; introducing companion DOFs w = zeta_dot
   // turns the 2nd-order system into 1st order. The inertia force on field k is
@@ -401,22 +408,24 @@ void ChamberCylinder::update_constant(SparseSystem& system,
   // Du (Eq. A5) is orthogonal between the radial/azimuthal (rho,phi,beta) and
   // axial (eta,eps) groups, so after integrating Theta (2 pi) and Z the only
   // couplings are rho-rho, eta-eta, phi-phi, eps-eps, beta-beta, phi-beta and
-  // eta-eps. The reference-configuration (R) part of the mass is assembled here;
-  // the state-dependent current-config correction R^2 -> (R+rho)^2 for the
-  // beta/phi moment arms (genet23 Eq A5) is added as a nonlinear inertia force in
-  // update_solution (see "Current-configuration inertia correction"). Inertia is
-  // ~1e-4 of the peak internal/pressure forces but the twist untwist is inertia-
-  // sensitive. The O(zeta_dot^2) centrifugal term D2u(zd,zd) is likewise a
-  // nonlinear force in update_solution (see "Convective inertia").
+  // eta-eps. The reference-configuration (R) part of the mass is assembled
+  // here; the state-dependent current-config correction R^2 -> (R+rho)^2 for
+  // the beta/phi moment arms (genet23 Eq A5) is added as a nonlinear inertia
+  // force in update_solution (see "Current-configuration inertia correction").
+  // Inertia is ~1e-4 of the peak internal/pressure forces but the twist untwist
+  // is inertia-sensitive. The O(zeta_dot^2) centrifugal term D2u(zd,zd) is
+  // likewise a nonlinear force in update_solution (see "Convective inertia").
   {
     const double rho0 = parameters[global_param_ids[ParamId::density]];
     const double Lp = parameters[global_param_ids[ParamId::length]];
-    const double cL1 = rho0 * 2.0 * M_PI * Lp;                    // int_Z 1  = L
-    const double cL2 = rho0 * 2.0 * M_PI * Lp * Lp / 2.0;         // int_Z Z  = L^2/2
-    const double cL3 = rho0 * 2.0 * M_PI * Lp * Lp * Lp / 3.0;    // int_Z Z^2= L^3/3
+    const double cL1 = rho0 * 2.0 * M_PI * Lp;             // int_Z 1  = L
+    const double cL2 = rho0 * 2.0 * M_PI * Lp * Lp / 2.0;  // int_Z Z  = L^2/2
+    const double cL3 =
+        rho0 * 2.0 * M_PI * Lp * Lp * Lp / 3.0;  // int_Z Z^2= L^3/3
     // Accumulate the mass over quadrature points into a local map, then ASSIGN
     // (=) to the sparse system: update_constant may be called multiple times
-    // (e.g. per step-size change), so += into the shared matrix would double it.
+    // (e.g. per step-size change), so += into the shared matrix would double
+    // it.
     std::map<std::pair<int, int>, double> M;
     auto Madd = [&](int r, int c, double v) { M[{r, c}] += v; };
     for (int q = 0; q < n_quad; q++) {
@@ -424,8 +433,8 @@ void ChamberCylinder::update_constant(SparseSystem& system,
       const int A[2] = {pt.elem, pt.elem + 1};
       const double N[2] = {pt.N[0], pt.N[1]};
       const double R2 = pt.R * pt.R;
-      Madd(e_beta(), i_vbeta(), cL3 * pt.w * R2);   // beta-beta
-      Madd(e_eps(), i_veps(), cL3 * pt.w);          // eps-eps
+      Madd(e_beta(), i_vbeta(), cL3 * pt.w * R2);  // beta-beta
+      Madd(e_eps(), i_veps(), cL3 * pt.w);         // eps-eps
       for (int i = 0; i < 2; i++) {
         // phi_0/eta_0 momentum rows are replaced by the pins when pinned.
         const bool free_row = !pin_rigid_ || A[i] != 0;
@@ -436,7 +445,7 @@ void ChamberCylinder::update_constant(SparseSystem& system,
           Madd(e_eta(A[i]), i_veps(), cL2 * pt.w * N[i]);
         }
         for (int j = 0; j < 2; j++) {
-          const double mrr = cL1 * pt.w * N[i] * N[j];       // rho-rho / eta-eta
+          const double mrr = cL1 * pt.w * N[i] * N[j];  // rho-rho / eta-eta
           Madd(e_rho(A[i]), i_vrho(A[j]), mrr);
           if (free_row) {
             Madd(e_eta(A[i]), i_veta(A[j]), mrr);
@@ -556,7 +565,8 @@ void ChamberCylinder::update_solution(
     Matrix3d S = compute_stress<double>(kin, xidot, ai, pt.alpha, p);
     const double I4q = (kin.C * M).trace();  // fiber invariant e_F . C . e_F
     double g[6], dgdtau[6], dgdp[6], Kd[6][6], K[6][6];
-    // Mixed u/p: d(g[k])/d(p_mix) = (J C^{-1}) : dE[k], since Sigma^b = p_mix J C^{-1}.
+    // Mixed u/p: d(g[k])/d(p_mix) = (J C^{-1}) : dE[k], since Sigma^b = p_mix J
+    // C^{-1}.
     const Matrix3d JCinv = (kin.J * kin.C.inverse()).eval();
     for (int i = 0; i < 6; i++) {
       g[i] = contract<double>(S, kin.dE[i]);
@@ -593,26 +603,72 @@ void ChamberCylinder::update_solution(
     // xi index: 0=rho(N), 1=rho'(dN), 2=phi'(dN), 3=beta, 4=eps, 5=eta'(dN).
     int req[6][2], cvr[6][2], rn[6], cn[6];
     double rw[6][2], cw[6][2];
-    req[0][0] = e_rho(A0); rw[0][0] = N0; req[0][1] = e_rho(A1); rw[0][1] = N1; rn[0] = 2;
-    cvr[0][0] = i_rho(A0); cw[0][0] = N0; cvr[0][1] = i_rho(A1); cw[0][1] = N1; cn[0] = 2;
-    req[1][0] = e_rho(A0); rw[1][0] = dN0; req[1][1] = e_rho(A1); rw[1][1] = dN1; rn[1] = 2;
-    cvr[1][0] = i_rho(A0); cw[1][0] = dN0; cvr[1][1] = i_rho(A1); cw[1][1] = dN1; cn[1] = 2;
+    req[0][0] = e_rho(A0);
+    rw[0][0] = N0;
+    req[0][1] = e_rho(A1);
+    rw[0][1] = N1;
+    rn[0] = 2;
+    cvr[0][0] = i_rho(A0);
+    cw[0][0] = N0;
+    cvr[0][1] = i_rho(A1);
+    cw[0][1] = N1;
+    cn[0] = 2;
+    req[1][0] = e_rho(A0);
+    rw[1][0] = dN0;
+    req[1][1] = e_rho(A1);
+    rw[1][1] = dN1;
+    rn[1] = 2;
+    cvr[1][0] = i_rho(A0);
+    cw[1][0] = dN0;
+    cvr[1][1] = i_rho(A1);
+    cw[1][1] = dN1;
+    cn[1] = 2;
     {  // phi': rows skip the inner node when it is pinned (static setting)
       int c = 0;
-      if (!pin_rigid_ || A0 != 0) { req[2][c] = e_phi(A0); rw[2][c] = dN0; c++; }
-      req[2][c] = e_phi(A1); rw[2][c] = dN1; c++; rn[2] = c;
+      if (!pin_rigid_ || A0 != 0) {
+        req[2][c] = e_phi(A0);
+        rw[2][c] = dN0;
+        c++;
+      }
+      req[2][c] = e_phi(A1);
+      rw[2][c] = dN1;
+      c++;
+      rn[2] = c;
     }
-    cvr[2][0] = i_phi(A0); cw[2][0] = dN0; cvr[2][1] = i_phi(A1); cw[2][1] = dN1; cn[2] = 2;
-    req[3][0] = e_beta(); rw[3][0] = 1.0; rn[3] = 1;
-    cvr[3][0] = i_beta(); cw[3][0] = 1.0; cn[3] = 1;
-    req[4][0] = e_eps(); rw[4][0] = 1.0; rn[4] = 1;
-    cvr[4][0] = i_eps(); cw[4][0] = 1.0; cn[4] = 1;
+    cvr[2][0] = i_phi(A0);
+    cw[2][0] = dN0;
+    cvr[2][1] = i_phi(A1);
+    cw[2][1] = dN1;
+    cn[2] = 2;
+    req[3][0] = e_beta();
+    rw[3][0] = 1.0;
+    rn[3] = 1;
+    cvr[3][0] = i_beta();
+    cw[3][0] = 1.0;
+    cn[3] = 1;
+    req[4][0] = e_eps();
+    rw[4][0] = 1.0;
+    rn[4] = 1;
+    cvr[4][0] = i_eps();
+    cw[4][0] = 1.0;
+    cn[4] = 1;
     {  // eta': rows skip the inner node when it is pinned (static setting)
       int c = 0;
-      if (!pin_rigid_ || A0 != 0) { req[5][c] = e_eta(A0); rw[5][c] = dN0; c++; }
-      req[5][c] = e_eta(A1); rw[5][c] = dN1; c++; rn[5] = c;
+      if (!pin_rigid_ || A0 != 0) {
+        req[5][c] = e_eta(A0);
+        rw[5][c] = dN0;
+        c++;
+      }
+      req[5][c] = e_eta(A1);
+      rw[5][c] = dN1;
+      c++;
+      rn[5] = c;
     }
-    cvr[5][0] = i_eta(A0); cw[5][0] = dN0; cvr[5][1] = i_eta(A1); cw[5][1] = dN1; cn[5] = 2;
+    cvr[5][0] = i_eta(A0);
+    cw[5][0] = dN0;
+    cvr[5][1] = i_eta(A1);
+    cw[5][1] = dN1;
+    cn[5] = 2;
 
     const double pref = 2.0 * M_PI * Lp * pt.w;
     for (int k = 0; k < 6; k++) {
@@ -621,7 +677,8 @@ void ChamberCylinder::update_solution(
         const double rwt = pref * rw[k][ri];
         Cloc[re] += rwt * g[k];
         Kat(re, active_col) += rwt * active_coef * dgdtau[k];
-        // Mixed u/p: coupling of the equilibrium to this element's pressure DOF.
+        // Mixed u/p: coupling of the equilibrium to this element's pressure
+        // DOF.
         Kat(re, i_pmix(pt.elem)) += rwt * dgdp[k];
         // BCS: sigma_1D also depends on e_c_dot via the mu*e_c_dot term.
         Kdat(re, i_ec(q)) += rwt * (bp.mu / i4denom) * dgdtau[k];
@@ -635,15 +692,16 @@ void ChamberCylinder::update_solution(
       }
     }
 
-    // --- Convective (centrifugal) inertia D2u(zeta_dot,zeta_dot) (genet23 Eqs 8,10,18) ---
-    // The O(zeta_dot^2) part of the acceleration a = D2u(zd,zd) + Du(zdd), omitted
-    // from the linear consistent mass. With the angular velocity w_om = beta_dot*Z +
-    // phi_dot, contracting D2u (Eq 10) with the virtual velocity Du (Eq 9) and
-    // integrating over Theta (2 pi) and Z (moments L, L^2/2, L^3/3) gives the forces
-    // conjugate to the rho / phi / beta virtual fields below. Rates are the velocity
-    // companion DOFs (w = zeta_dot). With a_c = 2 rho_dot w_om e_theta - (R+rho)
-    // w_om^2 e_r and the virtual velocity rho^ e_r + (beta^ Z + phi^)(R+rho) e_theta,
-    // every term carries one factor of the CURRENT radius R+rho.
+    // --- Convective inertia D2u(zeta_dot,zeta_dot) (genet23 Eqs 8,10,18) ---
+    // The O(zeta_dot^2) part of the acceleration a = D2u(zd,zd) + Du(zdd),
+    // omitted from the linear consistent mass. With the angular
+    // velocity w_om = beta_dot*Z + phi_dot, contracting D2u (Eq 10) with the
+    // virtual velocity Du (Eq 9) and integrating over Theta (2 pi) and Z
+    // (moments L, L^2/2, L^3/3) gives the forces conjugate to the rho / phi /
+    // beta virtual fields below. Rates are the velocity companion DOFs (w =
+    // zeta_dot). With a_c = 2 rho_dot w_om e_theta - (R+rho) w_om^2 e_r and the
+    // virtual velocity rho^ e_r + (beta^ Z + phi^)(R+rho) e_theta, every term
+    // carries one factor of the CURRENT radius R+rho.
     {
       const double rho0 = parameters[global_param_ids[ParamId::density]];
       const double Wr = N0 * Y(i_vrho(A0)) + N1 * Y(i_vrho(A1));  // rho_dot
@@ -652,9 +710,10 @@ void ChamberCylinder::update_solution(
       const double c0 = 2.0 * M_PI * rho0 * pt.w;
       const double base = c0 * (pt.R + rho);  // d(base)/d(rho) = c0
       const double L1 = Lp, L2 = Lp * Lp / 2.0, L3 = Lp * Lp * Lp / 3.0;
-      const double Iw2 = Wb * Wb * L3 + 2.0 * Wb * Wp * L2 + Wp * Wp * L1;  // int w_om^2
-      const double Qp = Wb * L2 + Wp * L1;   // int w_om
-      const double Qb = Wb * L3 + Wp * L2;   // int w_om Z
+      const double Iw2 =
+          Wb * Wb * L3 + 2.0 * Wb * Wp * L2 + Wp * Wp * L1;  // int w_om^2
+      const double Qp = Wb * L2 + Wp * L1;                   // int w_om
+      const double Qb = Wb * L3 + Wp * L2;                   // int w_om Z
       const int An[2] = {A0, A1};
       const double Nn[2] = {N0, N1};
       // beta (global twist): + 2 rho_dot (int w_om Z)
@@ -670,7 +729,8 @@ void ChamberCylinder::update_solution(
         const double Na = Nn[i];
         // rho: - (int w_om^2)
         Cloc[e_rho(a)] += -base * Iw2 * Na;
-        Kat(e_rho(a), i_vbeta()) += -base * Na * (2.0 * Wb * L3 + 2.0 * Wp * L2);
+        Kat(e_rho(a), i_vbeta()) +=
+            -base * Na * (2.0 * Wb * L3 + 2.0 * Wp * L2);
         for (int j = 0; j < 2; j++) {
           Kat(e_rho(a), i_vphi(An[j])) +=
               -base * Na * (2.0 * Wb * L2 + 2.0 * Wp * L1) * Nn[j];
@@ -696,35 +756,39 @@ void ChamberCylinder::update_solution(
     // NOT the reference R. Since Du^T Du is rotation-invariant (sin^2+cos^2=1),
     // only the beta/phi moment arms change: R^2 -> (R+rho)^2. The reference-R^2
     // mass is assembled once in E (update_constant); here we add the state-
-    // dependent (R+rho)^2 - R^2 correction to the RESIDUAL (it vanishes at rho=0,
-    // a pure addition to the reference dynamics). Rates are the velocity
+    // dependent (R+rho)^2 - R^2 correction to the RESIDUAL (it vanishes at
+    // rho=0, a pure addition to the reference dynamics). Rates are the velocity
     // companions (w_dot = zeta_ddot), so the mass enters dC_dydot (Kdat).
     //
-    // Jacobian: we deliberately OMIT the d(mass)/d(rho) coupling from dC_dy. That
-    // term is a small, non-symmetric rho <-> momentum block (the mass depends on
-    // the radial position); keeping it tipped stiff coarse-mesh cases past the
-    // Newton iteration limit. Dropping it is an
-    // inexact-Newton choice: the RESIDUAL is still the exact current-config mass,
-    // so the converged solution is unchanged (only the local convergence rate is,
-    // and it stays robustly convergent). The total beta/phi mass is (R+rho)^2 > 0.
+    // Jacobian: we deliberately OMIT the d(mass)/d(rho) coupling from dC_dy.
+    // That term is a small, non-symmetric rho <-> momentum block (the mass
+    // depends on the radial position); keeping it tipped stiff coarse-mesh
+    // cases past the Newton iteration limit. Dropping it is an inexact-Newton
+    // choice: the RESIDUAL is still the exact current-config mass, so the
+    // converged solution is unchanged (only the local convergence rate is, and
+    // it stays robustly convergent). The total beta/phi mass is (R+rho)^2 > 0.
     {
       const double rho0m = parameters[global_param_ids[ParamId::density]];
-      const double cL1 = rho0m * 2.0 * M_PI * Lp;                 // int_Z 1   = L
-      const double cL2 = rho0m * 2.0 * M_PI * Lp * Lp / 2.0;      // int_Z Z   = L^2/2
-      const double cL3 = rho0m * 2.0 * M_PI * Lp * Lp * Lp / 3.0; // int_Z Z^2 = L^3/3
-      const double rcur = pt.R + rho;                 // current radius R + rho
-      const double dr2 = rcur * rcur - pt.R * pt.R;   // (R+rho)^2 - R^2
+      const double cL1 = rho0m * 2.0 * M_PI * Lp;  // int_Z 1   = L
+      const double cL2 =
+          rho0m * 2.0 * M_PI * Lp * Lp / 2.0;  // int_Z Z   = L^2/2
+      const double cL3 =
+          rho0m * 2.0 * M_PI * Lp * Lp * Lp / 3.0;   // int_Z Z^2 = L^3/3
+      const double rcur = pt.R + rho;                // current radius R + rho
+      const double dr2 = rcur * rcur - pt.R * pt.R;  // (R+rho)^2 - R^2
       const int Am[2] = {A0, A1};
       const double Nm[2] = {N0, N1};
-      const double aBeta = Yd(i_vbeta());                            // beta_ddot
-      const double aPhi = N0 * Yd(i_vphi(A0)) + N1 * Yd(i_vphi(A1)); // phi-field ddot
+      const double aBeta = Yd(i_vbeta());  // beta_ddot
+      const double aPhi =
+          N0 * Yd(i_vphi(A0)) + N1 * Yd(i_vphi(A1));  // phi-field ddot
       // beta momentum row: couples to beta (cL3) and the phi field (cL2).
       const double fBeta = cL3 * aBeta + cL2 * aPhi;
       Cloc[e_beta()] += pt.w * dr2 * fBeta;
       Kdat(e_beta(), i_vbeta()) += pt.w * dr2 * cL3;
       for (int j = 0; j < 2; j++)
         Kdat(e_beta(), i_vphi(Am[j])) += pt.w * dr2 * cL2 * Nm[j];
-      // phi momentum rows (skip the inner node when pinned): beta (cL2), phi (cL1).
+      // phi momentum rows (skip the inner node when pinned): beta (cL2), phi
+      // (cL1).
       const double fPhi = cL2 * aBeta + cL1 * aPhi;
       for (int i = 0; i < 2; i++) {
         const int a = Am[i];
@@ -736,7 +800,7 @@ void ChamberCylinder::update_solution(
       }
     }
 
-    // --- Mixed u/p: weak incompressibility constraint for this element (P0) ---
+    // --- Mixed u/p: weak incompressibility constraint per element (P0) ---
     // Residual C[e_pmix] = sum_{q in e} pref (J-1) = 0. J depends only on
     // rho, rho', eps; map the analytic dJ/dxi through the same columns as the
     // force assembly. The pressure-pressure block is zero (saddle-point form).
@@ -764,7 +828,8 @@ void ChamberCylinder::update_solution(
       double a[3] = {Y(i_ec(q)), Y(i_tauc(q)), Y(i_kc(q))};
       double ad[3] = {Yd(i_ec(q)), Yd(i_tauc(q)), Yd(i_kc(q))};
       double Ra[3];
-      bcs_residual<double>(a, ad, e_fib, act, act_plus, bp, n0_ec_, n0_val_, Ra);
+      bcs_residual<double>(a, ad, e_fib, act, act_plus, bp, n0_ec_, n0_val_,
+                           Ra);
       for (int i = 0; i < 3; i++) Cloc[erow[i]] += Ra[i];
       // Complex-step tangents w.r.t. the local active state (dC_dy) and its
       // rates (dC_dydot). The regularized |e_c dot| makes the force-velocity
@@ -812,16 +877,16 @@ void ChamberCylinder::update_solution(
   {
     const int re = e_rho(0);
     Cloc[re] -= Pin * twoPiL * Rinner * (1.0 + eps);
-    Kat(re, 0) -= twoPiL * Rinner * (1.0 + eps);          // d/dPin
-    Kat(re, i_rho(0)) -= Pin * twoPiL * (1.0 + eps);      // d/drho_i
-    Kat(re, i_eps()) -= Pin * twoPiL * Rinner;            // d/deps
+    Kat(re, 0) -= twoPiL * Rinner * (1.0 + eps);      // d/dPin
+    Kat(re, i_rho(0)) -= Pin * twoPiL * (1.0 + eps);  // d/drho_i
+    Kat(re, i_eps()) -= Pin * twoPiL * Rinner;        // d/deps
   }
   // eps equation: - Pv * pi L * Rinner^2
   {
     const int re = e_eps();
     Cloc[re] -= Pin * piL * Rinner * Rinner;
-    Kat(re, 0) -= piL * Rinner * Rinner;                  // d/dPin
-    Kat(re, i_rho(0)) -= Pin * piL * 2.0 * Rinner;        // d/drho_i
+    Kat(re, 0) -= piL * Rinner * Rinner;            // d/dPin
+    Kat(re, i_rho(0)) -= Pin * piL * 2.0 * Rinner;  // d/drho_i
   }
 
   // --- Cavity volume definition: V - pi Rinner^2 (1+eps) L = 0 ---
@@ -836,8 +901,8 @@ void ChamberCylinder::update_solution(
   {
     const int re = e_mass();
     const double rho_i_d = Yd(i_rho(0));
-    const double Vdot = piL * (2.0 * Rinner * (1.0 + eps) * rho_i_d +
-                               Rinner * Rinner * eps_d);
+    const double Vdot =
+        piL * (2.0 * Rinner * (1.0 + eps) * rho_i_d + Rinner * Rinner * eps_d);
     Cloc[re] -= Vdot;
     // d/dy
     Kat(re, i_rho(0)) -=
@@ -853,7 +918,8 @@ void ChamberCylinder::update_solution(
     system.C(global_eqn_ids[i]) = Cloc[i];
     for (int j = 0; j < n_var; j++) {
       system.dC_dy.coeffRef(global_eqn_ids[i], global_var_ids[j]) = Kat(i, j);
-      system.dC_dydot.coeffRef(global_eqn_ids[i], global_var_ids[j]) = Kdat(i, j);
+      system.dC_dydot.coeffRef(global_eqn_ids[i], global_var_ids[j]) =
+          Kdat(i, j);
     }
   }
 }
@@ -862,9 +928,11 @@ void ChamberCylinder::set_frank_starling_curve(std::vector<double> ec,
                                                std::vector<double> val) {
   if (ec.size() != val.size() || ec.size() < 2) {
     throw std::runtime_error(
-        "ChamberCylinder::set_frank_starling_curve: e_c and n0 arrays must have "
+        "ChamberCylinder::set_frank_starling_curve: e_c and n0 arrays must "
+        "have "
         "equal length >= 2 (got " +
-        std::to_string(ec.size()) + " and " + std::to_string(val.size()) + ").");
+        std::to_string(ec.size()) + " and " + std::to_string(val.size()) +
+        ").");
   }
   n0_ec_ = std::move(ec);
   n0_val_ = std::move(val);

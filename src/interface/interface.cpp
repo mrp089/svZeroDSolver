@@ -190,10 +190,9 @@ void initialize(std::string input_file_arg, int& problem_id, int& pts_per_cycle,
   interface->states_.resize(num_output_steps);
 
   // Initialize integrator
-  interface->integrator_ =
-      GeneralizedAlpha(model.get(), interface->time_step_size_,
-                       interface->rho_infty_, interface->absolute_tolerance_,
-                       interface->max_nliter_);
+  interface->integrator_ = GeneralizedAlpha(
+      model.get(), interface->time_step_size_, interface->rho_infty_,
+      interface->absolute_tolerance_, interface->max_nliter_);
   commit_persistent_state_snapshot(interface);
 
   DEBUG_MSG("[initialize] Done");

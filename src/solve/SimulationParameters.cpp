@@ -456,8 +456,8 @@ void create_vessels(
     if (vessel_config.contains("activation_function")) {
       // create_vessels runs before the cardiac period is otherwise set (by the
       // boundary-condition parameters or the Solver), and the activation
-      // function captures the period at construction. Mirror create_chambers and
-      // take it from simulation_parameters when specified.
+      // function captures the period at construction. Mirror create_chambers
+      // and take it from simulation_parameters when specified.
       if (model.cardiac_cycle_period < 0.0 &&
           config.contains("simulation_parameters") &&
           config["simulation_parameters"].contains("cardiac_period")) {
@@ -468,11 +468,12 @@ void create_vessels(
       }
       auto act_func = generate_activation_function(
           model, vessel_config["activation_function"], vessel_name);
-      model.get_block(vessel_name)->set_activation_function(std::move(act_func));
+      model.get_block(vessel_name)
+          ->set_activation_function(std::move(act_func));
     }
 
-    // Optional Frank-Starling curve override for ChamberCylinder: an object with
-    // arrays "e_c" and "n0". Absent -> the block keeps its default curve.
+    // Optional Frank-Starling curve override for ChamberCylinder: an object
+    // with arrays "e_c" and "n0". Absent -> the block keeps its default curve.
     if (vessel_type == "ChamberCylinder" &&
         vessel_config.contains("frank_starling")) {
       const auto& fs = vessel_config["frank_starling"];

@@ -318,8 +318,9 @@ class FourierActivation : public ActivationFunction {
  *
  * NOTE: unlike the other activation functions, compute() returns the SIGNED
  * contraction RATE \f$\nu(t)\f$ and is deliberately NOT clamped to [0, 1]. The
- * base class's [0, 1] range is a convention (an elastance activation level), not
- * a constraint; here the output is a rate spanning [`alpha_min`, `alpha_max`].
+ * base class's [0, 1] range is a convention (an elastance activation level),
+ * not a constraint; here the output is a rate spanning [`alpha_min`,
+ * `alpha_max`].
  */
 class NagumoActivation : public ActivationFunction {
  public:

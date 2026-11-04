@@ -130,15 +130,15 @@ State GeneralizedAlpha::step(const State& old_state, double time) {
 // ConsistentStiffIntegrator (damped Newton + adaptive sub-stepping)
 // ---------------------------------------------------------------------------
 
-ConsistentStiffIntegrator::ConsistentStiffIntegrator(Model* model,
-                                                     double time_step_size,
-                                                     double rho, double atol,
-                                                     int max_iter,
-                                                     bool max_iter_error_to_warning) {
-  // Maximally dissipative spectral radius (rho_infty = 0, L-stable), independent
-  // of the requested rho: the stiff Bestel-Clement-Sorine active law of
-  // \cite genet23 needs the high-frequency damping. genet23 itself uses a bespoke
-  // energy-consistent midpoint scheme; this is its svZeroDSolver DAE counterpart.
+ConsistentStiffIntegrator::ConsistentStiffIntegrator(
+    Model* model, double time_step_size, double rho, double atol, int max_iter,
+    bool max_iter_error_to_warning) {
+  // Maximally dissipative spectral radius (rho_infty = 0, L-stable),
+  // independent of the requested rho: the stiff Bestel-Clement-Sorine active
+  // law of
+  // \cite genet23 needs the high-frequency damping. genet23 itself uses a
+  // bespoke energy-consistent midpoint scheme; this is its svZeroDSolver DAE
+  // counterpart.
   (void)rho;
   init(model, time_step_size, 0.0, atol, max_iter, max_iter_error_to_warning);
 }
@@ -146,8 +146,8 @@ ConsistentStiffIntegrator::ConsistentStiffIntegrator(Model* model,
 bool ConsistentStiffIntegrator::damped_step(const State& old_state,
                                             State& new_state, double dt,
                                             double time) {
-  // Step-size-dependent coefficients for this (possibly sub-) step, held locally
-  // so sub-stepping needs no save/restore of shared state.
+  // Step-size-dependent coefficients for this (possibly sub-) step, held
+  // locally so sub-stepping needs no save/restore of shared state.
   const double y_coeff = gamma * dt;
   const double y_coeff_jacobian = alpha_f * y_coeff;
 
@@ -216,7 +216,8 @@ State ConsistentStiffIntegrator::step(const State& old_state, double time) {
     }
   }
   throw std::runtime_error(
-      "Consistent-stiff integrator failed to converge (max sub-steps) at time " +
+      "Consistent-stiff integrator failed to converge (max sub-steps) at "
+      "time " +
       std::to_string(time));
 }
 
@@ -224,12 +225,9 @@ State ConsistentStiffIntegrator::step(const State& old_state, double time) {
 // Factory
 // ---------------------------------------------------------------------------
 
-std::unique_ptr<TimeIntegrator> make_integrator(IntegratorType type,
-                                                Model* model,
-                                                double time_step_size,
-                                                double rho, double atol,
-                                                int max_iter,
-                                                bool max_iter_error_to_warning) {
+std::unique_ptr<TimeIntegrator> make_integrator(
+    IntegratorType type, Model* model, double time_step_size, double rho,
+    double atol, int max_iter, bool max_iter_error_to_warning) {
   switch (type) {
     case IntegratorType::consistent_stiff:
       return std::make_unique<ConsistentStiffIntegrator>(
@@ -237,8 +235,8 @@ std::unique_ptr<TimeIntegrator> make_integrator(IntegratorType type,
           max_iter_error_to_warning);
     case IntegratorType::generalized_alpha:
     default:
-      return std::make_unique<GeneralizedAlpha>(
-          model, time_step_size, rho, atol, max_iter,
-          max_iter_error_to_warning);
+      return std::make_unique<GeneralizedAlpha>(model, time_step_size, rho,
+                                                atol, max_iter,
+                                                max_iter_error_to_warning);
   }
 }

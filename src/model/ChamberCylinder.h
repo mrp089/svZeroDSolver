@@ -47,7 +47,8 @@
  * scalars \f$\beta\f$ (twist per unit length) and \f$\varepsilon\f$
  * (longitudinal strain). The deformation gradient, right Cauchy-Green tensor
  * \f$C\f$ and Green-Lagrange strain \f$E=\tfrac12(C-1)\f$ follow \cite genet23
- * Eqs. (13,15,16), with volume ratio \f$J=(1+\rho')(1+\rho/R)(1+\varepsilon)\f$.
+ * Eqs. (13,15,16), with volume ratio
+ * \f$J=(1+\rho')(1+\rho/R)(1+\varepsilon)\f$.
  *
  * ### Constitutive law (\cite genet23 Eqs. 22-29)
  *
@@ -57,16 +58,17 @@
  * - transversely isotropic deviatoric energy
  *   \f$W^e = C_1(\bar I_1-3) + C_2(\bar I_2-3) + C_3 e^{C_4(\bar I_1-3)^2} +
  *   C_5 e^{C_6(\bar I_4-1)^2}\f$, \f$\Sigma^d=\partial W^e/\partial E\f$;
- * - an incompressibility bulk term \f$\Sigma^b = p\,J\,C^{-1}\f$ with \f$p\f$ an
- *   independent hydrostatic-pressure field (\cite genet23 mixed u/p
- *   formulation), discretized element-wise constant (P0, LBB-stable with the
- *   linear \f$\rho,\varphi,\eta\f$) and constrained by the weak
+ * - an incompressibility bulk term \f$\Sigma^b = p\,J\,C^{-1}\f$ with
+ *   \f$p\f$ an independent hydrostatic-pressure field (\cite genet23 mixed
+ *   u/p formulation), discretized element-wise constant (P0, LBB-stable with
+ *   the linear \f$\rho,\varphi,\eta\f$) and constrained by the weak
  *   incompressibility \f$\int_{\Omega_e}(J-1)\,\mathrm d\Omega=0\f$ per element
  *   (locking-free at coarse meshes);
  * - a viscous term \f$\Sigma^v=\gamma\,\dot E\f$;
- * - an active fiber stress \f$\Sigma^a = \tau\,\mathbf{e}_F\otimes\mathbf{e}_F\f$
- *   along the local myofiber direction \f$\mathbf{e}_F(R) = (0,\cos\alpha(R),
- *   \sin\alpha(R))\f$ with helix angle varying linearly through the wall,
+ * - an active fiber stress
+ *   \f$\Sigma^a = \tau\,\mathbf{e}_F\otimes\mathbf{e}_F\f$ along the local
+ *   myofiber direction \f$\mathbf{e}_F(R) = (0,\cos\alpha(R),\sin\alpha(R))\f$
+ *   with helix angle varying linearly through the wall,
  *   \f$\alpha(R)=\alpha_i\frac{R_e-R}{R_e-R_i}+\alpha_e\frac{R-R_i}{R_e-R_i}\f$.
  *
  * The invariants are those of the isochoric tensor \f$\bar C = J^{-2/3}C\f$,
@@ -108,9 +110,10 @@
  * \f]
  * assembled with finite elements over the thickness, with the acceleration
  * virtual power
- * \f$P_a=\int_\Omega\varrho_0\,\ddot u\cdot\mathrm{D}u(\hat\zeta)\,\mathrm d\Omega\f$
- * realized by velocity companion DOFs \f$w=\dot\zeta\f$ and the consistent mass
- * matrix \f$M=\int\varrho_0(\mathrm{D}u)^\top\mathrm{D}u\,\mathrm d\Omega\f$
+ * \f$P_a=\int_\Omega\varrho_0\,\ddot u\cdot\mathrm{D}u(\hat\zeta)\,d\Omega\f$
+ * realized by velocity companion DOFs \f$w=\dot\zeta\f$ and the consistent
+ * mass matrix
+ * \f$M=\int\varrho_0(\mathrm{D}u)^\top\mathrm{D}u\,\mathrm d\Omega\f$
  * (analytically integrated over \f$\Theta,Z\f$; \cite genet23 Eqs. A5-A6). For
  * cardiac parameters inertia is \f$\sim\!10^{-4}\f$ of the internal/pressure
  * forces. It is complemented by the cavity volume
@@ -141,11 +144,11 @@
  * * `mu` - BCS active dissipation \f$\mu\f$ (optional, default 70). Distinct
  *   from the passive `gamma`.
  * * `bcs_alpha` - BCS velocity-dependent bond-destruction (force-velocity)
- *   constant \f$\alpha\f$ (optional, default 0; the paper uses \f$\alpha=12\f$).
- *   The \f$\alpha|\dot e_c|\f$ term is stiff/non-smooth and destabilizes plain
+ *   constant \f$\alpha\f$ (optional, default 0; the paper uses 12). The
+ *   \f$\alpha|\dot e_c|\f$ term is stiff and destabilizes plain
  *   generalized-alpha; set the simulation parameter `"integrator": "stiff"`
- *   (ConsistentStiffIntegrator) to enable \f$\alpha>0\f$. The \f$k_c\dot e_c\f$
- *   force-length-velocity source is retained regardless of \f$\alpha\f$.
+ *   (ConsistentStiffIntegrator) to use \f$\alpha>0\f$. The \f$k_c\dot e_c\f$
+ *   source is retained regardless of \f$\alpha\f$.
  * * `density` - Reference mass density \f$\varrho_0\f$ (optional, default 1000
  *   kg/m^3 = the paper's 1 kg/L)
  * * `fv_reg` - BCS force-velocity regularizer \f$\epsilon\f$ smoothing
@@ -194,12 +197,12 @@ class ChamberCylinder : public Block {
     gamma,
     sigma_max,
     num_elements,
-    k_s,           // BCS series-spring stiffness
-    k_0,           // BCS maximum active stiffness
-    mu,            // BCS active dissipation
-    bcs_alpha,     // BCS activation rate constant (paper's alpha)
-    density,       // reference mass density rho_0 (inertia, genet23 Eq. 18)
-    fv_reg         // BCS force-velocity regularizer (|e_c dot| smoothing eps)
+    k_s,        // BCS series-spring stiffness
+    k_0,        // BCS maximum active stiffness
+    mu,         // BCS active dissipation
+    bcs_alpha,  // BCS activation rate constant (paper's alpha)
+    density,    // reference mass density rho_0 (inertia, genet23 Eq. 18)
+    fv_reg      // BCS force-velocity regularizer (|e_c dot| smoothing eps)
   };
 
   /**
@@ -307,19 +310,20 @@ class ChamberCylinder : public Block {
    * @param ec Contractile-element strain breakpoints e_c
    * @param val Recruitment factor values n_0 at those breakpoints
    */
-  void set_frank_starling_curve(std::vector<double> ec, std::vector<double> val);
+  void set_frank_starling_curve(std::vector<double> ec,
+                                std::vector<double> val);
 
  private:
   // --- Finite element discretization of the wall thickness ---
-  int n_ele = 0;    ///< Number of finite elements through the wall
-  int n_node = 0;   ///< Number of nodes (n_ele + 1)
-  int n_quad = 0;   ///< Number of quadrature points through the wall
+  int n_ele = 0;   ///< Number of finite elements through the wall
+  int n_node = 0;  ///< Number of nodes (n_ele + 1)
+  int n_quad = 0;  ///< Number of quadrature points through the wall
   /// Rigid-body pins phi(R_i) = eta(R_i) = 0. genet23 (Sec 2.4) needs them only
   /// in the static setting; with inertia (density > 0) the rigid rotation and
   /// axial translation are free and governed by momentum conservation.
   bool pin_rigid_ = true;
-  int n_var = 0;    ///< Number of block variables (external + internal)
-  int n_eqn = 0;    ///< Number of block equations
+  int n_var = 0;  ///< Number of block variables (external + internal)
+  int n_eqn = 0;  ///< Number of block equations
 
   /// Reference nodal radii (endocardium at index 0, epicardium at n_node-1)
   std::vector<double> node_R;
@@ -328,12 +332,12 @@ class ChamberCylinder : public Block {
    * @brief A single Gauss quadrature point in the thickness
    */
   struct QuadPoint {
-    int elem;         ///< Element index (spans nodes elem and elem+1)
-    double R;         ///< Reference radius of the quadrature point
-    double w;         ///< Integration weight (Gauss weight times |dR|)
-    double alpha;     ///< Myofiber helix angle at this radius [rad]
-    double N[2];      ///< Shape function values at the two element nodes
-    double dN[2];     ///< Shape function radial derivatives
+    int elem;      ///< Element index (spans nodes elem and elem+1)
+    double R;      ///< Reference radius of the quadrature point
+    double w;      ///< Integration weight (Gauss weight times |dR|)
+    double alpha;  ///< Myofiber helix angle at this radius [rad]
+    double N[2];   ///< Shape function values at the two element nodes
+    double dN[2];  ///< Shape function radial derivatives
   };
   std::vector<QuadPoint> quad;  ///< Quadrature points across the thickness
 
@@ -351,7 +355,9 @@ class ChamberCylinder : public Block {
   int i_eta(int a) const { return 4 + 2 * n_node + a; }
   int i_beta() const { return 4 + 3 * n_node; }
   int i_eps() const { return 4 + 3 * n_node + 1; }
-  int i_active0() const { return 4 + 3 * n_node + 2; }  ///< start of active vars
+  int i_active0() const {
+    return 4 + 3 * n_node + 2;
+  }  ///< start of active vars
   int i_ec(int q) const { return i_active0() + 3 * q; }
   int i_tauc(int q) const { return i_active0() + 3 * q + 1; }
   int i_kc(int q) const { return i_active0() + 3 * q + 2; }
@@ -399,8 +405,8 @@ class ChamberCylinder : public Block {
   std::unique_ptr<ActivationFunction> activation_function_;
 
   /// Frank-Starling force-length curve n_0(e_c) breakpoints. Default: the
-  /// genet/PhysioBlocks 9-point piecewise-linear curve (Caruel 2013, \cite
-  /// genet23 Ref. 13); overridable via set_frank_starling_curve().
+  /// genet/PhysioBlocks 9-point piecewise-linear curve (Caruel 2013, Ref. 13
+  /// of \cite genet23); overridable via set_frank_starling_curve().
   std::vector<double> n0_ec_ = {-0.1668, -0.0073, 0.0534, 0.0969, 0.1326,
                                 0.2016,  0.4663,  0.9187, 1.1762};
   std::vector<double> n0_val_ = {0.0, 0.5614, 0.7748, 0.8933, 0.9618,

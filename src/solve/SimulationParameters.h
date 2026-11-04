@@ -56,7 +56,7 @@ struct SimulationParameters {
                       ///< integration
   double sim_rho_infty{0.0};  ///< Spectral radius of generalized-alpha
   std::string sim_integrator{
-      "genalpha"};  ///< Time integrator: "genalpha" or "stiff"
+      "genalpha"};         ///< Time integrator: "genalpha" or "stiff"
   int output_interval{0};  ///< Interval of writing output
 
   bool sim_steady_initial{0};  ///< Start from steady solution
