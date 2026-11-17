@@ -107,8 +107,7 @@ form of the incompressible tube (`fixed_length_exact_ho`,
 ### Helical fibers
 
 `passive_helical_L2/` is the wall of `passive_anisotropic/` with the helix of
-`tests/cases/chamber_cylinder.json`, +60° at the endocardium to −60° at the
-epicardium, in a tube twice as long as the test case (2 L0 = 114 mm, initial
+genet23, +60° at the endocardium to −60° at the epicardium, in a tube twice as long as the test case (2 L0 = 114 mm, initial
 volume doubled). Mirroring θ or Z flips the helix angle, so the eighth
 model's symmetry planes do not apply: the 3D model is the full cylinder over
 the full length. It is as free as the 0D: both ends keep u_z = 0 (fixed
@@ -184,8 +183,8 @@ end layer against the tube length and the mesh
 
 `active_prescribed/` is the circulation of the 0D test case
 `tests/cases/chamber_sphere.json` (pressure source, tanh valves, RC vessels,
-1 s period) with the cylinder of `tests/cases/chamber_cylinder.json` adapted
-to what svMultiPhysics can represent: fixed length, circumferential
+1 s period) with the genet23 cylinder (Table 1 rounded: R_i 19 mm, R_e 33 mm,
+L 57.1 mm) adapted to what svMultiPhysics can represent: fixed length, circumferential
 fibers, the Holzapfel-Ogden wall of `passive_anisotropic/`, no viscosity, no
 wall inertia, and the BCS active law replaced by a prescribed tension
 T(t) = 80 kPa sin²(π (t − 0.1 s)/0.4 s) on 0.1–0.5 s. The 0D active
@@ -230,8 +229,8 @@ GMRES up to nr = 2; Trilinos GMRES with algebraic multigrid
 diagonal preconditioner stalls. Four processes are fastest on a 10-core
 laptop; eight are slower (weaker multigrid, oversubscription).
 
-`active_helical_L2/` is `active_prescribed/` with the helix of
-`tests/cases/chamber_cylinder.json` (+60° to −60°) in the 2 L0 tube (initial
+`active_helical_L2/` is `active_prescribed/` with the helix of genet23
+(+60° to −60°) in the 2 L0 tube (initial
 volume doubled, the same circulation; ejection fraction 0.18, peak 157 mmHg).
 As in `passive_helical_L2/` the 3D model is the full cylinder over the full
 length with free ends (u_z = 0, end dashpots), without circulation scaling,

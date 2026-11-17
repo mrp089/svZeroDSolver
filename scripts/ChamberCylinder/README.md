@@ -25,7 +25,7 @@ svZeroDSolver blocks:
 
 ## Regression case
 
-Only the test case `tests/cases/chamber_cylinder_genet_circulation.json` goes
+Only the test case `tests/cases/chamber_cylinder_genet23.json` goes
 into svZeroDSolver; this folder stays on this branch. The case is this setup,
 coarsened for test speed:
 
@@ -38,7 +38,7 @@ cfg["simulation_parameters"]["output_interval"] = 8
 Its `description` gives the source of every input, the reference values and
 the genet23 inconsistency. After a change, write the configuration, keep the
 `description`, regenerate the reference with
-`python tests/compute_ref_sol.py chamber_cylinder_genet_circulation.json` and
+`python tests/compute_ref_sol.py chamber_cylinder_genet23.json` and
 format both files with prettier.
 
 ## Reference solutions
