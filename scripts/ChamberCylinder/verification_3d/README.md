@@ -242,6 +242,12 @@ passive twist.
 
 ## Results
 
+Key figures (`pr_figures.py` writes them from the study summaries):
+
+![Convergence of the 3D errors with the mesh](figures/convergence.svg)
+
+![PV loop, 0D block vs. coupled 3D](figures/pv_loop.svg)
+
 Maximum relative errors vs. the 0D reference; "order" is log2 of the error
 ratio between successive meshes. Run times with 4 processes.
 
