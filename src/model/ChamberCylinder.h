@@ -112,8 +112,9 @@ struct ChamberCylinderFormulation {
  *
  * The material and active stress laws are those of \ref ChamberSphere. The
  * genet23 model is the material `mooney_rivlin_exponential` (\cite genet23
- * Eq. 25) with the active stress `genet23` (the Bestel-Clement-Sorine law of
- * Eqs. 29-33) driven by an activation rate (`piecewise_rate`).
+ * Eq. 25) with the active stress `linear_series_spring` (the
+ * Bestel-Clement-Sorine law of Eqs. 29-33) driven by an activation rate
+ * (`piecewise_rate`).
  *
  * ### Formulation
  *
@@ -123,7 +124,7 @@ struct ChamberCylinderFormulation {
  * - material: `mooney_rivlin_exponential` / `holzapfel_ogden` (svMultiPhysics
  *   `HolzapfelOgden`; with \f$C_0=0\f$, `mooney_rivlin_exponential` already
  *   contains svMultiPhysics' `neoHookean`, `MR` and the fiber term of `HGO`);
- * - active stress: `genet23` / `uniform_unsteady` (svMultiPhysics
+ * - active stress: `linear_series_spring` / `uniform_unsteady` (svMultiPhysics
  *   `UniformUnsteady`, a prescribed tension);
  * - volumetric law and end condition, selected with an optional `formulation`
  *   object on the chamber, e.g. `"formulation": {"volumetric": "st91",
@@ -190,12 +191,12 @@ struct ChamberCylinderFormulation {
  * parameters in `values`, a `material` object (see \ref Material), an
  * `active_stress` object (see \ref ActiveStress) and, for active stress laws
  * driven by an activation, an `activation_function` object (see \ref
- * ActivationFunction). With the active stress `genet23`, \f$\alpha>0\f$ (its
- * velocity-dependent bond destruction, 12 in the paper) and piecewise-linear
- * valves (PiecewiseValve), plain generalized-\f$\alpha\f$ may not converge:
- * both switch abruptly, at \f$\dot e_c=0\f$ and at valve opening and closing.
- * The simulation parameter `"integrator": "stiff"` (StiffIntegrator) then
- * converges.
+ * ActivationFunction). With the active stress `linear_series_spring`,
+ * \f$\alpha>0\f$ (its velocity-dependent bond destruction, 12 in the paper) and
+ * piecewise-linear valves (PiecewiseValve), plain generalized-\f$\alpha\f$ may
+ * not converge: both switch abruptly, at \f$\dot e_c=0\f$ and at valve opening
+ * and closing. The simulation parameter `"integrator": "stiff"`
+ * (StiffIntegrator) then converges.
  *
  * ### Internal variables
  *
@@ -206,7 +207,7 @@ struct ChamberCylinderFormulation {
  * * `eps` - Longitudinal strain \f$\varepsilon\f$
  * * `active_stress_<q>`, ... - States of the active stress law at quadrature
  *   point `q` (e.g. `active_stress_<q>`, `e_c_<q>`, `tau_c_<q>`, `k_c_<q>` for
- *   `genet23`)
+ *   `linear_series_spring`)
  * * `volume` - Cavity volume \f$V\f$
  * * `vrho_<A>`, `vphi_<A>`, `veta_<A>`, `vbeta`, `veps` - velocity companion
  *   DOFs \f$w=\dot\zeta\f$ (full dynamics)

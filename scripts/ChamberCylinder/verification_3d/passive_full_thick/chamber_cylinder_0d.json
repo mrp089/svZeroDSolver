@@ -96,7 +96,7 @@
         "k": 100.0
       },
       "active_stress": {
-        "type": "genet23",
+        "type": "linear_series_spring",
         "sigma_0": 0.0,
         "k_0": 0.0
       },

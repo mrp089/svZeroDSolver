@@ -98,7 +98,7 @@ def cylinder_chamber(vv, activation=None, formulation=None, tension=None,
         for k in BCS_KEYS:
             vv.pop(k, None)
     else:
-        active = {"type": "genet23"}
+        active = {"type": "linear_series_spring"}
         active.update({BCS_KEYS[k]: vv.pop(k) for k in list(BCS_KEYS) if k in vv})
         if frank_starling:
             active["n0_e_c"], active["n0_values"] = list(frank_starling["e_c"]), list(frank_starling["n0"])
@@ -123,7 +123,7 @@ def flat_parameters(chamber):
     else:
         raise ValueError(f"material {mat['type']}: no flat genet23 constants")
     act = chamber["active_stress"]
-    if act["type"] == "genet23":
+    if act["type"] == "linear_series_spring":
         defaults = dict(sigma_0=0.0, k_s=1e8, k_0=260e3, mu=70.0, alpha=0.0)
         vv.update({k: act.get(v, defaults[v]) for k, v in BCS_KEYS.items()})
     return vv

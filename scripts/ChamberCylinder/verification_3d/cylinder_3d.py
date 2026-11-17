@@ -65,7 +65,8 @@ MMHG = 133.322387415  # Pa; solver inputs are SI, reports use mmHg
 
 # Formulation of the 0D block when its input omits a component (genet23);
 # passive and active are the types of its material and active_stress objects.
-FORMULATION = dict(passive="genet23", volumetric="incompressible", active="genet23", ends="lids")
+FORMULATION = dict(passive="genet23", volumetric="incompressible", active="linear_series_spring",
+                   ends="lids")
 
 # 0D material constants under the flat names used by these scripts
 HO_FLAT = {"a": "ho_a", "b": "ho_b", "a4f": "ho_af", "b4f": "ho_bf", "a4s": "ho_as",
