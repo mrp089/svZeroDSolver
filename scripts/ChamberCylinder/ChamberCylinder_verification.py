@@ -203,7 +203,8 @@ def isolated_config(vv, P_t, P_v, T, npts, ic, act=None, integrator="stiff", for
             "cardiac_period": T, "steady_initial": False, "output_variable_based": True,
             "output_all_cycles": True,
             "absolute_tolerance": 1e-9, "maximum_nonlinear_iterations": 50,
-            "integrator": integrator, "rho_infty": 0.5},
+            "integrator": integrator,
+            **({"rho_infty": 0.5} if integrator == "genalpha" else {})},
         "initial_condition": ic,
         "vessels": [
             {"boundary_conditions": {"inlet": "IN"}, "vessel_id": 0, "vessel_length": 1.0,

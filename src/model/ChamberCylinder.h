@@ -113,7 +113,7 @@ struct ChamberCylinderFormulation {
  * The material and active stress laws are those of \ref ChamberSphere. The
  * genet23 model is the material `mooney_rivlin_exponential` (\cite genet23
  * Eq. 25) with the active stress `genet23` (the Bestel-Clement-Sorine law of
- * Eqs. 30-33) driven by an activation rate (`piecewise_rate`).
+ * Eqs. 29-33) driven by an activation rate (`piecewise_rate`).
  *
  * ### Formulation
  *
@@ -135,7 +135,7 @@ struct ChamberCylinderFormulation {
  *     `bulk_modulus` \f$\kappa\f$, enforced weakly per element:
  *     \f$\int_{\Omega_e}(\tfrac12(J-1/J)-p/\kappa)\,\mathrm d\Omega=0\f$;
  *   - `ends`: `lids` (genet23, default) closes the tube with rigid lids that
- *     carry the cavity pressure (\cite genet23 Eqs. 39-44), so the wall takes
+ *     carry the cavity pressure (\cite genet23 Eqs. 39-43), so the wall takes
  *     the axial force \f$P_v\pi(R_i+\rho(R_i))^2\f$ and the length is free;
  *     `fixed_length` lets the ends slide in fixed planes, like the end faces
  *     of a 3D model with \f$u_z=0\f$: \f$\varepsilon=0\f$ and the lids carry
@@ -193,7 +193,7 @@ struct ChamberCylinderFormulation {
  * ActivationFunction). With the active stress
  * `genet23` and \f$\alpha>0\f$ (its velocity-dependent bond destruction, 12 in
  * the paper), the stiff \f$\alpha|\dot e_c|\f$ term needs the simulation
- * parameter `"integrator": "stiff"` (ConsistentStiffIntegrator).
+ * parameter `"integrator": "stiff"` (StiffIntegrator).
  *
  * ### Internal variables
  *

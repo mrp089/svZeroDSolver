@@ -258,7 +258,7 @@ class StrainDependentActiveStress : public ActiveStress {
 /**
  * @brief Bestel-Clement-Sorine active stress of \cite genet23
  *
- * The law of \cite genet23 (Eqs. 30-33, after Chapelle et al. 2012) with the
+ * The law of \cite genet23 (Eqs. 29-33, after Chapelle et al. 2012) with the
  * fiber strain \f$e_\text{fib} = \lambda - 1\f$ and a linear series spring.
  * States \f$\tau, e_c, \tau_c, k_c\f$:
  * \f[

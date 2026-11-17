@@ -224,7 +224,7 @@ def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
     output); P_ar0: initial arterial pressure. Time step 1 ms (genet23 Sec 3.1).
     The force-velocity term (bcs_alpha > 0) needs the L-stable "stiff"
     integrator; genet23's own energy-consistent midpoint scheme is not
-    available in svZeroDSolver.
+    available in svZeroDSolver. rho_infty applies to "genalpha" only.
     """
     aortic_Rmax = aortic_Rmax if aortic_Rmax is not None else 1.0e12
     vv = dict(GEOM)
@@ -247,7 +247,8 @@ def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
             "cardiac_period": 0.8, "steady_initial": False,
             "output_variable_based": True, "absolute_tolerance": 1e-9,
             "maximum_nonlinear_iterations": 50, "output_all_cycles": False,
-            "integrator": integrator, "rho_infty": rho_infty,
+            "integrator": integrator,
+            **({"rho_infty": rho_infty} if integrator == "genalpha" else {}),
         },
         # Unloaded reference geometry at rest (rho = eps = 0), so the consistent
         # cavity volume is pi Ri^2 L. genet23 preloads statically to P_at; here
