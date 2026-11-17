@@ -222,9 +222,10 @@ def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
 
     ne: finite elements through the wall; ncycle: cardiac cycles (the last is
     output); P_ar0: initial arterial pressure. Time step 1 ms (genet23 Sec 3.1).
-    The force-velocity term (bcs_alpha > 0) needs the L-stable "stiff"
-    integrator; genet23's own energy-consistent midpoint scheme is not
-    available in svZeroDSolver. rho_infty applies to "genalpha" only.
+    With the force-velocity term (bcs_alpha > 0) and the piecewise-linear
+    valves, plain generalized-alpha does not converge; the "stiff" integrator
+    does. genet23's own energy-consistent midpoint scheme is not available in
+    svZeroDSolver. rho_infty applies to "genalpha" only.
     """
     aortic_Rmax = aortic_Rmax if aortic_Rmax is not None else 1.0e12
     vv = dict(GEOM)

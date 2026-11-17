@@ -12,7 +12,7 @@ and load.
 | 2b | `passive_anisotropic_full/`: all Holzapfel-Ogden terms (exponential isotropic, fiber, sheet, fiber-sheet) with the tension-compression switch | implemented |
 | 2b' | `passive_isotropic_closed/`, `passive_anisotropic_closed/`, `passive_anisotropic_full_closed/`: the walls of steps 1–2b with free length (0D ends `lids`, loaded by the cavity pressure), 3D tube closed by an end plate, 6 L0 long | implemented (nr 1, 2, 4; full HO 2, 4, 8) |
 | 2c | `passive_helical_L2/`: the wall of step 2 with helical fibers (+60° to −60°), full cylinder with free ends, twice the test-case length; `passive_helical_a30_L2/` (uniform 30°) and `passive_helical_a60to0_L2/` (+60° to 0°) | implemented (nr 1, 2, 4) |
-| 3a | `active_prescribed/`: PV loop with a prescribed active tension, 3D cylinder coupled to the circulation of `tests/cases/chamber_cylinder.json` | implemented (nr 1, 2, 4, 8) |
+| 3a | `active_prescribed/`: PV loop with a prescribed active tension, 3D cylinder coupled to the circulation of `tests/cases/chamber_sphere.json` (tanh valves) | implemented (nr 1, 2, 4, 8) |
 | 3a' | `active_helical_L2/`: the same with helical fibers (+60° to −60°), full 3D cylinder with free ends, twice the length | implemented (nr 1, 2) |
 | 3b | PV loop with an active-stress ODE model (e.g. Land-Niederer in both) | planned |
 
@@ -182,9 +182,10 @@ end layer against the tube length and the mesh
 
 ### Active contraction in a circulation
 
-`active_prescribed/` is the 0D test case `tests/cases/chamber_cylinder.json`
-(pressure source, tanh valves, RC vessels, 1 s period) with the cylinder
-adapted to what svMultiPhysics can represent: fixed length, circumferential
+`active_prescribed/` is the circulation of the 0D test case
+`tests/cases/chamber_sphere.json` (pressure source, tanh valves, RC vessels,
+1 s period) with the cylinder of `tests/cases/chamber_cylinder.json` adapted
+to what svMultiPhysics can represent: fixed length, circumferential
 fibers, the Holzapfel-Ogden wall of `passive_anisotropic/`, no viscosity, no
 wall inertia, and the BCS active law replaced by a prescribed tension
 T(t) = 80 kPa sin²(π (t − 0.1 s)/0.4 s) on 0.1–0.5 s. The 0D active
