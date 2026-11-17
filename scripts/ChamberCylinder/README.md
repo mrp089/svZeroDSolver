@@ -23,6 +23,24 @@ svZeroDSolver blocks:
   Sec 3.1. That beat is not periodic yet: the periodic end-systolic volume is
   0.6 mL larger.
 
+## Regression case
+
+Only the test case `tests/cases/chamber_cylinder_genet_circulation.json` goes
+into svZeroDSolver; this folder stays on this branch. The case is this setup,
+coarsened for test speed:
+
+```python
+cfg = G.build(ne=3, ncycle=2)  # G = ChamberCylinder_genet_exact
+cfg["simulation_parameters"]["number_of_time_pts_per_cardiac_cycle"] = 401  # 2 ms
+cfg["simulation_parameters"]["output_interval"] = 8
+```
+
+Its `description` gives the source of every input, the reference values and
+the genet23 inconsistency. After a change, write the configuration, keep the
+`description`, regenerate the reference with
+`python tests/compute_ref_sol.py chamber_cylinder_genet_circulation.json` and
+format both files with prettier.
+
 ## Reference solutions
 
 - **Digitized genet23 Figs 5-9** (`genet23_fig{5..9}_digitized.csv`,
