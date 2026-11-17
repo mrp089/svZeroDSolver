@@ -130,10 +130,9 @@ std::unique_ptr<Material> Material::create(const std::string& type_str) {
   if (type_str == "holzapfel_ogden") {
     return std::make_unique<HolzapfelOgdenMaterial>();
   }
-  throw std::runtime_error(
-      "Unknown material type '" + type_str +
-      "'. Must be one of: mooney_rivlin, exponential, "
-      "mooney_rivlin_exponential, holzapfel_ogden");
+  throw std::runtime_error("Unknown material type '" + type_str +
+                           "'. Must be one of: mooney_rivlin, exponential, "
+                           "mooney_rivlin_exponential, holzapfel_ogden");
 }
 
 double MooneyRivlinExponentialMaterial::get(const std::string& name) const {
@@ -150,8 +149,8 @@ Material::Mat3 MooneyRivlinExponentialMaterial::stress(const Mat3& C, double J,
   return stress_t<double>(C, J, f, c);
 }
 
-Material::Mat3c MooneyRivlinExponentialMaterial::stress(const Mat3c& C,
-                                                        cplx J, const Vec3& f,
+Material::Mat3c MooneyRivlinExponentialMaterial::stress(const Mat3c& C, cplx J,
+                                                        const Vec3& f,
                                                         const Vec3& s) const {
   (void)s;
   const double c[6] = {get("W1"), get("W2"), get("C0"),
