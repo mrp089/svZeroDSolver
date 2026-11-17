@@ -82,7 +82,7 @@ def reference(model_0d, cache_dir, direct_ne=None):
     if direct_ne:
         return zero_d(model_0d, cache_dir, direct_ne), f"0D ne = {direct_ne}"
     with open(model_0d) as f:
-        ne = int(CP.find_cylinder(json.load(f))["zero_d_element_values"]["num_elements"])
+        ne = int(CP.find_cylinder(json.load(f))["values"]["num_elements"])
     c, f = (zero_d(model_0d, cache_dir, n) for n in (2 * ne, 4 * ne))
     ref = dict(c)
     for k in ("V", "P", "Q_in", "Q_out", "beta"):

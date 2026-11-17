@@ -87,8 +87,8 @@ def main():
     out_dir = os.path.join(root, "output")
     os.makedirs(out_dir, exist_ok=True)
     with open(model) as f:
-        L = next(v for v in json.load(f)["vessels"]
-                 if v.get("zero_d_element_type") == "ChamberCylinder")["zero_d_element_values"]["length"]
+        L = next(c for c in json.load(f)["chambers"]
+                 if c["type"] == "ChamberCylinder")["values"]["length"]
     if a.active:
         import run_active_study as RA
         sols = {}

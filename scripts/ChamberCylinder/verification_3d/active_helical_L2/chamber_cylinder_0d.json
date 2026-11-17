@@ -50,14 +50,33 @@
       }
     },
     {
-      "boundary_conditions": {},
-      "vessel_id": 1,
+      "boundary_conditions": {
+        "outlet": "OUT"
+      },
+      "vessel_id": 2,
       "vessel_length": 1.0,
-      "vessel_name": "cylinder",
-      "zero_d_element_type": "ChamberCylinder",
-      "formulation": {
-        "volumetric": "st91",
-        "ends": "fixed_length"
+      "vessel_name": "downstream_vessel",
+      "zero_d_element_type": "BloodVessel",
+      "zero_d_element_values": {
+        "R_poiseuille": 10000000.0,
+        "C": 1e-9
+      }
+    }
+  ],
+  "chambers": [
+    {
+      "type": "ChamberCylinder",
+      "name": "cylinder",
+      "values": {
+        "Ri": 0.019,
+        "Re": 0.033,
+        "length": 0.1142,
+        "alpha_endo": 60.0,
+        "alpha_epi": -60.0,
+        "gamma": 0.0,
+        "num_elements": 8,
+        "density": 0.0,
+        "bulk_modulus": 10000000.0
       },
       "material": {
         "type": "holzapfel_ogden",
@@ -358,29 +377,9 @@
         "fourier_modes": 200,
         "ramp": 0
       },
-      "zero_d_element_values": {
-        "Ri": 0.019,
-        "Re": 0.033,
-        "length": 0.1142,
-        "alpha_endo": 60.0,
-        "alpha_epi": -60.0,
-        "gamma": 0.0,
-        "num_elements": 8,
-        "density": 0.0,
-        "bulk_modulus": 10000000.0
-      }
-    },
-    {
-      "boundary_conditions": {
-        "outlet": "OUT"
-      },
-      "vessel_id": 2,
-      "vessel_length": 1.0,
-      "vessel_name": "downstream_vessel",
-      "zero_d_element_type": "BloodVessel",
-      "zero_d_element_values": {
-        "R_poiseuille": 10000000.0,
-        "C": 1e-9
+      "formulation": {
+        "volumetric": "st91",
+        "ends": "fixed_length"
       }
     }
   ],

@@ -57,42 +57,38 @@ GEOM = dict(Ri=_RI, Re=_RE, length=_L, alpha_endo=60.0, alpha_epi=-60.0)
 MAT = dict(C1=7.0, C2=0.0, C3=700.0, C4=2.0, C5=50.0, C6=4.0, gamma=70.0,
            k_s=1e8, k_0=260e3, mu=70.0)
 SIGMA0 = 65e3  # maximum active stress sigma_0 [Pa]
-# |e_c dot| enters the BCS decay exactly (Eq 33); the block's default smoothing
-# eps = 1e-4 is a Newton aid, reduced here to a numerically inert value.
-FV_REG = 1e-10
-
-
 # --- ChamberCylinder input from flat parameters -------------------------------
-# The block takes its wall material and active stress law as "material" and
-# "active_stress" objects (shared with ChamberSphere). The scripts keep the
-# constants in one flat dict and split it here.
-GENET23_KEYS = ("C1", "C2", "C3", "C4", "C5", "C6")
+# The block is a chamber that takes its wall material and active stress law as
+# "material" and "active_stress" objects (shared with ChamberSphere). The
+# scripts keep the constants in one flat dict and split it here. The genet23
+# passive energy is the material mooney_rivlin_exponential, whose W1, W2, C0,
+# C1, C2, C3 are genet23's C1-C6.
+GENET23_TO_MRE = {"C1": "W1", "C2": "W2", "C3": "C0", "C4": "C1", "C5": "C2", "C6": "C3"}
+GENET23_KEYS = tuple(GENET23_TO_MRE)
 HO_KEYS = {"ho_a": "a", "ho_b": "b", "ho_af": "a4f", "ho_bf": "b4f", "ho_as": "a4s",
            "ho_bs": "b4s", "ho_afs": "afs", "ho_bfs": "bfs", "ho_k": "k"}
 BCS_KEYS = {"sigma_max": "sigma_0", "k_s": "k_s", "k_0": "k_0", "mu": "mu",
-            "bcs_alpha": "alpha", "fv_reg": "fv_reg"}
+            "bcs_alpha": "alpha"}
 
 
-def cylinder_vessel(vv, activation=None, formulation=None, tension=None,
-                    frank_starling=None):
-    """ChamberCylinder vessel entries from flat parameters.
+def cylinder_chamber(vv, activation=None, formulation=None, tension=None,
+                     frank_starling=None, name="ventricle"):
+    """ChamberCylinder entry of "chambers" from flat parameters.
 
     vv: geometry, gamma, num_elements, density, bulk_modulus and the material
-    (C1-C6 for genet23, or ho_* for holzapfel_ogden) and BCS constants
-    (sigma_max, k_s, k_0, mu, bcs_alpha, fv_reg). activation: the
-    activation_function object; tension: samples {"t", "T", "fourier_modes",
-    "ramp"} of a prescribed tension (active stress uniform_unsteady, no
-    activation); frank_starling: {"e_c", "n0"}. formulation: volumetric and
-    ends. Returns the keys "formulation", "material", "active_stress",
-    "zero_d_element_values" and "activation_function" of the vessel.
+    (genet23's C1-C6, or ho_* for holzapfel_ogden) and BCS constants
+    (sigma_max, k_s, k_0, mu, bcs_alpha). activation: the activation_function
+    object; tension: samples {"t", "T", "fourier_modes", "ramp"} of a
+    prescribed tension (active stress uniform_unsteady, no activation);
+    frank_starling: {"e_c", "n0"}. formulation: volumetric and ends.
     """
     vv = dict(vv)
     if any(float(vv.get(k, 0.0)) != 0.0 for k in HO_KEYS):
         material = {"type": "holzapfel_ogden"}
         material.update({HO_KEYS[k]: vv[k] for k in HO_KEYS if k in vv})
     else:
-        material = {"type": "genet23"}
-        material.update({k: vv[k] for k in GENET23_KEYS if k in vv})
+        material = {"type": "mooney_rivlin_exponential"}
+        material.update({GENET23_TO_MRE[k]: vv[k] for k in GENET23_KEYS if k in vv})
     for k in list(HO_KEYS) + list(GENET23_KEYS):
         vv.pop(k, None)
     if tension is not None:
@@ -106,31 +102,54 @@ def cylinder_vessel(vv, activation=None, formulation=None, tension=None,
         active.update({BCS_KEYS[k]: vv.pop(k) for k in list(BCS_KEYS) if k in vv})
         if frank_starling:
             active["n0_e_c"], active["n0_values"] = list(frank_starling["e_c"]), list(frank_starling["n0"])
-    out = {}
-    if formulation:
-        out["formulation"] = dict(formulation)
-    out.update(material=material, active_stress=active, zero_d_element_values=vv)
+    out = {"type": "ChamberCylinder", "name": name, "values": vv}
     if tension is None and activation is not None:
         out["activation_function"] = activation
+    out.update(material=material, active_stress=active)
+    if formulation:
+        out["formulation"] = dict(formulation)
     return out
 
 
-def flat_parameters(vessel):
-    """Inverse of cylinder_vessel: the flat parameters of a ChamberCylinder
-    vessel (zero_d_element_values plus the material and BCS constants)."""
-    vv = dict(vessel["zero_d_element_values"])
-    mat = vessel["material"]
+def flat_parameters(chamber):
+    """Inverse of cylinder_chamber: the flat parameters of a ChamberCylinder
+    chamber (values plus the material and BCS constants)."""
+    vv = dict(chamber["values"])
+    mat = chamber["material"]
     if mat["type"] == "holzapfel_ogden":
         vv.update({k: mat.get(v, 0.0) for k, v in HO_KEYS.items()})
-    elif mat["type"] == "genet23":
-        vv.update({k: mat.get(k, 0.0) for k in GENET23_KEYS})
+    elif mat["type"] == "mooney_rivlin_exponential":
+        vv.update({k: mat.get(v, 0.0) for k, v in GENET23_TO_MRE.items()})
     else:
         raise ValueError(f"material {mat['type']}: no flat genet23 constants")
-    act = vessel["active_stress"]
+    act = chamber["active_stress"]
     if act["type"] == "genet23":
-        defaults = dict(sigma_0=0.0, k_s=1e8, k_0=260e3, mu=70.0, alpha=0.0, fv_reg=1e-4)
+        defaults = dict(sigma_0=0.0, k_s=1e8, k_0=260e3, mu=70.0, alpha=0.0)
         vv.update({k: act.get(v, defaults[v]) for k, v in BCS_KEYS.items()})
     return vv
+
+
+def find_cylinder(cfg):
+    """The ChamberCylinder entry of a configuration."""
+    return next(c for c in cfg.get("chambers", []) if c["type"] == "ChamberCylinder")
+
+
+def activation_table(tsys, tdias, qrs, ramp, alpha_max, alpha_min, period=0.8):
+    """piecewise_rate activation_function of the ECG-based activation rate
+    nu(t) of the authors' input functions: alpha_min until the linear rise
+    through 0 at tsys reaches it, alpha_max from tsys + qrs, a plateau until
+    tdias - qrs, a linear fall to 0 at tdias and to alpha_min at tdias + ramp.
+    Break points are divided by the period."""
+    t_max = tsys + qrs
+    t_plat = tsys + qrs + max(0.0, tdias - tsys - 2.0 * qrs)
+    t_fin = tdias + ramp
+    t_clamp = tsys + alpha_min * qrs / alpha_max  # the rise reaches alpha_min
+    assert 0.0 <= t_clamp and t_fin <= period
+    t = [0.0, t_clamp, t_max, t_plat, tdias, t_fin, period]
+    u = [alpha_min, alpha_min, alpha_max, alpha_max, 0.0, alpha_min, alpha_min]
+    return {"type": "piecewise_rate", "u_t": [round(x / period, 12) for x in t],
+            "u_values": u}
+
 
 # --- Input functions (authors' code, genet23 Refs 33/6) ---
 MMHG = 134.0  # the authors' Pa-per-mmHg conversion
@@ -146,9 +165,9 @@ ACT_AMAX, ACT_AMIN = 35.0, -35.0
 
 def activation_times(period=0.8):
     """Return (tsys, tdias): the nu = 0 upstroke (depolarization time = delay +
-    ramp) and downstroke (depolarization end) for a heart period [s]. The
-    `nagumo` activation function builds the waveform knees from these, the QRS
-    width and the final ramp."""
+    ramp) and downstroke (depolarization end) for a heart period [s].
+    activation_table builds the waveform knees from these, the QRS width and
+    the final ramp."""
     QT = ACT_QTC * math.sqrt(period)  # Bazett
     ST = QT - ACT_QRSD
     tsys = ACT_RAMP + ACT_DELAY
@@ -211,10 +230,8 @@ def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
     vv = dict(GEOM)
     vv.update(MAT)
     vv.update(dict(sigma_max=sigma_max, num_elements=ne, bcs_alpha=bcs_alpha,
-                   density=density, fv_reg=FV_REG))
-    activation = {"type": "nagumo", "tsys": tsys, "tdias": tdias,
-                  "qrs": act_qrs, "ramp": act_ramp,
-                  "alpha_max": alpha_max, "alpha_min": alpha_min}
+                   density=density))
+    activation = activation_table(tsys, tdias, act_qrs, act_ramp, alpha_max, alpha_min)
     cfg = {
         "boundary_conditions": [
             {"bc_name": "ATRIUM", "bc_type": "PRESSURE",
@@ -244,9 +261,6 @@ def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
              "vessel_length": 1.0, "vessel_name": "upstream",
              "zero_d_element_type": "BloodVessel",
              "zero_d_element_values": {"R_poiseuille": 0.0, "C": 0.0}},
-            {"boundary_conditions": {}, "vessel_id": 1, "vessel_length": 1.0,
-             "vessel_name": "ventricle", "zero_d_element_type": "ChamberCylinder",
-             **cylinder_vessel(vv, activation)},
             # Eq 36b: C_ar at the aortic-valve outlet node P_ar.
             {"boundary_conditions": {}, "vessel_id": 2, "vessel_length": 1.0,
              "vessel_name": "aortic_root", "zero_d_element_type": "BloodVessel",
@@ -261,6 +275,7 @@ def build(P_at=PAT_MAX, P_vs=P_VS, sigma_max=SIGMA0, bcs_alpha=12.0, ne=12,
              "zero_d_element_type": "BloodVessel",
              "zero_d_element_values": {"R_poiseuille": Rd, "C": 0.0}},
         ],
+        "chambers": [cylinder_chamber(vv, activation)],
         "valves": [
             {"type": "PiecewiseValve", "name": "mitral",
              "params": {"Rmax": K_iso_inv, "Rmin": K_at_inv,

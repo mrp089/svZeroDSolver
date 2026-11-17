@@ -38,32 +38,36 @@
   "vessels": [
     {
       "boundary_conditions": {
-        "inlet": "CAVITY",
-        "outlet": "CLOSED"
+        "inlet": "CAVITY"
       },
       "vessel_id": 0,
       "vessel_length": 1.0,
-      "vessel_name": "cylinder",
-      "zero_d_element_type": "ChamberCylinder",
-      "formulation": {
-        "volumetric": "st91",
-        "ends": "lids"
-      },
-      "material": {
-        "type": "genet23",
-        "C1": 50000.0,
-        "C2": 0.0,
-        "C3": 0.0,
-        "C4": 0.0,
-        "C5": 0.0,
-        "C6": 0.0
-      },
-      "active_stress": {
-        "type": "genet23",
-        "sigma_0": 0.0,
-        "k_0": 0.0
-      },
+      "vessel_name": "in",
+      "zero_d_element_type": "BloodVessel",
       "zero_d_element_values": {
+        "R_poiseuille": 0.0,
+        "C": 0.0
+      }
+    },
+    {
+      "boundary_conditions": {
+        "outlet": "CLOSED"
+      },
+      "vessel_id": 1,
+      "vessel_length": 1.0,
+      "vessel_name": "out",
+      "zero_d_element_type": "BloodVessel",
+      "zero_d_element_values": {
+        "R_poiseuille": 0.0,
+        "C": 0.0
+      }
+    }
+  ],
+  "chambers": [
+    {
+      "type": "ChamberCylinder",
+      "name": "cylinder",
+      "values": {
         "Ri": 0.019034760191327525,
         "Re": 0.032969171761268755,
         "length": 0.2284171222959303,
@@ -75,16 +79,43 @@
         "num_elements": 32
       },
       "activation_function": {
-        "type": "nagumo",
-        "tsys": 0.1,
-        "tdias": 0.4,
-        "qrs": 0.08,
-        "ramp": 0.01,
-        "alpha_max": 0.0,
-        "alpha_min": 0.0
+        "type": "piecewise_rate",
+        "u_t": [0.0, 1.0],
+        "u_values": [0.0, 0.0]
+      },
+      "material": {
+        "type": "mooney_rivlin_exponential",
+        "W1": 50000.0,
+        "W2": 0.0,
+        "C0": 0.0,
+        "C1": 0.0,
+        "C2": 0.0,
+        "C3": 0.0
+      },
+      "active_stress": {
+        "type": "genet23",
+        "sigma_0": 0.0,
+        "k_0": 0.0
+      },
+      "formulation": {
+        "volumetric": "st91",
+        "ends": "lids"
       }
     }
   ],
-  "junctions": [],
+  "junctions": [
+    {
+      "junction_name": "J0",
+      "junction_type": "NORMAL_JUNCTION",
+      "inlet_blocks": ["in"],
+      "outlet_blocks": ["cylinder"]
+    },
+    {
+      "junction_name": "J1",
+      "junction_type": "NORMAL_JUNCTION",
+      "inlet_blocks": ["cylinder"],
+      "outlet_blocks": ["out"]
+    }
+  ],
   "valves": []
 }

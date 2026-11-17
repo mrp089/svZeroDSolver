@@ -61,20 +61,10 @@ def frank_starling(ec):
     return np.interp(ec, x, y)
 
 
-def nagumo(t, tsys, tdias, qrs, ramp, amax, amin, T=0.8):
-    """Activation rate nu(t) (an input of the model, not under test)."""
-    t = t % T
-    t_max = tsys + qrs
-    t_plat = tsys + qrs + max(0.0, tdias - tsys - 2 * qrs)
-    if t < t_max:
-        nu = amax * (t - tsys) / (t_max - tsys)
-    elif t < t_plat:
-        nu = amax
-    elif t < tdias:
-        nu = amax * (1 - (t - t_plat) / (tdias - t_plat))
-    else:
-        nu = amin * (t - tdias) / (tdias + ramp - tdias)
-    return max(nu, amin)
+def activation_rate(t, act, T=0.8):
+    """Activation rate nu(t) of a piecewise_rate activation_function (an input
+    of the model, not under test)."""
+    return float(np.interp((t % T) / T, act["u_t"], act["u_values"]))
 
 
 class Cylinder:
@@ -175,12 +165,12 @@ class Cylinder:
         return Qp - Qe - Qv - Qa
 
     def bcs_rhs(self, q, ec, tauc, kc, nu):
-        """BCS law, Eqs 32-33 (|e_c dot| smoothed by fv_reg as in the block)."""
+        """BCS law, Eqs 32-33."""
         a = self.act
         _, _, _, I4 = self.invariants(q)
         efib = np.sqrt(I4) - 1
         ecd = (a["k_s"] * (efib - ec) - tauc) / a["mu"]
-        decay = abs(nu) + a["alpha"] * np.sqrt(ecd ** 2 + a["fv_reg"])
+        decay = abs(nu) + a["alpha"] * abs(ecd)
         n0 = frank_starling(ec)
         taud = -decay * tauc + n0 * a["sigma0"] * max(nu, 0.0) + kc * ecd
         kcd = -decay * kc + n0 * a["k0"] * max(nu, 0.0)
@@ -198,11 +188,12 @@ def series(out, name):
 def isolated_config(vv, P_t, P_v, T, npts, ic, act=None, integrator="stiff", formulation=None,
                     tension=None):
     """Cylinder alone: prescribed cavity pressure at the inlet, closed outlet.
-    vv: flat parameters (G.cylinder_vessel); formulation: volumetric and ends
-    (default: genet23); tension: samples of a prescribed active tension
-    (active stress uniform_unsteady) instead of the BCS law."""
-    act = act or {"type": "nagumo", "tsys": 0.1, "tdias": 0.4, "qrs": 0.08,
-                  "ramp": 0.01, "alpha_max": 0.0, "alpha_min": 0.0}
+    The chamber connects through junctions to two empty vessels that carry the
+    boundary conditions. vv: flat parameters (G.cylinder_chamber); formulation:
+    volumetric and ends (default: genet23); tension: samples of a prescribed
+    active tension (active stress uniform_unsteady) instead of the BCS law."""
+    act = act or {"type": "piecewise_rate", "u_t": [0.0, 1.0], "u_values": [0.0, 0.0]}
+    empty = {"R_poiseuille": 0.0, "C": 0.0}
     cfg = {
         "boundary_conditions": [
             {"bc_name": "IN", "bc_type": "PRESSURE", "bc_values": {"P": P_v, "t": P_t}},
@@ -214,11 +205,20 @@ def isolated_config(vv, P_t, P_v, T, npts, ic, act=None, integrator="stiff", for
             "absolute_tolerance": 1e-9, "maximum_nonlinear_iterations": 50,
             "integrator": integrator, "rho_infty": 0.5},
         "initial_condition": ic,
-        "vessels": [{"boundary_conditions": {"inlet": "IN", "outlet": "OUT"}, "vessel_id": 0,
-                     "vessel_length": 1.0, "vessel_name": "cyl",
-                     "zero_d_element_type": "ChamberCylinder",
-                     **G.cylinder_vessel(vv, act, formulation, tension)}],
-        "junctions": [], "valves": []}
+        "vessels": [
+            {"boundary_conditions": {"inlet": "IN"}, "vessel_id": 0, "vessel_length": 1.0,
+             "vessel_name": "in", "zero_d_element_type": "BloodVessel",
+             "zero_d_element_values": dict(empty)},
+            {"boundary_conditions": {"outlet": "OUT"}, "vessel_id": 1, "vessel_length": 1.0,
+             "vessel_name": "out", "zero_d_element_type": "BloodVessel",
+             "zero_d_element_values": dict(empty)}],
+        "chambers": [G.cylinder_chamber(vv, act, formulation, tension, name="cyl")],
+        "junctions": [
+            {"junction_name": "J0", "junction_type": "NORMAL_JUNCTION",
+             "inlet_blocks": ["in"], "outlet_blocks": ["cyl"]},
+            {"junction_name": "J1", "junction_type": "NORMAL_JUNCTION",
+             "inlet_blocks": ["cyl"], "outlet_blocks": ["out"]}],
+        "valves": []}
     return cfg
 
 
@@ -234,7 +234,7 @@ def t1_symmetry(ne=6, ncycle=4):
     runs = {}
     for sgn in (1, -1):
         cfg = G.build(ne=ne, ncycle=ncycle, P_vs=G.P_VS)
-        vv = cfg["vessels"][1]["zero_d_element_values"]
+        vv = G.find_cylinder(cfg)["values"]
         vv["alpha_endo"], vv["alpha_epi"] = 60.0 * sgn, -60.0 * sgn
         cfg["simulation_parameters"]["absolute_tolerance"] = 1e-8
         out = svzerod.simulate(cfg)
@@ -550,7 +550,7 @@ def block_beat(ne, npts=801, ncycle=G.NCYCLE):
     cfg = G.build(ne=ne, ncycle=ncycle, P_vs=G.P_VS)
     cfg["simulation_parameters"]["number_of_time_pts_per_cardiac_cycle"] = npts
     cfg["simulation_parameters"]["absolute_tolerance"] = 1e-7
-    vv = G.flat_parameters(cfg["vessels"][1])
+    vv = G.flat_parameters(G.find_cylinder(cfg))
     out = svzerod.simulate(cfg)
     t, V = series(out, "volume:ventricle")
     m = t >= t.max() - 0.8 - 1e-9
@@ -571,7 +571,7 @@ def block_beat(ne, npts=801, ncycle=G.NCYCLE):
     for v, name in (("ec", "e_c"), ("tauc", "tau_c"), ("kc", "k_c")):
         d[v] = np.array([series(out, f"{name}_{q}:ventricle")[1][m] for q in range(nqb)])
     d["vv"] = vv
-    d["act"] = cfg["vessels"][1]["activation_function"]
+    d["act"] = G.find_cylinder(cfg)["activation_function"]
     return d
 
 
@@ -598,12 +598,12 @@ def independent_beat(blk, nq=24, rtol=1e-7):
     started from the block's state at the beginning of the beat."""
     vv = blk["vv"]
     mat = {k: vv[k] for k in ("C1", "C2", "C3", "C4", "C5", "C6")}
-    act = dict(k_s=vv["k_s"], mu=vv["mu"], alpha=vv["bcs_alpha"], fv_reg=vv["fv_reg"],
+    act = dict(k_s=vv["k_s"], mu=vv["mu"], alpha=vv["bcs_alpha"],
                sigma0=vv["sigma_max"], k0=vv["k_0"])
     cyl = Cylinder(vv["Ri"], vv["Re"], vv["length"], vv["alpha_endo"], vv["alpha_epi"], mat,
                    gamma=vv["gamma"], rho0=vv["density"], nq=nq, act=act)
     a = blk["act"]
-    nu = lambda t: nagumo(t, a["tsys"], a["tdias"], a["qrs"], a["ramp"], a["alpha_max"], a["alpha_min"])
+    nu = lambda t: activation_rate(t, a)
     tat, Pat_v = G.atrial_pressure(0.8)
     Pat = lambda t: float(np.interp((blk["t0"] + t) % 0.8, tat, Pat_v))
     n = cyl.nq

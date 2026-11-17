@@ -6,6 +6,7 @@
 #include <memory>
 #include <sstream>
 
+#include "ChamberCylinder.h"
 #include "ImpedanceBC.h"
 
 namespace {
@@ -331,13 +332,14 @@ std::unique_ptr<Material> generate_material(const nlohmann::json& j,
         "Missing 'material' for chamber " + chamber_name +
         ". Required with structure: {\"type\": \"mooney_rivlin\", \"W1\": "
         "10e3, \"W2\": 40} (or type exponential with C0, C1, C2, C3; "
-        "mooney_rivlin_exponential with W1, W2, C0, C1, C2, C3).");
+        "mooney_rivlin_exponential with W1, W2, C0, C1, C2, C3; "
+        "holzapfel_ogden with a, b, a4f, b4f, a4s, b4s, afs, bfs, k).");
   }
   if (!j.contains("type") || !j["type"].is_string()) {
     throw std::runtime_error(
         "Missing or invalid 'type' in material for chamber " + chamber_name +
         ". Must be one of: mooney_rivlin, exponential, "
-        "mooney_rivlin_exponential");
+        "mooney_rivlin_exponential, holzapfel_ogden");
   }
 
   std::string type_str = j["type"];
@@ -355,13 +357,15 @@ std::unique_ptr<ActiveStress> generate_active_stress(
         "\"alpha_max\": 30.0, \"alpha_min\": -30.0, \"sigma_max\": 185e3} "
         "(or type strain_dependent with E_s, mu, alpha_r, alpha, k_0, "
         "sigma_0, n0_e_c, n0_values, m0_e_c, m0_values; genet23 with sigma_0, "
-        "k_s, k_0, mu, alpha, n0_e_c, n0_values).");
+        "k_s, k_0, mu, alpha, n0_e_c, n0_values; uniform_unsteady with t, T, "
+        "fourier_modes, ramp).");
   }
   if (!j.contains("type") || !j["type"].is_string()) {
     throw std::runtime_error(
         "Missing or invalid 'type' in active_stress for chamber " +
         chamber_name +
-        ". Must be one of: strain_independent, strain_dependent, genet23");
+        ". Must be one of: strain_independent, strain_dependent, genet23, "
+        "uniform_unsteady");
   }
 
   std::string type_str = j["type"];
@@ -920,9 +924,16 @@ void create_chambers(
                      chamber_name);
     generate_block(model, chamber_config["values"], chamber_type, chamber_name);
 
-    auto act_func = generate_activation_function(
-        model, chamber_config["activation_function"], chamber_name);
-    model.get_block(chamber_name)->set_activation_function(std::move(act_func));
+    // The activation function drives the active stress law; laws without
+    // activation (uniform_unsteady) take none, which the block checks.
+    const bool has_law =
+        chamber_type == "ChamberSphere" || chamber_type == "ChamberCylinder";
+    if (!has_law || chamber_config.contains("activation_function")) {
+      auto act_func = generate_activation_function(
+          model, chamber_config["activation_function"], chamber_name);
+      model.get_block(chamber_name)
+          ->set_activation_function(std::move(act_func));
+    }
 
     // Create and set material and active stress model for chamber types
     // that use one
@@ -933,6 +944,29 @@ void create_chambers(
       auto act_stress =
           generate_active_stress(chamber_config["active_stress"], chamber_name);
       model.get_block(chamber_name)->set_active_stress(std::move(act_stress));
+    }
+
+    // ChamberCylinder: optional formulation of its volumetric law and ends,
+    // {"volumetric": ..., "ends": ...}; omitted components keep genet23.
+    if (chamber_type == "ChamberCylinder" &&
+        chamber_config.contains("formulation")) {
+      const auto& fc = chamber_config["formulation"];
+      if (!fc.is_object()) {
+        throw std::runtime_error("formulation of chamber " + chamber_name +
+                                 " must be an object.");
+      }
+      ChamberCylinderFormulation formulation;
+      for (const auto& el : fc.items()) {
+        if (el.key()[0] == '_') continue;
+        if (!el.value().is_string()) {
+          throw std::runtime_error("formulation component " + el.key() +
+                                   " of chamber " + chamber_name +
+                                   " must be a string.");
+        }
+        formulation.set(el.key(), el.value().get<std::string>());
+      }
+      auto* cc = dynamic_cast<ChamberCylinder*>(model.get_block(chamber_name));
+      if (cc != nullptr) cc->set_formulation(formulation);
     }
 
     DEBUG_MSG("Created chamber " << chamber_name);

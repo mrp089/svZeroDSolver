@@ -70,29 +70,56 @@ FORMULATION = dict(passive="genet23", volumetric="incompressible", active="genet
 # 0D material constants under the flat names used by these scripts
 HO_FLAT = {"a": "ho_a", "b": "ho_b", "a4f": "ho_af", "b4f": "ho_bf", "a4s": "ho_as",
            "b4s": "ho_bs", "afs": "ho_afs", "bfs": "ho_bfs", "k": "ho_k"}
-GENET23_FLAT = {"genet23": {k: k for k in ("C1", "C2", "C3", "C4", "C5", "C6")},
+GENET23_FLAT = {"mooney_rivlin_exponential": {"W1": "C1", "W2": "C2", "C0": "C3", "C1": "C4",
+                                              "C2": "C5", "C3": "C6"},
                 "mooney_rivlin": {"W1": "C1", "W2": "C2"},
                 "exponential": {"C0": "C3", "C1": "C4", "C2": "C5", "C3": "C6"}}
 
 
-def formulation(vessel):
-    """Formulation of a ChamberCylinder vessel of a 0D input: volumetric law
+def find_cylinder(cfg):
+    """The ChamberCylinder entry of the chambers of a 0D input."""
+    blocks = [c for c in cfg.get("chambers", []) if c["type"] == "ChamberCylinder"]
+    if len(blocks) != 1:
+        raise ValueError(f"expected one ChamberCylinder chamber, found {len(blocks)}")
+    return blocks[0]
+
+
+def between_bcs(cyl, inlet, outlet):
+    """vessels, chambers and junctions that place the chamber cyl between the
+    boundary conditions inlet and outlet (through empty vessels)."""
+    name = cyl["name"]
+    empty = {"R_poiseuille": 0.0, "C": 0.0}
+    vessels = [{"boundary_conditions": {"inlet": inlet}, "vessel_id": 0, "vessel_length": 1.0,
+                "vessel_name": "in", "zero_d_element_type": "BloodVessel",
+                "zero_d_element_values": dict(empty)},
+               {"boundary_conditions": {"outlet": outlet}, "vessel_id": 1, "vessel_length": 1.0,
+                "vessel_name": "out", "zero_d_element_type": "BloodVessel",
+                "zero_d_element_values": dict(empty)}]
+    junctions = [{"junction_name": "J0", "junction_type": "NORMAL_JUNCTION",
+                  "inlet_blocks": ["in"], "outlet_blocks": [name]},
+                 {"junction_name": "J1", "junction_type": "NORMAL_JUNCTION",
+                  "inlet_blocks": [name], "outlet_blocks": ["out"]}]
+    return dict(vessels=vessels, chambers=[cyl], junctions=junctions, valves=[])
+
+
+def formulation(cyl):
+    """Formulation of the ChamberCylinder chamber of a 0D input: volumetric law
     and ends, and the types of its material (passive) and active stress
     (active)."""
     form = dict(FORMULATION)
-    form.update({k: x for k, x in vessel.get("formulation", {}).items() if not k.startswith("_")})
-    form["passive"] = "holzapfel_ogden" if vessel["material"]["type"] == "holzapfel_ogden" \
+    form.update({k: x for k, x in cyl.get("formulation", {}).items() if not k.startswith("_")})
+    form["passive"] = "holzapfel_ogden" if cyl["material"]["type"] == "holzapfel_ogden" \
         else "genet23"
-    form["active"] = vessel["active_stress"]["type"]
+    form["active"] = cyl["active_stress"]["type"]
     return form
 
 
-def flat_values(vessel):
-    """zero_d_element_values of a ChamberCylinder vessel plus its material
-    constants under flat names: C1-C6 (genet23 energy; mooney_rivlin and
+def flat_values(cyl):
+    """values of a ChamberCylinder chamber plus its material constants under
+    flat names: genet23's C1-C6 (mooney_rivlin_exponential; mooney_rivlin and
     exponential map onto it) or ho_a ... ho_k (holzapfel_ogden)."""
-    vals = dict(vessel["zero_d_element_values"])
-    mat = vessel["material"]
+    vals = dict(cyl["values"])
+    mat = cyl["material"]
     names = HO_FLAT if mat["type"] == "holzapfel_ogden" else GENET23_FLAT[mat["type"]]
     vals.update({flat: float(mat.get(key, 0.0)) for key, flat in names.items()})
     return vals
@@ -103,15 +130,16 @@ def read_0d(path):
     0D input."""
     with open(path) as f:
         cfg = json.load(f)
-    blocks = [v for v in cfg["vessels"] if v["zero_d_element_type"] == "ChamberCylinder"]
-    if len(blocks) != 1:
-        raise ValueError(f"{path}: expected one ChamberCylinder vessel, found {len(blocks)}")
-    blk = blocks[0]
-    inlet = blk["boundary_conditions"].get("inlet")
+    blk = find_cylinder(cfg)
+    # the chamber's inlet: junction -> vessel -> inlet boundary condition
+    jun = next((j for j in cfg.get("junctions", []) if blk["name"] in j["outlet_blocks"]), None)
+    ves = next((v for v in cfg["vessels"] if jun and v["vessel_name"] in jun["inlet_blocks"]),
+               None)
+    inlet = ves["boundary_conditions"].get("inlet") if ves else None
     bc = next((b for b in cfg["boundary_conditions"] if b["bc_name"] == inlet), None)
     if bc is None or bc["bc_type"] != "PRESSURE":
         raise ValueError(f"{path}: the ChamberCylinder inlet must be a PRESSURE boundary condition")
-    return dict(name=blk["vessel_name"], values=flat_values(blk),
+    return dict(name=blk["name"], values=flat_values(blk),
                 formulation=formulation(blk), t=list(bc["bc_values"]["t"]),
                 P=list(bc["bc_values"]["P"]), config=cfg)
 

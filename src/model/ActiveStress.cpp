@@ -7,6 +7,10 @@
 #include <cmath>
 #include <stdexcept>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 namespace {
 
 using cplx = std::complex<double>;
@@ -50,9 +54,13 @@ std::unique_ptr<ActiveStress> ActiveStress::create(
   if (type_str == "genet23") {
     return std::make_unique<Genet23ActiveStress>();
   }
+  if (type_str == "uniform_unsteady") {
+    return std::make_unique<UniformUnsteadyActiveStress>();
+  }
   throw std::runtime_error(
       "Unknown active_stress type '" + type_str +
-      "'. Must be one of: strain_independent, strain_dependent, genet23");
+      "'. Must be one of: strain_independent, strain_dependent, genet23, "
+      "uniform_unsteady");
 }
 
 void ActiveStress::linearize(const double* a, const double* adot, double lambda,
@@ -84,7 +92,8 @@ void ActiveStress::linearize(const double* a, const double* adot, double lambda,
 // StrainIndependentActiveStress
 // ============================================================
 
-void StrainIndependentActiveStress::update_time(double signal) {
+void StrainIndependentActiveStress::update_time(double time, double signal) {
+  (void)time;
   const double alpha_max = params_.at("alpha_max");
   const double alpha_min = params_.at("alpha_min");
   const double act_t = alpha_max * signal + alpha_min * (1 - signal);
@@ -109,7 +118,8 @@ void StrainIndependentActiveStress::residual(const cplx* a, const cplx* adot,
 // StrainDependentActiveStress
 // ============================================================
 
-void StrainDependentActiveStress::update_time(double signal) {
+void StrainDependentActiveStress::update_time(double time, double signal) {
+  (void)time;
   if (signal >= 0.0) {
     u_plus_ = signal;
     u_minus_ = 0.0;
@@ -196,7 +206,8 @@ void Genet23ActiveStress::finalize() {
   }
 }
 
-void Genet23ActiveStress::update_time(double signal) {
+void Genet23ActiveStress::update_time(double time, double signal) {
+  (void)time;
   nu_abs_ = std::abs(signal);
   nu_plus_ = std::max(signal, 0.0);
 }
@@ -233,4 +244,95 @@ void Genet23ActiveStress::residual(const double* a, const double* adot,
 void Genet23ActiveStress::residual(const cplx* a, const cplx* adot, cplx lambda,
                                    cplx* R) const {
   residual_t<cplx>(a, adot, lambda, R);
+}
+
+// ============================================================
+// UniformUnsteadyActiveStress
+// ============================================================
+
+void UniformUnsteadyActiveStress::finalize() {
+  const auto& t = params_vec_.at("t");
+  const auto& v = params_vec_.at("T");
+  const size_t n = t.size();
+  const int n_modes =
+      static_cast<int>(std::lround(params_.at("fourier_modes")));
+  if (n < 2 || v.size() != n || n_modes < 1) {
+    throw std::runtime_error(
+        "uniform_unsteady active_stress: needs >= 2 samples t, T of equal "
+        "length and fourier_modes >= 1.");
+  }
+  for (size_t i = 1; i < n; i++) {
+    if (t[i] <= t[i - 1]) {
+      throw std::runtime_error(
+          "uniform_unsteady active_stress: sample times must increase "
+          "strictly.");
+    }
+  }
+  ramp_ = params_.at("ramp") != 0.0;
+  t0_ = t[0];
+  period_ = t[n - 1] - t[0];
+  v0_ = v[0];
+  slope_ = (v[n - 1] - v[0]) / period_;
+  // Samples minus the linear trend
+  std::vector<double> ts(n), vs(n);
+  for (size_t i = 0; i < n; i++) {
+    ts[i] = t[i] - t0_;
+    vs[i] = v[i] - (v0_ + slope_ * ts[i]);
+  }
+  // Exact Fourier coefficients of the piecewise-linear interpolant
+  const int n_coef = ramp_ ? 1 : n_modes;
+  re_.assign(n_coef, 0.0);
+  im_.assign(n_coef, 0.0);
+  for (int k = 0; k < n_coef; k++) {
+    for (size_t i = 0; i + 1 < n; i++) {
+      if (k == 0) {
+        re_[k] += 0.5 * (ts[i + 1] - ts[i]) * (vs[i + 1] + vs[i]);
+      } else {
+        const double ko = 2.0 * M_PI * k * ts[i] / period_;
+        const double kn = 2.0 * M_PI * k * ts[i + 1] / period_;
+        const double s = (vs[i + 1] - vs[i]) / (ts[i + 1] - ts[i]);
+        re_[k] += s * (std::cos(kn) - std::cos(ko));
+        im_[k] -= s * (std::sin(kn) - std::sin(ko));
+      }
+    }
+    if (k == 0) {
+      re_[k] /= period_;
+    } else {
+      const double scale = 0.5 * period_ / (M_PI * M_PI * k * k);
+      re_[k] *= scale;
+      im_[k] *= scale;
+    }
+  }
+}
+
+double UniformUnsteadyActiveStress::tension(double time) const {
+  const double t = ramp_ ? std::max(std::min(time - t0_, period_), 0.0)
+                         : std::fmod(time - t0_, period_);
+  double val = v0_ + t * slope_;
+  if (!ramp_) {
+    for (size_t k = 0; k < re_.size(); k++) {
+      const double K = 2.0 * M_PI * k * t / period_;
+      val += re_[k] * std::cos(K) - im_[k] * std::sin(K);
+    }
+  }
+  return val;
+}
+
+void UniformUnsteadyActiveStress::update_time(double time, double signal) {
+  (void)signal;
+  tension_ = tension(time);
+}
+
+void UniformUnsteadyActiveStress::residual(const double* a, const double* adot,
+                                           double lambda, double* R) const {
+  (void)adot;
+  (void)lambda;
+  R[0] = a[0] - tension_;
+}
+
+void UniformUnsteadyActiveStress::residual(const cplx* a, const cplx* adot,
+                                           cplx lambda, cplx* R) const {
+  (void)adot;
+  (void)lambda;
+  R[0] = a[0] - tension_;
 }

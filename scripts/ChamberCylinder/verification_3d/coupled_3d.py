@@ -54,19 +54,15 @@ LIB_IN_IMAGE = "/svzerod/build-docker/src/interface/libsvzero_interface.so"
 BLOCK = "LV"  # external coupling block of the endo face
 
 
-def find_cylinder(cfg):
-    blocks = [v for v in cfg["vessels"] if v["zero_d_element_type"] == "ChamberCylinder"]
-    if len(blocks) != 1:
-        raise ValueError(f"expected one ChamberCylinder vessel, found {len(blocks)}")
-    return blocks[0]
+find_cylinder = C3.find_cylinder
 
 
 def coupling_config(cfg, scale, n_substeps=2):
     """svZeroDSolver input of the circulation coupled to the 3D cavity."""
     c = copy.deepcopy(cfg)
     cyl = find_cylinder(c)
-    name = cyl["vessel_name"]
-    c["vessels"] = [v for v in c["vessels"] if v is not cyl]
+    name = cyl["name"]
+    c["chambers"] = [ch for ch in c["chambers"] if ch is not cyl]
     for v in c["vessels"]:
         vals = v["zero_d_element_values"]
         for k in ("R_poiseuille", "L"):
@@ -161,7 +157,7 @@ def generate(model_0d, case_dir, nr, cycles=None, density=1.0, newton_tol=1e-10,
               abs_tol=1e-20, max_iter=4, krylov=300)
     ls.update(linear_solver or {})
     p0 = float(cfg.get("initial_condition", {}).get("pressure_all", 0.0))
-    case = dict(source_0d=os.path.basename(model_0d), block=cyl["vessel_name"],
+    case = dict(source_0d=os.path.basename(model_0d), block=cyl["name"],
                 Ri=v["Ri"], Re=v["Re"], length=v["length"], mesh_length=Lm, material=mat,
                 fiber_files=[os.path.relpath(p, case_dir) for p in paths[:2]],
                 fiber_location="points", robin_stiffness=0.0, formulation="struct-p2",
@@ -275,8 +271,8 @@ def run_0d(model_0d, num_elements=None):
         cfg = json.load(f)
     cyl = find_cylinder(cfg)
     if num_elements:
-        cyl["zero_d_element_values"]["num_elements"] = num_elements
-    name = cyl["vessel_name"]
+        cyl["values"]["num_elements"] = num_elements
+    name = cyl["name"]
     r = svzerod.simulate(cfg)
 
     def series(var):
@@ -284,8 +280,8 @@ def run_0d(model_0d, num_elements=None):
         return s["time"].to_numpy(), s["y"].to_numpy()
     t, V = series(f"volume:{name}")
     pname = next(n for n in r["name"].unique() if n.startswith("pressure:") and name in n)
-    ne = int(cyl["zero_d_element_values"]["num_elements"])
-    v = cyl["zero_d_element_values"]
+    ne = int(cyl["values"]["num_elements"])
+    v = cyl["values"]
     prof = {f: np.stack([series(f"{f}_{A}:{name}")[1] for A in range(ne + 1)], axis=1)
             for f in ("rho", "phi", "eta")}
     inlet = next(n for n in r["name"].unique() if n.startswith("flow:") and n.endswith(":" + name))

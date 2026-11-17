@@ -94,8 +94,8 @@ def main():
     if a.model_0d:
         with open(a.model_0d) as f:
             cfg = json.load(f)
-        v = next(b for b in cfg["vessels"] if b["zero_d_element_type"] == "ChamberCylinder")
-        v = v["zero_d_element_values"]
+        v = next(b for b in cfg["chambers"] if b["type"] == "ChamberCylinder")
+        v = v["values"]
         Ri, Re, ae, ap_ = v["Ri"], v["Re"], v["alpha_endo"], v["alpha_epi"]
     else:
         Ri, Re, ae, ap_ = a.Ri, a.Re, a.alpha_endo, a.alpha_epi

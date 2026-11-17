@@ -180,8 +180,8 @@ def run_0d(config, name, num_elements=None, cache_dir=None):
     Results are cached in cache_dir under a hash of the 0D input.
     """
     cfg = copy.deepcopy(config)
-    blk = next(v for v in cfg["vessels"] if v["vessel_name"] == name)
-    vals = blk["zero_d_element_values"]
+    blk = next(c for c in cfg["chambers"] if c["name"] == name)
+    vals = blk["values"]
     if num_elements:
         vals["num_elements"] = num_elements
     ne = int(vals.get("num_elements", 10))

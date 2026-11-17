@@ -56,7 +56,7 @@ def test_fixed_length_inflation_matches_closed_form():
                              formulation={"ends": "fixed_length"})
     out = CV.svzerod.simulate(cfg)
     t, V = CV.series(out, "volume:cyl")
-    _, P = CV.series(out, "pressure:IN:cyl")
+    _, P = CV.series(out, "pressure:J0:cyl")
     _, eps = CV.series(out, "eps:cyl")
     ramp = t <= T / 2
     V_exact = [math.pi * CV.fixed_length_exact(p, Ri, Re, mu) ** 2 * L for p in P[ramp]]
@@ -83,7 +83,7 @@ def test_holzapfel_ogden_fixed_length_inflation_matches_closed_form(k):
                                  formulation={"ends": "fixed_length"})
         out = CV.svzerod.simulate(cfg)
         t, V = CV.series(out, "volume:cyl")
-        _, P = CV.series(out, "pressure:IN:cyl")
+        _, P = CV.series(out, "pressure:J0:cyl")
         ramp = t <= T / 2
         V_exact = [math.pi * CV.fixed_length_exact_ho(p, Ri, Re, vv) ** 2 * L for p in P[ramp]]
         err.append(np.abs(V[ramp] / V_exact - 1).max())
@@ -125,15 +125,15 @@ def test_prescribed_active_tension_matches_closed_form():
 
 def _input_error(formulation=None, extra=None, edit=None):
     """Message of the error that an inconsistent ChamberCylinder input raises.
-    extra: flat parameters (G.cylinder_vessel); edit: function changing the
-    vessel entry."""
+    extra: flat parameters (G.cylinder_chamber); edit: function changing the
+    chamber entry."""
     vv = dict(GEOM, C1=5e3, gamma=0.0, num_elements=2, density=0.0, **CV.NOACT)
     vv.update(extra or {})
     cfg = CV.isolated_config(vv, [0.0, 1.0], [0.0, 0.0], 1.0, 3,
                              {"pressure_all": 0.0, "volume:cyl": 1e-5},
                              formulation=formulation)
     if edit:
-        edit(cfg["vessels"][0])
+        edit(cfg["chambers"][0])
     with pytest.raises(RuntimeError) as err:
         CV.svzerod.simulate(cfg)
     return str(err.value)
@@ -154,7 +154,7 @@ def test_component_inputs_are_checked():
         edit=lambda v: v["material"].update(a4f=1.0))
     assert "b4f and b4s must be positive" in _input_error(
         edit=lambda v: v.update(material={"type": "holzapfel_ogden", "a": 1e4, "a4f": 1e4}))
-    # the BCS activation (nagumo) is a rate; uniform_unsteady takes none
+    # the BCS law needs an activation rate; uniform_unsteady takes none
     assert "takes no activation_function" in _input_error(
         edit=lambda v: v.update(active_stress={"type": "uniform_unsteady", "t": [0.0, 1.0],
                                                "T": [0.0, 0.0]}))
@@ -171,22 +171,23 @@ def _volume(material, active=None, activation=None):
     vv = dict(GEOM, gamma=70.0, num_elements=3, density=0.0, sigma_max=0.0, k_0=0.0)
     ic = {"pressure_all": 0.0, "volume:cyl": math.pi * GEOM["Ri"] ** 2 * GEOM["length"]}
     cfg = CV.isolated_config(vv, [0.0, 0.5, 1.0], [0.0, 2e3, 2e3], 1.0, 11, ic, act=activation)
-    cfg["vessels"][0]["material"] = material
+    cfg["chambers"][0]["material"] = material
     if active:
-        cfg["vessels"][0]["active_stress"] = active
+        cfg["chambers"][0]["active_stress"] = active
     return CV.series(CV.svzerod.simulate(cfg), "volume:cyl")[1]
 
 
 def test_sphere_laws_in_the_cylinder():
     """The material and active stress laws are those of ChamberSphere. Its
-    Mooney-Rivlin and exponential materials are the genet23 energy with
-    renamed constants, and its strain-independent active stress contracts the
-    cylinder."""
+    Mooney-Rivlin and exponential materials are mooney_rivlin_exponential (the
+    genet23 energy) without the other terms, and its strain-independent active
+    stress contracts the cylinder."""
     mr = _volume({"type": "mooney_rivlin", "W1": 7e3, "W2": 50.0})
-    assert np.array_equal(mr, _volume({"type": "genet23", "C1": 7e3, "C2": 50.0}))
+    assert np.array_equal(mr, _volume({"type": "mooney_rivlin_exponential", "W1": 7e3,
+                                       "W2": 50.0}))
     ex = _volume({"type": "exponential", "C0": 700.0, "C1": 2.0, "C2": 50.0, "C3": 4.0})
-    assert np.array_equal(ex, _volume({"type": "genet23", "C3": 700.0, "C4": 2.0, "C5": 50.0,
-                                       "C6": 4.0}))
+    assert np.array_equal(ex, _volume({"type": "mooney_rivlin_exponential", "C0": 700.0,
+                                       "C1": 2.0, "C2": 50.0, "C3": 4.0}))
     act = _volume({"type": "mooney_rivlin", "W1": 7e3, "W2": 50.0},
                   {"type": "strain_independent", "alpha_max": 30.0, "alpha_min": -30.0,
                    "sigma_max": 5e4},

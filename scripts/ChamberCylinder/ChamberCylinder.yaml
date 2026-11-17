@@ -54,8 +54,8 @@ constitutive_law: |
   #   mu e_c_dot = k_s (e_fib - e_c) - tau_c                 (series-spring balance)
   #   tau_c_dot  = -(|nu| + alpha|e_c_dot|) tau_c + e_c_dot k_c + n0(e_c) sigma0 |nu|_+
   #   k_c_dot    = -(|nu| + alpha|e_c_dot|) k_c   + n0(e_c) k0    |nu|_+
-  # nu = ECG-derived activation rate (nagumo waveform from tsys/tdias/qrs/ramp/
-  # alpha_max/alpha_min); alpha = bcs_alpha (Table-1 = 12); n0(e_c) = a
+  # nu = ECG-derived activation rate (a piecewise_rate table built from
+  # tsys/tdias/qrs/ramp/alpha_max/alpha_min); alpha = bcs_alpha (Table-1 = 12); n0(e_c) = a
   # fixed piecewise-linear Frank-Starling recruitment factor. Writing sigma_1D
   # through tau_c + mu*e_c_dot keeps the stiff k_s (= 1e8) out of the mechanical
   # residual.

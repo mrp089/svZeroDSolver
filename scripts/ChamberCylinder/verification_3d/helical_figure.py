@@ -115,8 +115,8 @@ def sweep(config, name, out_dir, angles, T, ne=16):
         shear, twist = [], []
         for a in angles:
             cfg = copy.deepcopy(config)
-            blk = next(b for b in cfg["vessels"] if b["vessel_name"] == name)
-            v = blk["zero_d_element_values"]
+            blk = next(b for b in cfg["chambers"] if b["name"] == name)
+            v = blk["values"]
             a = float(a)
             v["alpha_endo"], v["alpha_epi"] = (a, -a) if fam.startswith("±") else (a, a)
             sol = RS.run_0d(cfg, name, ne, out_dir)

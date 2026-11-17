@@ -32,8 +32,7 @@ def replay_config(cfg, t, P):
     """0D input: the cylinder of cfg between a pressure P(t) and a closed outlet."""
     c = copy.deepcopy(cfg)
     cyl = CP.find_cylinder(c)
-    cyl["boundary_conditions"] = {"inlet": "CAVITY", "outlet": "CLOSED"}
-    c["vessels"], c["valves"], c["junctions"] = [cyl], [], []
+    c.update(CP.C3.between_bcs(cyl, "CAVITY", "CLOSED"))
     dt = t[1] - t[0]
     # one sample past the end: the time-dependent BC is periodic over its samples
     tb, Pb = np.append(t, t[-1] + dt), np.append(P, P[-1])
@@ -55,7 +54,7 @@ def replay_0d(model, ne=None):
     if ne:
         return CP.run_0d(model, ne)
     with open(model) as f:
-        n = int(CP.find_cylinder(json.load(f))["zero_d_element_values"]["num_elements"])
+        n = int(CP.find_cylinder(json.load(f))["values"]["num_elements"])
     c, f = CP.run_0d(model, 2 * n), CP.run_0d(model, 4 * n)
     z = dict(c)
     z["V"], z["beta"] = ((4.0 * f[k] - c[k]) / 3.0 for k in ("V", "beta"))
@@ -95,10 +94,10 @@ def main():
     root = os.path.abspath(a.case)
     with open(os.path.join(root, "chamber_cylinder_0d.json")) as f:
         cfg = json.load(f)
-    L = CP.find_cylinder(cfg)["zero_d_element_values"]["length"]
+    L = CP.find_cylinder(cfg)["values"]["length"]
     out_dir = os.path.join(root, "output")
     os.makedirs(out_dir, exist_ok=True)
-    n = int(CP.find_cylinder(cfg)["zero_d_element_values"]["num_elements"])
+    n = int(CP.find_cylinder(cfg)["values"]["num_elements"])
     result = dict(case=os.path.basename(root), levels={},
                   reference=f"0D ne = {a.ne}" if a.ne else f"0D Richardson ne = {2 * n}/{4 * n}")
     for nr in a.nr:

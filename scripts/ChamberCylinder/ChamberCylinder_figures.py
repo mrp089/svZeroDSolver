@@ -52,7 +52,7 @@ def run(overrides=None, ne=6, ncycle=G.NCYCLE, gamma=GAMMA_TABLE1):
     """Run the genet23 baseline with optional vessel-parameter overrides
     (geometry or fiber angle) and wall viscosity gamma; return the last cycle."""
     cfg = G.build(ne=ne, ncycle=ncycle, P_vs=G.P_VS)
-    vv = cfg["vessels"][1]["zero_d_element_values"]
+    vv = G.find_cylinder(cfg)["values"]
     vv["gamma"] = gamma
     if overrides:
         vv.update(overrides)
@@ -86,7 +86,7 @@ def geom(aspect, Vint, Vwall):
 
 
 # Baseline internal and wall volumes (65 and 130 mL, genet23 Table 1).
-_d = G.build()["vessels"][1]["zero_d_element_values"]
+_d = G.find_cylinder(G.build())["values"]
 RI0, RE0, L0 = _d["Ri"], _d["Re"], _d["length"]
 VINT0 = np.pi * RI0 ** 2 * L0
 VWALL0 = np.pi * L0 * (RE0 ** 2 - RI0 ** 2)

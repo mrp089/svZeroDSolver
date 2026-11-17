@@ -105,7 +105,7 @@ $n_0(e_c)$ & 9-pt PWL & \code & Table~1 cites Ref~6; the authors' \texttt{starli
 \section*{Input functions $\nu(t)$, $P_\text{at}(t)$ (Refs.~33/6, authors' code)}
 \begin{longtable}{l l l P{6.6cm}}
 \toprule Parameter & Value & Source & Note \\ \midrule\endhead
-$\nu(t)$ (\texttt{nagumo}) & --- & \code & ECG-parametric: delay 0.1, QRSd 0.08, QTc 0.33 (Bazett $QT{=}QTc\sqrt{T}$), ramp 0.01; $\alpha_\text{max/min}{=}\pm35$. Kernel port matches to $3\times10^{-14}$ \\
+$\nu(t)$ (\texttt{piecewise\_rate}) & --- & \code & ECG-parametric: delay 0.1, QRSd 0.08, QTc 0.33 (Bazett $QT{=}QTc\sqrt{T}$), ramp 0.01; $\alpha_\text{max/min}{=}\pm35$. The waveform is piecewise linear, given to the block as a 7-point table \\
 $P_\text{at}(t)$ & 4.5 / 7 mmHg & \code & 603 / \SI{938}{Pa}; kick at $T{-}PQ{+}$ramp, $T{-}AV{+}$ramp (PQ 0.14, AV 0.08) \\
 period $T$ & \SI{0.8}{s} & \gen & \\
 \bottomrule

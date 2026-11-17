@@ -23,11 +23,11 @@
  * @brief Hyperelastic wall material of the chamber blocks
  *
  * A material is an isochoric strain energy \f$W(\bar C)\f$ of the invariants
- * of \f$\bar C = J^{-2/3} C\f$ and the fiber direction \f$\mathbf{e}_F\f$. It
- * returns the deviatoric 2nd Piola-Kirchhoff stress
- * \f$\Sigma^d = 2\,\partial W/\partial C\f$ for a right Cauchy-Green tensor
- * \f$C\f$ given in an orthonormal basis, with the fiber direction in the same
- * basis. The volumetric response belongs to the block: \ref ChamberSphere is
+ * of \f$\bar C = J^{-2/3} C\f$, with the fiber and sheet directions
+ * \f$\mathbf{e}_F\f$, \f$\mathbf{e}_S\f$. It returns the deviatoric 2nd
+ * Piola-Kirchhoff stress \f$\Sigma^d = 2\,\partial W/\partial C\f$ for a right
+ * Cauchy-Green tensor \f$C\f$ given in an orthonormal basis, with the
+ * directions in the same basis. The volumetric response belongs to the block: \ref ChamberSphere is
  * incompressible by its kinematics, \ref ChamberCylinder enforces
  * incompressibility with an element pressure.
  *
@@ -38,7 +38,7 @@
  * \f$\bar I_4 = J^{-2/3}\,\mathbf{e}_F\cdot C\cdot\mathbf{e}_F\f$.
  *
  * Types (JSON `material` object): `mooney_rivlin`, `exponential`,
- * `mooney_rivlin_exponential`.
+ * `mooney_rivlin_exponential`, `holzapfel_ogden`.
  */
 class Material : public ParameterHolder {
  public:
@@ -62,9 +62,11 @@ class Material : public ParameterHolder {
    * @param J Volume ratio \f$J = \sqrt{\det C}\f$ (given by the block's
    * kinematics)
    * @param f Unit fiber direction
+   * @param s Unit sheet direction
    * @return Stress \f$2\,\partial W/\partial C\f$
    */
-  virtual Mat3 stress(const Mat3& C, double J, const Vec3& f) const = 0;
+  virtual Mat3 stress(const Mat3& C, double J, const Vec3& f,
+                      const Vec3& s) const = 0;
 
   /**
    * @brief Deviatoric 2nd Piola-Kirchhoff stress for complex arguments
@@ -73,15 +75,17 @@ class Material : public ParameterHolder {
    * @param C Right Cauchy-Green tensor
    * @param J Volume ratio
    * @param f Unit fiber direction
+   * @param s Unit sheet direction
    * @return Stress \f$2\,\partial W/\partial C\f$
    */
-  virtual Mat3c stress(const Mat3c& C, cplx J, const Vec3& f) const = 0;
+  virtual Mat3c stress(const Mat3c& C, cplx J, const Vec3& f,
+                       const Vec3& s) const = 0;
 
   /**
    * @brief Factory: create a material from a type string
    *
    * @param type_str One of: "mooney_rivlin", "exponential",
-   * "mooney_rivlin_exponential"
+   * "mooney_rivlin_exponential", "holzapfel_ogden"
    * @return Unique pointer to the created material
    */
   static std::unique_ptr<Material> create(const std::string& type_str);
@@ -111,8 +115,10 @@ class MooneyRivlinExponentialMaterial : public Material {
              {"C2", InputParameter(true, false, true, 0.0)},
              {"C3", InputParameter(true, false, true, 0.0)}}) {}
 
-  Mat3 stress(const Mat3& C, double J, const Vec3& f) const override;
-  Mat3c stress(const Mat3c& C, cplx J, const Vec3& f) const override;
+  Mat3 stress(const Mat3& C, double J, const Vec3& f,
+              const Vec3& s) const override;
+  Mat3c stress(const Mat3c& C, cplx J, const Vec3& f,
+               const Vec3& s) const override;
 
  protected:
   /**
@@ -161,6 +167,42 @@ class ExponentialMaterial : public MooneyRivlinExponentialMaterial {
                                          {"C1", InputParameter()},
                                          {"C2", InputParameter()},
                                          {"C3", InputParameter()}}) {}
+};
+
+/**
+ * @brief Holzapfel-Ogden material of svMultiPhysics (`HolzapfelOgden`)
+ *
+ * \f[
+ * W=\frac{a}{2b}e^{b(\bar I_1-3)}
+ * +\sum_{i=f,s}\frac{a_i}{2b_i}\chi_i\left(e^{b_i(\bar I_{4i}-1)^2}-1\right)
+ * +\frac{a_{fs}}{2b_{fs}}\left(e^{b_{fs}\bar I_8^2}-1\right)
+ * \f]
+ * with \f$\bar I_{4f}=\bar I_4\f$ and the smoothed Heaviside
+ * \f$\chi_i=1/(1+e^{-k(\bar I_{4i}-1)})\f$.
+ *
+ * Parameters (svMultiPhysics names): `a`, `b`, `a4f`, `b4f`, `a4s`, `b4s`,
+ * `afs`, `bfs`, `k` (optional, default 0). A fiber or sheet term is off when
+ * its `a4f`/`a4s` is 0, otherwise its `b4f`/`b4s` must be positive.
+ */
+class HolzapfelOgdenMaterial : public Material {
+ public:
+  HolzapfelOgdenMaterial()
+      : Material({{"a", InputParameter(true, false, true, 0.0)},
+                  {"b", InputParameter(true, false, true, 0.0)},
+                  {"a4f", InputParameter(true, false, true, 0.0)},
+                  {"b4f", InputParameter(true, false, true, 0.0)},
+                  {"a4s", InputParameter(true, false, true, 0.0)},
+                  {"b4s", InputParameter(true, false, true, 0.0)},
+                  {"afs", InputParameter(true, false, true, 0.0)},
+                  {"bfs", InputParameter(true, false, true, 0.0)},
+                  {"k", InputParameter(true, false, true, 0.0)}}) {}
+
+  void finalize() override;
+
+  Mat3 stress(const Mat3& C, double J, const Vec3& f,
+              const Vec3& s) const override;
+  Mat3c stress(const Mat3c& C, cplx J, const Vec3& f,
+               const Vec3& s) const override;
 };
 
 #endif  // SVZERODSOLVER_MODEL_MATERIAL_HPP_

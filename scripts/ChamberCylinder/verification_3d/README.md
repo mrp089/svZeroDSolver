@@ -23,7 +23,7 @@ and load.
   `src/model/Material.h`, `src/model/ActiveStress.h`) and a `formulation`
   object for its volumetric law and ends (`src/model/ChamberCylinder.h`).
   Each has the genet23 choice and the svMultiPhysics equivalent: material
-  `genet23` (C1–C6) or `holzapfel_ogden`, active stress `genet23` (the
+  `mooney_rivlin_exponential` (genet23's C1–C6) or `holzapfel_ogden`, active stress `genet23` (the
   Bestel-Clement-Sorine law) or `uniform_unsteady`, volumetric law
   `incompressible` or `st91`, ends `lids` or `fixed_length`. Every case input
   states all four. The passive cases keep the genet23 active stress at rest

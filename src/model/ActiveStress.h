@@ -30,13 +30,14 @@
  * R(a, \dot a, \lambda) = 0,
  * \f]
  * where \f$\lambda = \sqrt{\mathbf{e}_F\cdot C\cdot\mathbf{e}_F}\f$ is the
- * fiber stretch. The activation signal of the chamber's \ref
- * ActivationFunction is set once per time step with update_time(). The law is the same at every material point,
+ * fiber stretch. Time-dependent inputs (the activation signal of the
+ * chamber's \ref ActivationFunction, prescribed tensions) are set once per
+ * time step with update_time(). The law is the same at every material point,
  * so a block evaluates it once for a uniform wall (\ref ChamberSphere) or at
  * each integration point (\ref ChamberCylinder).
  *
  * Types (JSON `active_stress` object): `strain_independent`,
- * `strain_dependent`, `genet23`.
+ * `strain_dependent`, `genet23`, `uniform_unsteady`.
  */
 class ActiveStress : public ParameterHolder {
  public:
@@ -65,6 +66,13 @@ class ActiveStress : public ParameterHolder {
   virtual std::vector<std::string> state_names() const = 0;
 
   /**
+   * @brief Whether the law is driven by an activation function
+   *
+   * @return False for laws that take no activation signal
+   */
+  virtual bool uses_activation() const { return true; }
+
+  /**
    * @brief Type of activation signal this law needs
    *
    * Checked by the chamber blocks against ActivationFunction::signal_type.
@@ -76,11 +84,13 @@ class ActiveStress : public ParameterHolder {
   }
 
   /**
-   * @brief Set the activation signal of the current time
+   * @brief Set the time-dependent inputs of the law
    *
-   * @param signal Activation signal of the chamber's ActivationFunction
+   * @param time Current time
+   * @param signal Activation signal of the chamber's ActivationFunction at
+   * this time (0 for laws without activation)
    */
-  virtual void update_time(double signal) = 0;
+  virtual void update_time(double time, double signal) = 0;
 
   /**
    * @brief Residuals of the state equations at a material point
@@ -129,7 +139,7 @@ class ActiveStress : public ParameterHolder {
    * @brief Factory: create an active stress law from a type string
    *
    * @param type_str One of: "strain_independent", "strain_dependent",
-   * "genet23"
+   * "genet23", "uniform_unsteady"
    * @return Unique pointer to the created active stress law
    */
   static std::unique_ptr<ActiveStress> create(const std::string& type_str);
@@ -158,7 +168,7 @@ class StrainIndependentActiveStress : public ActiveStress {
   std::vector<std::string> state_names() const override {
     return {"active_stress"};
   }
-  void update_time(double signal) override;
+  void update_time(double time, double signal) override;
   void residual(const double* a, const double* adot, double lambda,
                 double* R) const override;
   void residual(const cplx* a, const cplx* adot, cplx lambda,
@@ -231,7 +241,7 @@ class StrainDependentActiveStress : public ActiveStress {
   ActivationSignalType required_signal_type() const override {
     return ActivationSignalType::rate;
   }
-  void update_time(double signal) override;
+  void update_time(double time, double signal) override;
   void residual(const double* a, const double* adot, double lambda,
                 double* R) const override;
   void residual(const cplx* a, const cplx* adot, cplx lambda,
@@ -290,7 +300,7 @@ class Genet23ActiveStress : public ActiveStress {
   ActivationSignalType required_signal_type() const override {
     return ActivationSignalType::rate;
   }
-  void update_time(double signal) override;
+  void update_time(double time, double signal) override;
   void residual(const double* a, const double* adot, double lambda,
                 double* R) const override;
   void residual(const cplx* a, const cplx* adot, cplx lambda,
@@ -302,6 +312,59 @@ class Genet23ActiveStress : public ActiveStress {
 
   double nu_abs_ = 0.0;   ///< |nu(t)|
   double nu_plus_ = 0.0;  ///< |nu(t)|_+
+};
+
+/**
+ * @brief Prescribed active tension of svMultiPhysics (`UniformUnsteady`)
+ *
+ * One state, the active stress \f$\tau = T(t)\f$, with \f$T(t)\f$ built from
+ * samples \f$(t_i, T_i)\f$ as svMultiPhysics' FourierInterpolation does: the
+ * linear trend through the first and last sample plus the first
+ * `fourier_modes` Fourier modes of the piecewise-linear interpolant of the
+ * samples minus the trend, periodic with period \f$t_\text{last}-t_0\f$.
+ * With `ramp` (nonzero), only the trend, held constant outside
+ * \f$[t_0, t_\text{last}]\f$. Takes no activation function.
+ *
+ * Parameters: `t`, `T` (arrays), `fourier_modes` (default 1), `ramp`
+ * (default 0)
+ */
+class UniformUnsteadyActiveStress : public ActiveStress {
+ public:
+  UniformUnsteadyActiveStress()
+      : ActiveStress({{"t", InputParameter(false, true)},
+                      {"T", InputParameter(false, true)},
+                      {"fourier_modes", InputParameter(true, false, true, 1.0)},
+                      {"ramp", InputParameter(true, false, true, 0.0)}}) {}
+
+  void finalize() override;
+  int num_states() const override { return 1; }
+  std::vector<std::string> state_names() const override {
+    return {"active_stress"};
+  }
+  bool uses_activation() const override { return false; }
+  void update_time(double time, double signal) override;
+  void residual(const double* a, const double* adot, double lambda,
+                double* R) const override;
+  void residual(const cplx* a, const cplx* adot, cplx lambda,
+                cplx* R) const override;
+
+  /**
+   * @brief Tension T(t) at a time
+   *
+   * @param time Time
+   * @return Tension
+   */
+  double tension(double time) const;
+
+ private:
+  bool ramp_ = false;       ///< linear ramp instead of the Fourier series
+  double t0_ = 0.0;         ///< first sample time
+  double period_ = 0.0;     ///< last minus first sample time
+  double v0_ = 0.0;         ///< trend value at t0
+  double slope_ = 0.0;      ///< trend slope
+  std::vector<double> re_;  ///< cosine coefficients
+  std::vector<double> im_;  ///< sine coefficients (with a minus sign)
+  double tension_ = 0.0;    ///< T at the current time
 };
 
 #endif  // SVZERODSOLVER_MODEL_ACTIVESTRESS_HPP_
