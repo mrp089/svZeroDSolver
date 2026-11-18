@@ -168,7 +168,7 @@ std::unique_ptr<ActivationFunction> generate_activation_function(
  *
  * Validates keys against the material type's params, reads scalar parameters,
  * and returns a created Material. Caller associates it with a chamber block
- * (ChamberSphere, ChamberCylinder) via set_material().
+ * (ChamberSphere, ChamberSphereThick, ChamberCylinder) via set_material().
  *
  * @param j            JSON object (e.g. chamber_config["material"])
  * @param chamber_name Chamber name for error messages
@@ -183,7 +183,7 @@ std::unique_ptr<Material> generate_material(const nlohmann::json& j,
  *
  * Validates keys against the active stress type's params, reads scalar
  * parameters, and returns a created ActiveStress. Caller associates it with
- * a chamber block (ChamberSphere, ChamberCylinder) via set_active_stress().
+ * a chamber block (ChamberSphere, ChamberSphereThick, ChamberCylinder) via set_active_stress().
  *
  * @param j            JSON object (e.g. chamber_config["active_stress"])
  * @param chamber_name Chamber name for error messages

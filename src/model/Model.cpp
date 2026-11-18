@@ -15,6 +15,7 @@ Model::Model() {
       {"BloodVessel", block_factory<BloodVessel>()},
       {"ChamberSphere", block_factory<ChamberSphere>()},
       {"ChamberCylinder", block_factory<ChamberCylinder>()},
+      {"ChamberSphereThick", block_factory<ChamberSphereThick>()},
       {"BloodVesselJunction", block_factory<BloodVesselJunction>()},
       {"ClosedLoopCoronaryLeft", block_factory<ClosedLoopCoronaryLeftBC>()},
       {"ClosedLoopCoronaryRight", block_factory<ClosedLoopCoronaryRightBC>()},

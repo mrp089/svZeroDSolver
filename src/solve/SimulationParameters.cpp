@@ -935,7 +935,8 @@ void create_chambers(
 
     // Create and set material and active stress model for chamber types
     // that use one
-    if (chamber_type == "ChamberSphere" || chamber_type == "ChamberCylinder") {
+    if (chamber_type == "ChamberSphere" || chamber_type == "ChamberCylinder" ||
+        chamber_type == "ChamberSphereThick") {
       auto mat = generate_material(chamber_config["material"], chamber_name);
       model.get_block(chamber_name)->set_material(std::move(mat));
 

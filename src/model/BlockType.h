@@ -36,7 +36,8 @@ enum class BlockType {
   blood_vessel_rc = 20,
   chamber_elastance_inductor_exponential = 21,
   impedance_bc = 22,
-  chamber_cylinder = 23
+  chamber_cylinder = 23,
+  chamber_sphere_thick = 24
 };
 
 /**
