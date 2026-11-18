@@ -446,7 +446,8 @@ $n_e$ & $e_{PV}$ & $e_\text{tors}$ & tw@550 & EDV & $e_{PV}$ & $e_\text{tors}$ &
 Spatially both converge at second order (P1 elements); torsion is mesh-independent to $0.05^\circ$
 from $n_e=3$, and $n_e=6$ is within \SI{0.2}{mL} of $n_e=12$ (the figures above use $n_e=6$).
 The paper's single P3 element reaches $\sim$3e-5 (Fig.~4, upper left), which our P1 mesh would
-need $n_e\gtrsim24$ for; $n_e=24$ does not converge at present (open issue).
+need $n_e\gtrsim24$ for. $n_e\geq16$ needs a Newton tolerance looser than $10^{-9}$, which is
+below the round-off floor of the residual; see \texttt{convergence/README.md}.
 
 \begin{center}\docfig{\linewidth}{convergence.png}\end{center}
 

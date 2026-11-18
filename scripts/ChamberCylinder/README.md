@@ -60,6 +60,14 @@ format both files with prettier.
 - **3D finite elements:** svMultiPhysics models of the same cylinder, in
   `verification_3d/`.
 
+## Solver settings
+
+`convergence/` holds the convergence and cost study of the elements through the
+wall, the time step, the integrator, the Newton tolerance and the number of
+beats, with recommended settings: 8 elements and Δt = 2 ms by default, plain
+generalized-α with ρ∞ = 0, an absolute tolerance of 1e-6, and enough beats to
+reach a periodic state.
+
 ## The genet23 inconsistency
 
 **Old inertia term in the torsion figures.** The twist curves of genet23 Figs 5-9
@@ -103,6 +111,7 @@ the full analysis.
 | `ChamberCylinder_provenance.tex` | parameter provenance, formulation audit, torsion analysis |
 | `ChamberCylinder.yaml` | the continuous equations the block discretizes (documentation) |
 | `verification_3d/` | comparison with svMultiPhysics |
+| `convergence/` | convergence, cost and recommended solver settings |
 
 Only digitized numbers are stored here; the paper's figures, text and the
 authors' code are not.
